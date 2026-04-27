@@ -3,11 +3,8 @@ import { resolve } from 'path';
 
 export default defineConfig({
     // GitHub Pages 部署路径（仓库名）
-    // TODO(PHASE-1-DEBT): Update base path for new unified repository.
-    // Original: '/pkm33/' for hasheeper.github.io/pkm33/
-    // New target: hasheeper.github.io/pkm-pink/apps/battle-sim/
-    // Suggested: base: '/pkm-pink/apps/battle-sim/',
-    base: '/pkm33/',
+    // Unified repository: hasheeper.github.io/pkm-pink/apps/battle-sim/
+    base: '/pkm-pink/apps/battle-sim/',
     
     // 开发服务器配置
     server: {
