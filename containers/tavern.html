@@ -60,7 +60,8 @@
 
     <script>
         (async function() {
-            const params = new URLSearchParams(location.search);
+            const hash = location.hash.slice(1);
+            const params = new URLSearchParams(hash);
             const target = params.get('target') || 'dashboard-main';
 
             const frame = document.getElementById('tavern-frame');

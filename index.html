@@ -116,7 +116,7 @@
         <div class="loading">Loading registry...</div>
     </div>
 
-    <a class="tavern-link" href="./containers/app.html?target=dashboard-main">Tavern Inject Container</a>
+    <a class="tavern-link" href="./containers/app.html#target=dashboard-main">Tavern Inject Container</a>
 
     <script>
         (async function() {
@@ -150,9 +150,9 @@
             }
         })();
 
-        // Support ?app=xxx routing
-        const params = new URLSearchParams(location.search);
-        const targetApp = params.get('app');
+        // Support #app=xxx routing
+        const hashParams = new URLSearchParams(location.hash.slice(1));
+        const targetApp = hashParams.get('app');
         if (targetApp) {
             (async function() {
                 try {

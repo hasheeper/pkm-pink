@@ -48,7 +48,8 @@
 
     <script>
         (async function() {
-            const params = new URLSearchParams(location.search);
+            const hash = location.hash.slice(1);
+            const params = new URLSearchParams(hash);
             const appId = params.get('app');
             const target = params.get('target');
             const profile = params.get('profile');
