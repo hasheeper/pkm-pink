@@ -1,0 +1,212 @@
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PKM - Frame Wrapper</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+    }
+    #app-frame {
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+      border: 0;
+      display: block;
+      background: transparent;
+    }
+
+    #frame-toolbar {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 2147483647;
+      display: flex;
+      gap: 8px;
+      pointer-events: auto;
+    }
+
+    .tool-btn {
+      appearance: none;
+      border: 1px solid rgba(0, 0, 0, 0.18);
+      background: rgba(255, 255, 255, 0.92);
+      color: #2B2B2B;
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      user-select: none;
+      backdrop-filter: blur(6px);
+    }
+
+    .tool-btn:active {
+      transform: translateY(1px);
+    }
+
+    .tool-btn[hidden] {
+      display: none;
+    }
+
+    html.pseudo-fullscreen,
+    html.pseudo-fullscreen body {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      background: #000;
+    }
+
+    html.pseudo-fullscreen #app-frame {
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+    }
+  </style>
+</head>
+<body>
+  <div id="frame-toolbar">
+    <button id="btn-enter" class="tool-btn" type="button">放大</button>
+    <button id="btn-exit" class="tool-btn" type="button" hidden>退出</button>
+  </div>
+  <script id="pkm-json" type="application/json">$1</script>
+
+  <iframe
+    id="app-frame"
+    title="PKM"
+    src="https://hasheeper.github.io/pkm12/"
+    sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
+    allow="fullscreen"
+    allowfullscreen
+    referrerpolicy="no-referrer"
+  ></iframe>
+
+  <script>
+    (function () {
+      const root = document.documentElement;
+      const btnEnter = document.getElementById('btn-enter');
+      const btnExit = document.getElementById('btn-exit');
+      const frame = document.getElementById('app-frame');
+      const hostFrame = window.frameElement;
+
+      function resizeHostFrame() {
+        if (!hostFrame) return;
+        const width = Math.min(window.innerWidth || 9999, 1280);
+        const height = Math.min(window.innerHeight || screen.height || 900, 860);
+        hostFrame.style.width = width + 'px';
+        hostFrame.style.maxWidth = '100%';
+        hostFrame.style.height = height + 'px';
+        hostFrame.style.minHeight = '540px';
+        hostFrame.style.border = 'none';
+      }
+      resizeHostFrame();
+      window.addEventListener('resize', resizeHostFrame);
+
+      try {
+        const base = frame.getAttribute('src') || '';
+        if (base && !/\bv=\d+\b/.test(base)) {
+          const sep = base.includes('?') ? '&' : '?';
+          frame.src = base + sep + 'v=' + Date.now();
+        }
+      } catch (e) {}
+
+      function isFullscreen() {
+        return !!document.fullscreenElement;
+      }
+
+      function isPseudo() {
+        return root.classList.contains('pseudo-fullscreen');
+      }
+
+      function syncButtons() {
+        const active = isFullscreen() || isPseudo();
+        btnEnter.hidden = active;
+        btnExit.hidden = !active;
+      }
+
+      async function enterFullscreen() {
+        try {
+          if (root.requestFullscreen) {
+            await root.requestFullscreen();
+            return;
+          }
+        } catch (e) {}
+        root.classList.add('pseudo-fullscreen');
+      }
+
+      async function exitFullscreen() {
+        try {
+          if (isFullscreen() && document.exitFullscreen) {
+            await document.exitFullscreen();
+          }
+        } catch (e) {}
+        root.classList.remove('pseudo-fullscreen');
+      }
+
+      function parseInjectedData() {
+        try {
+          const dataNode = document.getElementById('pkm-json');
+          if (!dataNode) return null;
+          const raw = (dataNode.textContent || dataNode.innerText || '').trim();
+          if (!raw) return null;
+          return JSON.parse(raw);
+        } catch (e) {
+          console.warn('[PKM] 解析注入战斗数据失败:', e);
+          return null;
+        }
+      }
+
+      function postBattleData() {
+        const injectedBattleData = parseInjectedData();
+        if (!frame || !frame.contentWindow) return;
+        if (!injectedBattleData) return;
+        frame.contentWindow.postMessage(
+          {
+            type: 'pkm-battle-data',
+            payload: injectedBattleData,
+          },
+          '*'
+        );
+      }
+
+      frame.addEventListener('load', postBattleData);
+
+      window.addEventListener('message', (event) => {
+        const injectedBattleData = parseInjectedData();
+        const payload = event?.data;
+        if (!payload || payload.type !== 'pkm-battle-data-request') return;
+        if (!injectedBattleData || !frame || !frame.contentWindow) return;
+        frame.contentWindow.postMessage(
+          {
+            type: 'pkm-battle-data',
+            payload: injectedBattleData,
+          },
+          '*'
+        );
+      });
+
+      btnEnter.addEventListener('click', () => {
+        enterFullscreen().finally(syncButtons);
+      });
+      btnExit.addEventListener('click', () => {
+        exitFullscreen().finally(syncButtons);
+      });
+
+      document.addEventListener('fullscreenchange', syncButtons);
+      syncButtons();
+    })();
+  </script>
+</body>
+</html>
+
+
+```

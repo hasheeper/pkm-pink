@@ -1,0 +1,289 @@
+<battle_rules>
+[PKM 引擎协议]
+PKM引擎协议是一个宝可梦对战的场景模拟器，用在实际发生战斗场景前进行演绎和播放，同时，必须在正文铺垫结束后使用此协议
+触发条件：仅当「战斗逻辑判定 (Battle_Logic_Active) = YES」时，生成纯 JSON 数据并包裹在 <PKM_BATTLE> XML标签中。禁输出无关文本。
+核心原则：
+1. 标识符：**严格**使用官方英文 ID (Species/Moves)。例如: "Ursaluna-Bloodmoon"。
+2. 难度 (difficulty): easy / normal / hard / expert。
+3. 动态配置：由 entrants 配置决定具体对战形式。
+
+[根结构]
+// lines 在此处与 entrants 平级
+<PKM_BATTLE>
+{
+  "difficulty": "expert",
+  "p1": { 
+    "entrants": [ {ENTITY}, ... ],
+    // 可能更多
+  }, 
+  "p2": { 
+    "entrants": [ {ENTITY}, ... ],
+     // 可能更多
+    "lines": { 
+       "start": "start P2 dialog", 
+       "win": "Text when P1 wins", 
+       "lose": "Text when P1 lose", 
+       "escape": "Text/Feedback when P1 running away"
+    }
+  },
+  "environment": {ENVIRONMENT}  // (可选) 自定义战场环境
+}
+</PKM_BATTLE>
+[模块：实体 (ENTITY) 数据结构]
+必须根据数据来源，选择下方**模式 A** 或 **模式 B** 中的一种，严格遵守键值类型：
+
+// 模式 A：现场实例化 (Constructor)
+// 适用：野生生物、临时敌人、需要定制数值的 Boss。
+// 核心：party 必须是 Object 数组，现场定义所有数值。
+{
+  "name": "Display_Label_Name", // 用于显示的名称
+  "type": "wild" | "trainer",
+  "party": [
+    // --- 结构 1: 简易构建 (适用于杂兵/普通野怪) ---
+    // 必须包含 name, lv, moves 以防止崩溃
+    { 
+      "name": "SpeciesID", 
+      "lv": <Int>, 
+      "moves": ["MoveID_1", "MoveID_2", …………]
+    },
+    
+    // --- 结构 2: 完整构建 (适用于 Boss/队长) ---
+    { 
+      "name": "SpeciesID", 
+      "lv": <Int>, 
+      // 基础属性
+      "shiny": <Bool>,
+      "gender": "M" | "F" | "N",
+      "quality": "low" | "medium" | "high" | "perfect", // 决定个体值精度
+      "nature": "NatureID", // Official English
+      "ability": "AbilityID", 
+      "item": "ItemID",
+      // 战斗机制 (只要设定 mechanic，必填相关字段，但默认情况下不要用，可不选)
+      "mechanic": "mega" | "dynamax" | "zmove" | "tera", |
+      "teraType": "TypeID",  // tera后填入，要不然不用填
+      // 招式与标记
+      "moves": ["Move1", "Move2", "Move3", "Move4"], 
+    }
+  ]
+}
+
+[模块：环境数据结构]
+// 可选模块，用于创建特殊战场环境，影响战斗机制
+// 适用：Boss 战、剧情战斗、区域特色地形、试炼等需要独特规则的场景
+
+{
+  // 天气 ID (全部小写)
+  // 普通天气: "sun" (晴天), "rain" (雨天), "sandstorm" (沙暴), "snow" (雪天)
+  // 始源天气: "harshsun" (大日照), "heavyrain" (大雨), "deltastream" (乱气流)
+  // 区域天气: "smog"(N区), "ashfall"(A区), "gale"(B区), "fog"(S区)
+  // 无天气:  "clear"
+  // 不指定: 使用 null 调用当地默认天气
+  "weather": "sun" | ... | "fog" | null,
+  "weatherTurns": 0,  // 天气持续回合 (0=无限，>0 会在场地管理器倒计时)
+  "overlay": {
+    "env_name": "环境名称",
+    "narrative": "环境描述文字...",
+    "rules": [
+      {
+        "target": "TARGET_SELECTOR",
+        "eff": ["EFFECT_ATOM", ...]
+      }
+    ]
+  }
+}
+
+// ========== 目标选择器 (TARGET_SELECTOR) ==========
+// 语法：以 "+" 连接多个条件 (AND)，以 "," 或 单独规则拆分 (OR)
+// 可嵌套 NOT: 前缀 (如 "NOT:Grounded", "NOT:Type:Ghost")
+// 支持的原子：
+//   "ALL" / "Side:Player" / "Side:Enemy"
+//   "Grounded" / "Flying" / "HasItem:AirBalloon" 等地面判定
+//   "Type:Fire" / "Type:Water+Grounded" / "HasAbility:FlashFire"
+//   "MoveType:Water" / "MoveType:Water+Flag:Contact"
+//   "Flag:Contact" / "Flag:Sound" / "Flag:Slicing" ... (对应 moves-data.js 中的 flags)
+//   "Weather:Rain" / "Status:brn" / "HP<=0.5"（条件式目前用于数据预留，默认不启用）
+
+// ========== 效果原子 (EFFECT_ATOM) ==========
+// 统一本地化解析，全部写成字符串，不区分大小写；冒号支持中/英文
+
+// 1) 数值倍率 (范围 0.1~10)：
+//   "Atk:1.5" / "Def:0.7" / "SpA:1.3" / "SpD:0.8" / "Spe:0.5"
+//   "Dmg:1.2" (伤害倍率) / "Accuracy:0.8" / "Crit:2.0"
+//   "Heal:0.5" (回复效率) / "Drain:0.5" (吸血效率)
+
+// 2) HP 持续跳动 (每回合，比例 -0.5~0.5)：
+//   "HP:0.0625" (回血 1/16) / "HP:-0.125" (扣血 1/8)
+//   "HP:0.25:once" 仅在入场时结算一次
+
+// 3) 类型控制：
+//   "Immune:Ice" / "Weak:Fairy" / "Ban:Fire" / "Grant:Ghost"
+//   "ToType:Normal>Electric"  (进场后将普通系攻击判定为电系)
+
+// 4) 道具 / 技能 / 属性禁用：
+//   "BanItem:Leftovers" / "BanItem:Berry"
+//   "BanMove:SwordsDance" (或直接使用 "Ban:MoveName")
+
+// 5) 状态相关：
+//   "Status:burn:0.3" (30% 概率附加灼伤)
+//   "ImmuneStatus:freeze" / "Prevent:poison"
+//   "Cure:freeze:0.5" (50% 概率治愈冰冻) / "Cure:all" (一次写入所有主状态)
+
+// 6) 优先度 / 闪避 / 暴击等级：
+//   "CritStage:+1" / "Evasion:+2" / "Priority:+1"
+
+// 7) 环境反伤 / Drain 扩展：
+//   "Recoil:0.5"            → 50% 概率对攻击方造成 10% MaxHP 反伤
+//   "Recoil:0.3:0.15"       → 30% 概率造成 15% MaxHP
+//   "Drain:0.5"             → 所有吸血/寄生吸取类恢复量 x0.5
+
+// 8) 其他：
+//   "GrantType:Grass" 为进场宝可梦额外赋予属性 (配合 envOverlay.getGrantedTypes 使用)
+//   "Immune:Ground" 常用于气球环境 (“HasItem:AirBalloon” 目标 + Immune:Ground)
+
+// ========== JSON 规则示例 ==========
+// 例：熔岩洞穴 (Magma Cavern)
+// {
+//   "env_name": "熔岩洞穴 (Magma Cavern)",
+//   "narrative": "炽热的岩浆在脚下流淌...",
+//   "rules": [
+//     { "target": "Grounded", "eff": ["HP:-0.0625"] },
+//     { "target": "Grounded+Type:Steel", "eff": ["HP:-0.125", "Spe:0.5"] },
+//     { "target": "Type:Fire+HasAbility:FlashFire", "eff": ["Dmg:1.5", "HP:0.0625"] },
+//     { "target": "MoveType:Water+Flag:Contact", "eff": ["Dmg:0.5", "Recoil:0.5"] },
+//     { "target": "MoveType:Fire+Flag:Pulse", "eff": ["Dmg:1.3"] },
+//     { "target": "HasItem:AirBalloon", "eff": ["Immune:Ground"] },
+//     { "target": "ALL", "eff": ["BanItem:Berry", "Drain:0.5"] }
+//   ]
+// }
+
+// 将 JSON 直接写入 environment.overlay.rules。
+
+示例（2v2）：
+<PKM_BATTLE>
+{
+  "difficulty": "expert",
+  "p1": {
+    "entrants": [
+      {   
+        "name": "{{user}}" // 默认全上
+      },
+      {       // 如果有第二个人
+        "name": "Marnie",
+        "type": "trainer",
+        "tier": 4,
+        "party": ["Grimmsnarl", "Morpeko"]
+      }
+    ]
+  },
+  "p2": {
+    "entrants": [
+      // 实体1: 无主 Boss (全详情)
+      {
+        "name": "Guardian Protocol",
+        "type": "wild",
+        "party": [
+          {
+            "name": "Iron Valiant",
+            "lv": 98,
+            "quality": "perfect",
+            "ability": "Quark Drive",
+            "item": "Booster Energy",
+            "moves": ["Moonblast", "Close Combat", "Spirit Break", "Thunderbolt"]
+          }
+        ]
+      },
+      // 实体2  (快速构建 x3)
+      {
+        "name": "Defense Drones",
+        "type": "wild",
+        "party": [
+           // 快速1: 纯极简干扰手
+           { "name": "Iron Moth", "lv": 90, "moves": ["Acid Spray", "Fiery Dance"] },
+           // 快速2: 带道具速攻手
+           { "name": "Iron Bundle", "lv": 90, "item": "Focus Sash", "moves": ["Icy Wind", "Flip Turn"] },
+           // 快速3: 功能性肉盾
+           { "name": "Iron Treads", "lv": 90, "moves": ["Stealth Rock", "Rapid Spin"] }
+        ]
+      }
+    ]
+  }
+}
+</PKM_BATTLE>
+示例（1v1）：
+<PKM_BATTLE>
+{
+  "difficulty": "normal",
+  "p1": {
+    "entrants": [
+      {
+        "name": "{{user}}" // 模式 A 简写，读取玩家存档全队
+      }
+    ]
+  },
+  "p2": {
+    "entrants": [
+      {
+        "name": "Roxie", // 调用预设 NPC 数据
+        "type": "trainer",
+        "tier": 2, // 对应规则中的 normal 难度
+        "party": ["Whirlipede", "Garbodor"] // 仅筛选这两只作为出战宝可梦，如果不写全队出战
+      }
+    ],
+    "lines": {
+      "start": "Techinical check! One, two! Get ready to be rocked by my Poison types!",
+      "win": "Looks like you couldn't handle the toxicity!",
+      "lose": "You... you unplugged my amp...!",
+      "escape": "Hey! The show isn't over yet!"
+    }
+  }
+}
+</PKM_BATTLE>
+
+示例（带环境的 Boss 战）：
+<PKM_BATTLE>
+{
+  "difficulty": "expert",
+  "p1": {
+    "entrants": [
+      { "name": "{{user}}" }
+    ]
+  },
+  "p2": {
+    "entrants": [
+      {
+        "name": "Void Guardian",
+        "type": "wild",
+        "party": [
+          {
+            "name": "Giratina-Origin",
+            "lv": 95,
+            "quality": "perfect",
+            "ability": "Levitate",
+            "item": "Griseous Orb",
+            "moves": ["Shadow Force", "Dragon Pulse", "Aura Sphere", "Will-O-Wisp"]
+          }
+        ]
+      }
+    ],
+    "lines": {
+      "start": "时空的裂隙撕开了...反转世界的守护者现身！",
+      "win": "裂隙...正在愈合...",
+      "lose": "这个世界...将被吞噬..."
+    }
+  },
+  "environment": {
+    "weather": null,   // 不指定
+    "weatherTurns": 0,
+    "overlay": {
+      "env_name": "反转世界",
+      "narrative": "重力法则被扭曲，时空在此处交错...",
+      "rules": [
+        { "target": "ALL", "eff": ["Spe:0.7"] },
+        { "target": "Type:Ghost", "eff": ["SpA:1.4", "Def:1.2"] },
+        { "target": "Type:Dragon", "eff": ["Dmg:0.8"] }
+      ]
+    }
+  }
+}
+</PKM_BATTLE>
+</battle_rules>

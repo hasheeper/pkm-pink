@@ -1,0 +1,85 @@
+/* =========================================
+   COPY NOTIFICATION (从 styles.css 移植)
+   更具科技感的横幅提示
+   ========================================= */
+.copy-notification {
+    position: fixed;
+    top: 60px; /* 从顶部滑入 */
+    left: 20px; right: 20px;
+    max-width: 400px;
+    margin: 0 auto;
+  
+    background: rgba(30, 30, 35, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4), 0 0 0 1px rgba(85, 239, 196, 0.5); /* 绿色描边 */
+    backdrop-filter: blur(16px);
+    border-radius: 6px;
+  
+    /* 倾斜切角左上右下 */
+    transform: skewX(-15deg) translateY(-20px);
+  
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    z-index: 9999;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+
+.copy-notification.show {
+    opacity: 1;
+    transform: skewX(-15deg) translateY(0); /* 滑入 */
+}
+
+/* 内部内容反转以保持正 */
+.copy-notif-internal {
+    transform: skewX(15deg);
+    display: flex; 
+    align-items: center; 
+    gap: 15px; 
+    width: 100%;
+}
+
+.copy-notif-icon {
+    font-size: 1.5rem;
+    color: #55efc4;
+    display: flex; align-items: center;
+}
+
+.copy-notif-text {
+    font-family: 'Exo 2', sans-serif;
+    color: #fff;
+    line-height: 1.2;
+}
+
+.copy-notif-title {
+    font-weight: 800;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #55efc4; /* Tech Green */
+}
+
+.copy-notif-desc {
+    font-size: 0.75rem;
+    color: #b2bec3;
+    font-weight: 500;
+}
+
+@keyframes scanline {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(200%); }
+}
+
+/* 扫描线特效 */
+.copy-notification::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    z-index: -1;
+    animation: scanline 2s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+}

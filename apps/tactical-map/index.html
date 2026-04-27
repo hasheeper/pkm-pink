@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RHODIA CMD SYSTEM</title>
+    <link rel="stylesheet" href="scifi.css">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+</head>
+<body>
+
+    <div class="scanline"></div>
+
+    <!-- Journey Planner Panel -->
+    <div id="journey-panel" class="hidden">
+        <div class="panel-header">
+            <span style="color:var(--highlight); font-weight:800; letter-spacing:1px;">
+                <i class="ri-route-line"></i> FLIGHT PLAN
+            </span>
+            <button onclick="window.RouteSystem && RouteSystem.toggle()" class="close-btn" title="CLOSE">
+                <i class="ri-close-fill"></i>
+            </button>
+        </div>
+
+        <div class="route-dashboard">
+            <div class="stat-box">
+                <div class="label">DIST</div>
+                <div class="val" id="route-dist">0m</div>
+            </div>
+            <div class="stat-box">
+                <div class="label">LEGS</div>
+                <div class="val" id="route-legs">0</div>
+            </div>
+            <div class="stat-box">
+                <div class="label">RISK</div>
+                <div class="val" id="route-risk" style="color:#2ecc71">--</div>
+            </div>
+        </div>
+
+        <div id="route-steps"></div>
+
+        <div class="panel-footer">
+            <button class="nav-btn reset" onclick="window.RouteSystem && RouteSystem.reset()"><i class="ri-refresh-line"></i> RESET</button>
+            <button class="nav-btn commit" onclick="window.RouteSystem && RouteSystem.toggle()"><i class="ri-check-double-line"></i> EXECUTE</button>
+        </div>
+    </div>
+
+    <!-- 顶部 UI 区域 -->
+    <div id="ui-layer">
+        <div class="ui-header">
+            <div>
+                <h1>RHODIA <span style="font-weight:400; font-size: 0.8em; opacity: 0.6;">OS</span></h1>
+                <div class="subtitle">TACTICAL COMMAND // VER 1.5</div>
+            </div>
+            <button id="layer-toggle-btn" onclick="toggleLayerMenu()">
+                <i class="ri-stack-line"></i> LAYERS
+            </button>
+        </div>
+
+        <div id="layer-panel-content" class="collapsed">
+            <div class="layer-control-actions">
+                <span onclick="toggleAllLayers(true)">ALL ON</span>
+                <span style="opacity: 0.3">|</span>
+                <span onclick="toggleAllLayers(false)">ALL OFF</span>
+            </div>
+            <div id="layer-toggles"></div>
+        </div>
+    </div>
+
+    <div id="tooltip"></div>
+
+    <div id="canvas-wrapper">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <!-- NEW: Map Command Controls -->
+    <div id="map-controls">
+        <button class="map-btn" onclick="modifyZoom(0.2)" title="ZOOM IN"><i class="ri-add-line"></i></button>
+        <button class="map-btn" onclick="modifyZoom(-0.2)" title="ZOOM OUT"><i class="ri-subtract-line"></i></button>
+        <div style="height: 10px;"></div>
+        <button class="map-btn" onclick="centerCameraOnPlayer()" title="LOCATE SQUAD"><i class="ri-crosshair-2-line"></i></button>
+        <div style="height: 10px;"></div>
+        <button class="map-btn accent" onclick="window.RouteSystem && RouteSystem.toggle()" title="SET ROUTE">
+            <i class="ri-map-pin-add-line"></i>
+        </button>
+        <div style="height: 10px;"></div>
+        <button class="map-btn" onclick="showLocationContext()" title="LOCATION INFO">
+            <i class="ri-map-pin-line"></i>
+        </button>
+    </div>
+
+    <div id="bottom-dock">
+        <div class="info-card">
+            <div class="label">SQUAD STATUS</div>
+            <div class="val" style="color:#2ecc71">OPTIMAL</div>
+            <div class="label" style="margin-top: 4px;">GRID REF</div>
+            <div class="val" id="ui-coords" style="color:var(--accent)">--.--</div>
+        </div>
+
+        <button id="action-btn" onclick="toggleTacticalMode()" class="action-btn">
+            <i class="ri-focus-2-line"></i> <span id="action-btn-text">TACTICAL DIVE</span>
+        </button>
+    </div>
+
+    <script src="tacticalView.js"></script>
+    <script src="pkmdata.js"></script>
+    <script src="game.js"></script>
+    <script src="pokemonEngine.js"></script>
+    <script src="locationContext.js"></script>
+
+    <!-- 位置信息弹窗 -->
+    <div id="location-context-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#1a1a2e;border:2px solid var(--accent);border-radius:8px;padding:20px;max-width:500px;max-height:80vh;overflow-y:auto;z-index:10001;font-family:monospace;font-size:12px;white-space:pre-wrap;color:#e0e0e0;box-shadow:0 0 30px rgba(0,200,255,0.3);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid var(--accent);padding-bottom:10px;">
+            <span style="color:var(--highlight);font-weight:bold;"><i class="ri-map-pin-line"></i> LOCATION CONTEXT</span>
+            <button id="location-close-btn" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:20px;padding:5px 10px;">✕</button>
+        </div>
+        <div id="location-context-content" style="min-height:100px;"></div>
+    </div>
+    <div id="location-context-backdrop" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:10000;"></div>
+
+    <script>
+        function toggleLayerMenu() {
+            const panel = document.getElementById('layer-panel-content');
+            panel.classList.toggle('collapsed');
+            const btn = document.getElementById('layer-toggle-btn');
+            btn.classList.toggle('active');
+        }
+        
+        function showLocationContext() {
+            if (!window.LocationContextGenerator) {
+                alert('位置系统未就绪');
+                return;
+            }
+            // 优先使用playerState（全局玩家位置）
+            let gx, gy;
+            if (window.playerState && typeof window.playerState.gx === 'number') {
+                gx = window.playerState.gx;
+                gy = window.playerState.gy;
+            } else if (window.TacticalSystem && window.TacticalSystem.isActive && window.TacticalSystem.playerGrid) {
+                gx = window.TacticalSystem.playerGrid.x;
+                gy = window.TacticalSystem.playerGrid.y;
+            } else {
+                alert('玩家位置未初始化');
+                return;
+            }
+            try {
+                const contextText = LocationContextGenerator.generateContextText(gx, gy);
+                document.getElementById('location-context-content').textContent = contextText || '无法获取位置信息';
+            } catch(e) {
+                console.error('[LocationContext] Error:', e);
+                document.getElementById('location-context-content').textContent = '错误: ' + e.message;
+            }
+            document.getElementById('location-context-modal').style.display = 'block';
+            document.getElementById('location-context-backdrop').style.display = 'block';
+        }
+        
+        function hideLocationContext() {
+            document.getElementById('location-context-modal').style.display = 'none';
+            document.getElementById('location-context-backdrop').style.display = 'none';
+        }
+        
+        // 绑定关闭按钮事件
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('location-close-btn').addEventListener('click', hideLocationContext);
+            document.getElementById('location-context-backdrop').addEventListener('click', hideLocationContext);
+        });
+    </script>
+</body>
+</html>

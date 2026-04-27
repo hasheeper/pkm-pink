@@ -1,0 +1,742 @@
+/**
+ * PKM Dashboard - SillyTavern 悬浮球注入脚本 (Mini版本)
+ * 点击悬浮球打开 GitHub Pages 上的 PKM 面板
+ * 核心功能：悬浮球、开关键、ERA数据获取、注入栏(指向)、卸载逻辑
+ */
+
+(function() {
+    'use strict';
+    
+    const PKM_URL = 'https://hasheeper.github.io/pkm21/';
+    
+    // 等待 jQuery 加载
+    function waitForJQuery(callback) {
+        if (typeof jQuery !== 'undefined') {
+            callback(jQuery);
+        } else {
+            setTimeout(() => waitForJQuery(callback), 100);
+        }
+    }
+    
+    waitForJQuery(function($) {
+        console.log('[PKM] Mini版本加载中...');
+        
+        // 清理旧元素
+        $('[id^="pkm-"]').remove();
+        
+        // 动画样式
+        const animationStyle = `
+            <style id="pkm-anim-style">
+                @keyframes pkm-float {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-6px); }
+                }
+                @keyframes pkm-pulse {
+                    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.4); }
+                    50% { box-shadow: 0 0 0 12px rgba(255, 215, 0, 0); }
+                }
+            </style>
+        `;
+        if (!$('#pkm-anim-style').length) {
+            $('head').append(animationStyle);
+        }
+        
+        // 创建容器
+        const container = $('<div>')
+            .attr('id', 'pkm-container')
+            .css({
+                position: 'fixed',
+                top: '80px',
+                right: '20px',
+                zIndex: '99999'
+            });
+        
+        // 悬浮球
+        const ball = $('<div>')
+            .attr('id', 'pkm-ball')
+            .css({
+                width: '50px',
+                height: '50px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 4px 15px rgba(255, 165, 0, 0.5)',
+                animation: 'pkm-float 3s ease-in-out infinite, pkm-pulse 2s ease-in-out infinite',
+                transition: 'transform 0.2s ease'
+            })
+            .html(`
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));">
+                    <circle cx="12" cy="12" r="10" stroke="#333" stroke-width="2" fill="none"/>
+                    <line x1="2" y1="12" x2="22" y2="12" stroke="#333" stroke-width="2"/>
+                    <circle cx="12" cy="12" r="3" fill="#333"/>
+                </svg>
+            `)
+            .hover(
+                function() { $(this).css({ transform: 'scale(1.1)' }); },
+                function() { $(this).css({ transform: 'scale(1)' }); }
+            );
+        
+        // 遮罩层
+        const overlay = $('<div>')
+            .attr('id', 'pkm-overlay')
+            .css({
+                'position': 'fixed',
+                'top': '0',
+                'left': '0',
+                'right': '0',
+                'bottom': '0',
+                'width': '100vw',
+                'height': '97.5vh',
+                'background': 'rgba(0, 0, 0, 0.5)',
+                'backdrop-filter': 'blur(4px)',
+                'pointer-events': 'auto',
+                'display': 'none',
+                'align-items': 'center',
+                'justify-content': 'center',
+                'padding': '1px',
+                'z-index': 2147483646,
+                'overflow': 'hidden'
+            });
+        
+        // 内容包装器
+        const contentWrapper = $('<div>')
+            .attr('id', 'pkm-content-wrapper')
+            .css({
+                'position': 'relative',
+                'width': '100%',
+                'max-width': '485px',
+                'height': '95vh',
+                'max-height': '850px',
+                'display': 'flex',
+                'flex-direction': 'column',
+                'align-items': 'center',
+                'justify-content': 'center',
+                'pointer-events': 'auto'
+            });
+        
+        // iframe
+        const iframe = $('<iframe>')
+            .attr('id', 'pkm-iframe')
+            .css({
+                'width': '100%',
+                'height': '100%',
+                'border': 'none',
+                'border-radius': '24px',
+                'box-shadow': '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                'background': '#f2f4f8',
+                'overflow': 'hidden'
+            });
+        
+        // 关闭按钮
+        const closeIconSvg = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>`;
+        
+        const closeBtn = $('<div>')
+            .attr('id', 'pkm-close-btn')
+            .html(closeIconSvg)
+            .css({
+                'position': 'absolute',
+                'top': '-5px',
+                'right': '-10px',
+                'width': '40px',
+                'height': '40px',
+                'background': 'rgba(255, 255, 255, 0.85)',
+                'backdrop-filter': 'blur(4px)',
+                'border-radius': '50%',
+                'cursor': 'pointer',
+                'display': 'flex',
+                'align-items': 'center',
+                'justify-content': 'center',
+                'color': '#636e72',
+                'z-index': 100,
+                'pointer-events': 'auto',
+                'transition': 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
+            });
+        
+        closeBtn.hover(
+            function() {
+                $(this).css({
+                    'transform': 'rotate(90deg) scale(1.1)',
+                    'background': '#ff7675',
+                    'color': '#fff'
+                });
+            },
+            function() {
+                $(this).css({
+                    'transform': 'rotate(0deg) scale(1)',
+                    'background': 'rgba(255, 255, 255, 0.85)',
+                    'color': '#636e72'
+                });
+            }
+        );
+        
+        // 组装
+        contentWrapper.append(iframe).append(closeBtn);
+        overlay.append(contentWrapper);
+        container.append(ball);
+        $('body').append(container).append(overlay);
+        
+        // ========== ERA 变量获取 ==========
+        async function getEraVars() {
+            return new Promise((resolve) => {
+                if (typeof eventEmit === 'undefined' || typeof eventOn === 'undefined') {
+                    console.warn('[PKM] eventEmit/eventOn 不可用');
+                    resolve(null);
+                    return;
+                }
+                
+                const timeout = setTimeout(() => {
+                    console.warn('[PKM] ERA 查询超时');
+                    resolve(null);
+                }, 3000);
+                
+                eventOn('era:queryResult', (detail) => {
+                    if (detail.queryType === 'getCurrentVars') {
+                        clearTimeout(timeout);
+                        resolve(detail.result?.statWithoutMeta || null);
+                    }
+                }, { once: true });
+                
+                eventEmit('era:getCurrentVars');
+            });
+        }
+        
+        // ========== 打开/关闭面板 ==========
+        let iframeInitialized = false;
+        
+        ball.on('click', async function() {
+            console.log('[PKM] 打开面板');
+            overlay.css('display', 'flex');
+            
+            if (!iframeInitialized) {
+                console.log('[PKM] 初始化 iframe...');
+                iframe.attr('src', PKM_URL);
+                
+                iframe.on('load', async function() {
+                    console.log('[PKM] iframe 加载完成');
+                    const eraData = await getEraVars();
+                    if (eraData && iframe[0] && iframe[0].contentWindow) {
+                        iframe[0].contentWindow.postMessage({
+                            type: 'PKM_ERA_DATA',
+                            data: eraData
+                        }, '*');
+                        console.log('[PKM] ✓ ERA 数据已发送到 iframe');
+                    }
+                });
+                
+                iframeInitialized = true;
+            }
+        });
+        
+        closeBtn.on('click', function() {
+            overlay.css('display', 'none');
+        });
+        
+        overlay.on('click', function(e) {
+            if (e.target === overlay[0]) {
+                overlay.css('display', 'none');
+            }
+        });
+        
+        // ESC 关闭
+        $(document).on('keydown', function(e) {
+            if (e.key === 'Escape' && overlay.css('display') !== 'none') {
+                overlay.css('display', 'none');
+            }
+        });
+        
+        // ========== 刷新函数 ==========
+        let refreshDashboardTimer = null;
+        async function refreshDashboard() {
+            if (refreshDashboardTimer) {
+                clearTimeout(refreshDashboardTimer);
+            }
+            
+            refreshDashboardTimer = setTimeout(async () => {
+                console.log('[PKM] 刷新面板数据...');
+                const eraData = await getEraVars();
+                if (!eraData) return;
+                
+                const message = { type: 'PKM_REFRESH', data: eraData };
+                
+                if (iframe[0] && iframe[0].contentWindow) {
+                    try {
+                        iframe[0].contentWindow.postMessage(message, '*');
+                        console.log('[PKM] ✓ 已发送刷新数据到 iframe');
+                    } catch (e) {}
+                }
+                
+                refreshDashboardTimer = null;
+            }, 150);
+        }
+
+        // ========== Transfer Buffer 处理 ==========
+        let transferBufferLock = false;
+
+        function createEmptyTransferBuffer() {
+            return {
+                slot: 7,
+                name: null,
+                nickname: null,
+                species: null,
+                gender: null,
+                lv: null,
+                quality: null,
+                nature: null,
+                ability: null,
+                shiny: false,
+                item: null,
+                mechanic: null,
+                teraType: null,
+                isAce: false,
+                isLead: false,
+                friendship: {
+                    avs: { trust: 0, passion: 0, insight: 0, devotion: 0 },
+                    av_up: { trust: 0, passion: 0, insight: 0, devotion: 0 }
+                },
+                moves: {
+                    move1: null,
+                    move2: null,
+                    move3: null,
+                    move4: null
+                },
+                stats_meta: {
+                    ivs: { hp: null, atk: null, def: null, spa: null, spd: null, spe: null },
+                    ev_level: 0,
+                    ev_up: 0
+                },
+                notes: null
+            };
+        }
+
+        async function handleTransferBuffer() {
+            if (transferBufferLock) {
+                console.log('[PKM] [TRANSFER] 正在处理中，忽略重复请求');
+                return;
+            }
+
+            try {
+                if (typeof getLastMessageId !== 'function' ||
+                    typeof getChatMessages !== 'function' ||
+                    typeof setChatMessages !== 'function') {
+                    console.warn('[PKM] [TRANSFER] SillyTavern API 函数不可用，跳过 transfer_buffer 处理');
+                    return;
+                }
+
+                const eraVars = await getEraVars();
+                const transferBuffer = eraVars?.player?.party?.transfer_buffer;
+
+                if (!transferBuffer || !transferBuffer.name) {
+                    return;
+                }
+
+                transferBufferLock = true;
+                console.log('[PKM] [TRANSFER] 检测到 transfer_buffer 有内容:', transferBuffer.name);
+
+                const box = eraVars?.player?.box || {};
+                const existingIds = Object.keys(box)
+                    .filter((k) => k.startsWith('storage_'))
+                    .map((k) => parseInt(k.split('_')[1], 10))
+                    .filter((n) => Number.isFinite(n));
+
+                const nextId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+                const newBoxKey = `storage_${String(nextId).padStart(2, '0')}`;
+
+                const boxData = JSON.parse(JSON.stringify(transferBuffer));
+                delete boxData.slot;
+
+                const variableInsertData = {
+                    player: {
+                        box: {
+                            [newBoxKey]: boxData
+                        }
+                    }
+                };
+
+                const variableEditData = {
+                    player: {
+                        party: {
+                            transfer_buffer: createEmptyTransferBuffer()
+                        }
+                    }
+                };
+
+                const variableInsertBlock = `<VariableInsert>\n${JSON.stringify(variableInsertData, null, 2)}\n</VariableInsert>`;
+                const variableEditBlock = `<VariableEdit>\n${JSON.stringify(variableEditData, null, 2)}\n</VariableEdit>`;
+
+                const lastMessageId = getLastMessageId();
+                const messages = getChatMessages(lastMessageId);
+                if (!messages || messages.length === 0) {
+                    console.warn('[PKM] [TRANSFER] 无法获取最近消息');
+                    return;
+                }
+
+                const msg = messages[0];
+                let content = msg.message || '';
+                content = content.trim() + '\n\n' + variableInsertBlock + '\n\n' + variableEditBlock;
+
+                await setChatMessages([{
+                    message_id: lastMessageId,
+                    message: content
+                }], { refresh: 'affected' });
+
+                console.log(`[PKM] [TRANSFER] ✓ 已将 ${transferBuffer.name} 传输到盒子 ${newBoxKey}`);
+
+                if (typeof eventEmit !== 'undefined') {
+                    eventEmit('era:updateByObject', variableInsertData);
+                    eventEmit('era:updateByObject', variableEditData);
+                    console.log('[PKM] [TRANSFER] ✓ ERA 变量已更新');
+                }
+
+                setTimeout(() => refreshDashboard(), 100);
+            } catch (e) {
+                console.error('[PKM] [TRANSFER] 处理失败:', e);
+            } finally {
+                setTimeout(() => { transferBufferLock = false; }, 1000);
+            }
+        }
+        
+        // ========== 监听酒馆事件 ==========
+        if (typeof eventOn !== 'undefined') {
+            let isProcessingEraEvent = false;
+            let eraEventDebounceTimer = null;
+
+            eventOn('era:writeDone', () => {
+                if (isProcessingEraEvent) {
+                    console.log('[PKM] era:writeDone 事件跳过（内部更新处理中）');
+                    return;
+                }
+
+                if (eraEventDebounceTimer) {
+                    clearTimeout(eraEventDebounceTimer);
+                }
+
+                eraEventDebounceTimer = setTimeout(async () => {
+                    isProcessingEraEvent = true;
+                    console.log('[PKM] 检测到 ERA 变量更新，刷新面板并检查 transfer_buffer');
+                    try {
+                        refreshDashboard();
+                        await handleTransferBuffer();
+                    } finally {
+                        setTimeout(() => {
+                            isProcessingEraEvent = false;
+                        }, 200);
+                    }
+                }, 100);
+            });
+            
+            eventOn('generation_ended', () => {
+                console.log('[PKM] 检测到消息生成完成，刷新面板并检查 transfer_buffer');
+                refreshDashboard();
+                handleTransferBuffer();
+            });
+            
+            eventOn('chat_changed', () => {
+                console.log('[PKM] 检测到对话切换，重置面板');
+                iframeInitialized = false;
+            });
+        }
+        
+        // ========== 监听 iframe 的 postMessage 请求 ==========
+        window.addEventListener('message', function(event) {
+            if (!event.data || !event.data.type) return;
+            
+            // 处理注入请求（指向）
+            if (event.data.type === 'PKM_INJECT_LOCATION') {
+                const { id, content, position, depth } = event.data;
+                console.log('[PKM] 收到注入请求:', id);
+                
+                try {
+                    if (typeof uninjectPrompts === 'function') {
+                        try {
+                            uninjectPrompts([id]);
+                        } catch (e) {}
+                    }
+                    
+                    if (typeof injectPrompts === 'function') {
+                        injectPrompts([{
+                            id: id,
+                            position: position || 'after_wi_scan',
+                            depth: depth || 0,
+                            role: 'system',
+                            should_scan: false,
+                            content: content
+                        }]);
+                        console.log('[PKM] ✓ 内容已注入到世界书');
+                    } else {
+                        console.warn('[PKM] injectPrompts API 不可用');
+                    }
+                } catch (e) {
+                    console.error('[PKM] 注入失败:', e);
+                }
+            }
+            
+            // 处理清除注入请求
+            if (event.data.type === 'PKM_CLEAR_INJECTION') {
+                const { id } = event.data;
+                console.log('[PKM] 收到清除注入请求:', id);
+                
+                try {
+                    if (typeof uninjectPrompts === 'function') {
+                        uninjectPrompts([id]);
+                        console.log('[PKM] ✓ 注入已清除');
+                    }
+                } catch (e) {
+                    console.error('[PKM] 清除注入失败:', e);
+                }
+            }
+            
+            // 处理 Leader 切换请求
+            if (event.data.type === 'PKM_SET_LEADER') {
+                const { targetSlot } = event.data.data || {};
+                console.log('[PKM] 收到 Leader 切换请求:', targetSlot);
+                handleLeaderToggle(targetSlot);
+            }
+            
+            // 处理 Settings 更新请求
+            if (event.data.type === 'PKM_UPDATE_SETTINGS') {
+                const settingsData = event.data.data;
+                console.log('[PKM] 收到 Settings 更新请求:', settingsData);
+                handleSettingsToggle(settingsData);
+            }
+        });
+        
+        // ========== Leader 切换处理 ==========
+        let leaderToggleLock = false;
+        
+        async function handleLeaderToggle(targetSlot) {
+            if (leaderToggleLock) {
+                console.log('[PKM] [LEADER] 正在处理中，忽略重复请求');
+                return;
+            }
+            leaderToggleLock = true;
+            
+            try {
+                console.log(`[PKM] [LEADER] 收到切换请求: ${targetSlot}`);
+                
+                // 检查必要的 API 函数
+                if (typeof getLastMessageId !== 'function' || 
+                    typeof getChatMessages !== 'function' || 
+                    typeof setChatMessages !== 'function') {
+                    console.error('[PKM] [LEADER] SillyTavern API 函数不可用');
+                    return;
+                }
+                
+                const eraVars = await getEraVars();
+                const party = eraVars?.player?.party || {};
+                
+                if (!party || Object.keys(party).length === 0) {
+                    console.warn('[PKM] [LEADER] 队伍为空，无法切换');
+                    return;
+                }
+                
+                const variableEditData = {
+                    player: {
+                        party: {}
+                    }
+                };
+                
+                for (let i = 1; i <= 6; i++) {
+                    const slotKey = `slot${i}`;
+                    const pokemon = party[slotKey];
+                    
+                    if (pokemon && pokemon.name) {
+                        variableEditData.player.party[slotKey] = {
+                            isLead: slotKey === targetSlot
+                        };
+                    }
+                }
+                
+                const variableEditJson = JSON.stringify(variableEditData, null, 2);
+                const variableEditBlock = `<VariableEdit>\n${variableEditJson}\n</VariableEdit>`;
+                
+                console.log('[PKM] [LEADER] 生成 VariableEdit:', variableEditBlock);
+                
+                const lastMessageId = getLastMessageId();
+                const messages = getChatMessages(lastMessageId);
+                
+                if (!messages || messages.length === 0) {
+                    console.warn('[PKM] [LEADER] 无法获取最近消息');
+                    return;
+                }
+                
+                const msg = messages[0];
+                let content = msg.message || '';
+                content = content.trim() + '\n\n' + variableEditBlock;
+                
+                await setChatMessages([{
+                    message_id: lastMessageId,
+                    message: content
+                }], { refresh: 'affected' });
+                
+                console.log(`[PKM] [LEADER] ✓ 已注入 Leader 切换到消息 #${lastMessageId}`);
+                
+                if (typeof eventEmit !== 'undefined') {
+                    eventEmit('era:updateByObject', variableEditData);
+                    console.log('[PKM] [LEADER] ✓ ERA 变量已更新');
+                }
+                
+                setTimeout(() => refreshDashboard(), 100);
+                
+            } catch (e) {
+                console.error('[PKM] [LEADER] 切换失败:', e);
+            } finally {
+                setTimeout(() => { leaderToggleLock = false; }, 1000);
+            }
+        }
+        
+        // ========== Settings 切换处理 ==========
+        let settingsToggleLock = false;
+        
+        async function handleSettingsToggle(settingsData) {
+            if (settingsToggleLock) {
+                console.log('[PKM] [SETTINGS] 正在处理中，忽略重复请求');
+                return;
+            }
+            settingsToggleLock = true;
+            
+            try {
+                console.log('[PKM] [SETTINGS] 收到设置更新:', settingsData);
+                
+                // 检查必要的 API 函数
+                if (typeof getLastMessageId !== 'function' || 
+                    typeof getChatMessages !== 'function' || 
+                    typeof setChatMessages !== 'function') {
+                    console.error('[PKM] [SETTINGS] SillyTavern API 函数不可用');
+                    return;
+                }
+                
+                const variableEditData = {
+                    settings: settingsData
+                };
+                
+                const variableEditJson = JSON.stringify(variableEditData, null, 2);
+                const variableEditBlock = `<VariableEdit>\n${variableEditJson}\n</VariableEdit>`;
+                
+                console.log('[PKM] [SETTINGS] 生成 VariableEdit:', variableEditBlock);
+                
+                const lastMessageId = getLastMessageId();
+                const messages = getChatMessages(lastMessageId);
+                
+                if (!messages || messages.length === 0) {
+                    console.warn('[PKM] [SETTINGS] 无法获取最近消息');
+                    return;
+                }
+                
+                const msg = messages[0];
+                let content = msg.message || '';
+                content = content.trim() + '\n\n' + variableEditBlock;
+                
+                await setChatMessages([{
+                    message_id: lastMessageId,
+                    message: content
+                }], { refresh: 'affected' });
+                
+                console.log(`[PKM] [SETTINGS] ✓ 已注入 Settings 到消息 #${lastMessageId}`);
+                
+                if (typeof eventEmit !== 'undefined') {
+                    eventEmit('era:updateByObject', variableEditData);
+                    console.log('[PKM] [SETTINGS] ✓ ERA 变量已更新');
+                }
+                
+            } catch (e) {
+                console.error('[PKM] [SETTINGS] 更新失败:', e);
+            } finally {
+                setTimeout(() => { settingsToggleLock = false; }, 500);
+            }
+        }
+        
+        // ========== 卸载清理函数 ==========
+        function unloadPkmUI() {
+            console.log('[PKM] UI 脚本开始卸载');
+            
+            $('#pkm-container').remove();
+            $('#pkm-anim-style').remove();
+            $('[id^="pkm-"]').remove();
+            
+            if (typeof eventRemoveListener !== 'undefined') {
+                try {
+                    eventRemoveListener('era:writeDone');
+                    eventRemoveListener('generation_ended');
+                    eventRemoveListener('chat_changed');
+                } catch (e) {}
+            }
+            
+            delete window.pkmDashboard;
+            window.removeEventListener('pagehide', unloadPkmUI);
+            
+            console.log('[PKM] UI 脚本卸载完成');
+        }
+        
+        // 监听 pagehide 事件（退出角色卡时触发）
+        window.removeEventListener('pagehide', unloadPkmUI);
+        window.addEventListener('pagehide', unloadPkmUI);
+        
+        // ========== 暴露全局函数到酒馆主窗口 ==========
+        // 方案1: 使用酒馆助手的 initializeGlobal API
+        if (typeof initializeGlobal === 'function') {
+            initializeGlobal('pkmSetLeader', handleLeaderToggle);
+            initializeGlobal('pkmUpdateSettings', handleSettingsToggle);
+            console.log('[PKM] ✓ 已通过 initializeGlobal 暴露函数');
+        }
+        
+        // 方案2: 直接在酒馆主窗口设置全局函数
+        try {
+            const topWin = window.top || window.parent;
+            if (topWin && topWin !== window) {
+                topWin.pkmSetLeader = handleLeaderToggle;
+                topWin.pkmUpdateSettings = handleSettingsToggle;
+                console.log('[PKM] ✓ 已在酒馆主窗口设置 pkmSetLeader 和 pkmUpdateSettings');
+                
+                // 在酒馆主窗口注册 postMessage 监听器
+                topWin.addEventListener('message', function(event) {
+                    if (!event.data || !event.data.type) return;
+                    
+                    if (event.data.type === 'PKM_SET_LEADER') {
+                        const { targetSlot } = event.data.data || {};
+                        console.log('[PKM] 收到 Leader 切换请求 (top listener):', targetSlot);
+                        handleLeaderToggle(targetSlot);
+                    }
+                    
+                    if (event.data.type === 'PKM_UPDATE_SETTINGS') {
+                        const settingsData = event.data.data;
+                        console.log('[PKM] 收到 Settings 更新请求 (top listener):', settingsData);
+                        handleSettingsToggle(settingsData);
+                    }
+                });
+                console.log('[PKM] ✓ 已在酒馆主窗口注册 postMessage 监听器');
+            }
+        } catch (e) {
+            console.warn('[PKM] 无法访问酒馆主窗口:', e.message);
+        }
+        
+        // 方案3: 本地 window 也设置（作为降级）
+        window.pkmSetLeader = handleLeaderToggle;
+        window.pkmUpdateSettings = handleSettingsToggle;
+        
+        // ========== 注入回调函数到 iframe ==========
+        // 当 iframe 加载完成后，注入回调函数
+        iframe.on('load', function() {
+            try {
+                const iframeWin = iframe[0].contentWindow;
+                if (iframeWin) {
+                    // 注入 Leader 切换回调
+                    iframeWin.pkmSetLeaderCallback = handleLeaderToggle;
+                    // 注入 Settings 更新回调
+                    iframeWin.pkmUpdateSettingsCallback = handleSettingsToggle;
+                    console.log('[PKM] ✓ 已注入回调函数到 iframe');
+                }
+            } catch (e) {
+                console.warn('[PKM] 无法注入回调函数到 iframe:', e.message);
+            }
+        });
+        
+        console.log('[PKM] ✓ Mini版本已加载，点击悬浮球打开面板');
+    });
+})();

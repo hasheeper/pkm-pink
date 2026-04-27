@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 字体库 -->
+    <link href="https://fonts.googleapis.com/css2?family=Exo+2:ital,wght@0,700;1,900&family=M+PLUS+Rounded+1c:wght@500;800;900&family=Noto+Sans+SC:wght@700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- 1. 最外层：大圆角的正矩形框架 -->
+    <div class="ver-dawn-frame">
+        
+        <!-- MID: 导航按钮 (按钮歪，排列直) -->
+        <div class="nav-wrap">
+            <div class="tab active" onclick="switchPage('dashboard', this)">
+                <span class="t-txt">HOME</span>
+            </div>
+            <div class="tab" onclick="switchPage('party', this)">
+                <span class="t-txt">PARTY</span>
+            </div>
+            <div class="tab" id="nav-box" data-t="box" onclick="switchPage('box', this)">
+                <span class="t-txt">PC BOX</span>
+            </div>
+            <div class="tab" data-t="soc" onclick="switchPage('social', this)">
+                <span class="t-txt">RELATION</span>
+            </div>
+            <div class="tab" data-t="cfg" onclick="switchPage('settings', this)">
+                <span class="t-txt">CONFIG</span>
+            </div>
+        </div>
+
+        <!-- MAIN: 内容滚动窗 -->
+        <div class="main-viewport" id="inject-viewport">
+            <div id="pg-dashboard" class="page curr"></div>
+            <div id="pg-party" class="page"></div>
+            <div id="pg-social" class="page"></div>
+            <div id="pg-settings" class="page"></div>
+            <div id="pg-box" class="page"></div>
+            <div id="pg-transit" class="page"></div>
+        </div>
+
+    </div>
+
+    <!-- 底部悬浮操作控制台 -->
+    <div id="box-ops-console" class="box-ops-bar">
+        <div class="ops-text" id="ops-log">
+            选择操作对象...
+        </div>
+        <div class="ops-btn-group">
+            <button class="btn-ops-cancel" onclick="resetBoxSelection()">取消 / RESET</button>
+            <button class="btn-ops-confirm" onclick="confirmBoxTransfer()">确认传输 / EXE</button>
+        </div>
+    </div>
+
+    <!-- JS路径保持正确 -->
+    <script src="https://files.catbox.moe/8oxf4b.js"></script>
+    <script src="map/data/translations.js"></script>
+    <script src="data-helpers.js"></script>
+    <script src="app.js"></script>
+    <script src="script.js"></script>
+
+</body>
+</html>

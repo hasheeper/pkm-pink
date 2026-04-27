@@ -1,0 +1,256 @@
+<battle_rules>
+[PKM 引擎协议]
+PKM引擎协议是一个宝可梦对战的场景模拟器，用在实际发生战斗场景前进行演绎和播放，同时，必须在正文铺垫结束后使用此协议
+触发条件：仅当「战斗逻辑判定 (Battle_Logic_Active) = YES」时，生成纯 JSON 数据并包裹在 <PKM_BATTLE> XML标签中。禁输出无关文本。
+核心原则：
+1. 标识符：**严格**使用官方英文 ID (Species/Moves)。例如: "Ursaluna-Bloodmoon"。
+2. 难度 (difficulty): easy / normal / hard / expert。
+3. 动态配置：由 entrants 配置决定具体对战形式，**不再存在固定 NPC 数据库**，所有训练家/敌人均需现场构建。
+
+[根结构]
+// lines 在此处与 entrants 平级
+<PKM_BATTLE>
+{
+  "difficulty": "expert",
+  "p1": { 
+    "entrants": [ {ENTITY}, ... ],
+    // 可能更多
+  }, 
+  "p2": { 
+    "entrants": [ {ENTITY}, ... ],
+     // 可能更多
+    "lines": { 
+       "start": "start P2 dialog", 
+       "win": "Text when P1 wins", 
+       "lose": "Text when P1 lose", 
+       "escape": "Text/Feedback when P1 running away"
+    }
+  },
+  "environment": {ENVIRONMENT}  // (可选) 自定义战场环境
+}
+</PKM_BATTLE>
+[模块：实体 (ENTITY) 数据结构]
+必须根据数据来源，选择下方**模式 A** 或 **模式 B** 中的一种，严格遵守键值类型：
+
+// 模式 A：现场实例化 (Constructor)
+// 适用：野生生物、临时敌人、需要定制数值的 Boss。
+// 核心：party 必须是 Object 数组，现场定义所有数值。
+{
+  "name": "Display_Label_Name", // 用于显示的名称
+  "type": "wild" | "trainer",
+  "party": [
+    // --- 结构 1: 简易构建 (适用于杂兵/普通野怪) ---
+    // 必须包含 name, lv, moves 以防止崩溃
+    { 
+      "name": "SpeciesID", 
+      "lv": <Int>, 
+      "moves": ["MoveID_1", "MoveID_2", …………]
+    },
+    
+    // --- 结构 2: 完整构建 (适用于 Boss/队长) ---
+    { 
+      "name": "SpeciesID", 
+      "lv": <Int>, 
+      // 基础属性
+      "shiny": <Bool>,
+      "gender": "M" | "F" | "N",
+      "quality": "low" | "medium" | "high" | "perfect", // 决定个体值精度
+      "nature": "NatureID", // Official English
+      "ability": "AbilityID", 
+      "item": "ItemID",
+      // 战斗机制 (只要设定 mechanic，必填相关字段，但默认情况下不要用，可不选)
+      "mechanic": "mega" | "dynamax" | "zmove" | "tera", |
+      "teraType": "TypeID",  // tera后填入，要不然不用填
+      // 招式与标记
+      "moves": ["Move1", "Move2", "Move3", "Move4"], 
+    }
+  ]
+}
+
+[模块：环境 (ENVIRONMENT) 数据结构]
+// 可选模块，用于创建特殊战场环境，影响战斗机制
+// 适用：Boss 战、剧情战斗、特殊地形等需要独特战斗规则的场景
+
+{
+  // 天气 ID (全部小写)
+  // 普通天气: "sun" (晴天), "rain" (雨天), "sandstorm" (沙暴), "snow" (雪天)
+  // 始源天气: "harshsun" (大日照), "heavyrain" (大雨), "deltastream" (乱气流)
+  // 区域天气: "smog" (烟霾), "ashfall" (火山灰), "fog" (暗影迷雾)
+  // 无天气:  "clear"
+  // 不指定: 使用 null 调用当地默认天气
+  "weather": "sun" | "rain" | "sandstorm" | "snow" | "harshsun" | "heavyrain" | "deltastream" | "smog" | "ashfall" | "fog" | null,
+  "weatherTurns": 0,  // 天气持续回合 (0=永久)
+  "overlay": {
+    "env_name": "环境名称",           // 显示名称
+    "narrative": "环境描述文字...",    // 战斗开始时显示的描述
+    "rules": [
+      { "target": "TARGET_SELECTOR", "eff": ["EFFECT_ATOM", ...] }
+    ]
+  }
+}
+
+// --- 目标选择器 (TARGET_SELECTOR) ---
+// "ALL"              - 所有宝可梦
+// "Type:Fire"        - 指定属性的宝可梦
+// "MoveType:Water"   - 指定属性的技能
+// "Flag:Contact/Pulse/Sound/Punch/Bite/Slicing/Bullet……"     - Flag招式指定
+// "Side:Player"      - 玩家方
+// "Side:Enemy"       - 敌方
+// "HasAbility:X"     - 拥有特定特性的宝可梦
+// "NOT:Type:Ghost"   - 取反选择
+
+// --- 效果原子 (EFFECT_ATOM) ---
+// 数值修正 (倍率 0.1~6.0):
+//   "Atk:1.5"   - 物攻 x1.5
+//   "Def:0.7"   - 物防 x0.7
+//   "SpA:1.3"   - 特攻 x1.3
+//   "SpD:0.8"   - 特防 x0.8
+//   "Spe:0.5"   - 速度 x0.5
+//   "Dmg:1.2"   - 伤害 x1.2
+//   "Crit:2.0"  - 暴击率 x2.0
+//   "Heal:0.5"  - 回复效果 x0.5
+
+// HP 跳动 (每回合，比例 -0.5~0.5):
+//   "HP:0.0625"   - 每回合回复 1/16 最大HP
+//   "HP:-0.125"   - 每回合扣除 1/8 最大HP
+
+// 类型控制:
+//   "Immune:Ice"          - 免疫冰系伤害
+//   "Weak:Fairy"          - 对妖精系追加弱点 (x2)
+//   "Ban:Fire"            - 禁用火系技能
+//   "ToType:Normal>Electric"  - 普通系技能转换为电系
+
+示例（2v2）：
+<PKM_BATTLE>
+{
+  "difficulty": "expert",
+  "p1": {
+    "entrants": [
+      {   
+        "name": "{{user}}" // 默认全上
+      },
+      {       // 联机盟友：必须现场定义
+        "name": "Pulse-Diver",
+        "type": "trainer",
+        "party": [
+          { "name": "Palafin-Hero", "lv": 82, "moves": ["Jet Punch", "Wave Crash", "Flip Turn", "Taunt"] },
+          { "name": "Tinkaton", "lv": 78, "moves": ["Gigaton Hammer", "Play Rough", "Stealth Rock", "Knock Off"] }
+        ]
+      }
+    ]
+  },
+  "p2": {
+    "entrants": [
+      // 实体1: 无主 Boss (全详情)
+      {
+        "name": "Guardian Protocol",
+        "type": "wild",
+        "party": [
+          {
+            "name": "Iron Valiant",
+            "lv": 98,
+            "quality": "perfect",
+            "ability": "Quark Drive",
+            "item": "Booster Energy",
+            "moves": ["Moonblast", "Close Combat", "Spirit Break", "Thunderbolt"]
+          }
+        ]
+      },
+      // 实体2  (快速构建 x3)
+      {
+        "name": "Defense Drones",
+        "type": "wild",
+        "party": [
+           // 快速1: 纯极简干扰手
+           { "name": "Iron Moth", "lv": 90, "moves": ["Acid Spray", "Fiery Dance"] },
+           // 快速2: 带道具速攻手
+           { "name": "Iron Bundle", "lv": 90, "item": "Focus Sash", "moves": ["Icy Wind", "Flip Turn"] },
+           // 快速3: 功能性肉盾
+           { "name": "Iron Treads", "lv": 90, "moves": ["Stealth Rock", "Rapid Spin"] }
+        ]
+      }
+    ]
+  }
+}
+</PKM_BATTLE>
+示例（1v1）：
+<PKM_BATTLE>
+{
+  "difficulty": "normal",
+  "p1": {
+    "entrants": [
+      {
+        "name": "{{user}}" // 模式 A 简写，读取玩家存档全队
+      }
+    ]
+  },
+  "p2": {
+    "entrants": [
+      {
+        "name": "Toxic-Engineer", // 现场定义的 trainer
+        "type": "trainer",
+        "party": [
+          { "name": "Muk-Alola", "lv": 65, "moves": ["Poison Jab", "Knock Off", "Curse", "Rest"] },
+          { "name": "Drapion", "lv": 64, "moves": ["Cross Poison", "Crunch", "Toxic Spikes", "Roar"] }
+        ]
+      }
+    ],
+    "lines": {
+      "start": "Techinical check! One, two! Get ready to be rocked by my Poison types!",
+      "win": "Looks like you couldn't handle the toxicity!",
+      "lose": "You... you unplugged my amp...!",
+      "escape": "Hey! The show isn't over yet!"
+    }
+  }
+}
+</PKM_BATTLE>
+
+示例（带环境的 Boss 战）：
+<PKM_BATTLE>
+{
+  "difficulty": "expert",
+  "p1": {
+    "entrants": [
+      { "name": "{{user}}" }
+    ]
+  },
+  "p2": {
+    "entrants": [
+      {
+        "name": "Void Guardian",
+        "type": "wild",
+        "party": [
+          {
+            "name": "Giratina-Origin",
+            "lv": 95,
+            "quality": "perfect",
+            "ability": "Levitate",
+            "item": "Griseous Orb",
+            "moves": ["Shadow Force", "Dragon Pulse", "Aura Sphere", "Will-O-Wisp"]
+          }
+        ]
+      }
+    ],
+    "lines": {
+      "start": "时空的裂隙撕开了...反转世界的守护者现身！",
+      "win": "裂隙...正在愈合...",
+      "lose": "这个世界...将被吞噬..."
+    }
+  },
+  "environment": {
+    "weather": null,   // 不指定
+    "weatherTurns": 0,
+    "overlay": {
+      "env_name": "反转世界",
+      "narrative": "重力法则被扭曲，时空在此处交错...",
+      "rules": [
+        { "target": "ALL", "eff": ["Spe:0.7"] },
+        { "target": "Type:Ghost", "eff": ["SpA:1.4", "Def:1.2"] },
+        { "target": "Type:Dragon", "eff": ["Dmg:0.8"] },
+        { "target": "MoveType:Normal", "eff": ["Dmg:0"] }
+      ]
+    }
+  }
+}
+</PKM_BATTLE>
+</battle_rules>

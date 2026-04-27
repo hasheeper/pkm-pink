@@ -1,0 +1,4551 @@
+
+
+/**
+ * 根据当前区域获取角色活跃度分组
+ * @param {string} zoneCode - 区域代码 (N/B/S/A/Z)
+ * @returns {object} - { dominant: [], active: [], occasional: [], rare: [] }
+ */
+function getZoneCharacters(zoneCode) {
+    const zone = ZONE_DATA[zoneCode];
+    const result = {
+        dominant: [],   // 活跃度 3：主场势力
+        active: [],     // 活跃度 2：经常出没
+        occasional: [], // 活跃度 1：偶尔路过
+        rare: []        // 活跃度 0：几乎不来
+    };
+    
+    for (const [npcId, data] of Object.entries(NPC_ADDON_DATA)) {
+        if (!data.zone_affinity) continue;
+        const affinity = data.zone_affinity[zoneCode] || 0;
+        const entry = { 
+            id: npcId, 
+            name_cn: data.name_cn, 
+            name_en: data.name_en, 
+            affinity,
+            desc: zone?.dominant_desc?.[npcId] || null,
+            avoid_reason: zone?.avoid_reasons?.[npcId] || null
+        };
+        
+        if (affinity === 3) result.dominant.push(entry);
+        else if (affinity === 2) result.active.push(entry);
+        else if (affinity === 1) result.occasional.push(entry);
+        else result.rare.push(entry);
+    }
+    
+    return result;
+}
+
+/**
+ * 生成区域状态卡文本（仅 NPC 舒适度，不含区域描述）
+ * @param {string} zoneCode - 区域代码 (N/B/S/A/Z)
+ * @returns {string} - 格式化的状态卡文本
+ */
+function generateZoneStatusCard(zoneCode) {
+    const zone = ZONE_DATA[zoneCode];
+    if (!zone) return `[未知区域: ${zoneCode}]`;
+    
+    const chars = getZoneCharacters(zoneCode);
+    
+    // 仅显示区域名称和 NPC 舒适度，不显示区域详细描述
+    let card = `<pkm_zone_npc_comfort>
+[当前区域] ${zone.name_cn} (${zoneCode})
+---
+[主场势力] (舒适度=3，大概率已在场):`;
+
+    chars.dominant.forEach(c => {
+        const desc = c.desc ? `: ${c.desc}` : '';
+        card += `\n  ${c.name_cn}(${c.name_en})${desc}`;
+    });
+    
+    if (chars.active.length > 0) {
+        card += `\n[经常出没] (舒适度=2): ${chars.active.map(c => c.name_cn).join(' / ')}`;
+    }
+    
+    if (chars.occasional.length > 0) {
+        card += `\n[偶尔路过] (舒适度=1): ${chars.occasional.map(c => c.name_cn).join(' / ')}`;
+    }
+    
+    if (chars.rare.length > 0) {
+        card += `\n[不适应此地] (舒适度=0，若已在场会表现不适):`;
+        chars.rare.forEach(c => {
+            const reason = c.avoid_reason ? ` - ${c.avoid_reason}` : '';
+            card += `\n  ${c.name_cn}(${c.name_en})${reason}`;
+        });
+    }
+    
+    card += `\n注: 以上仅为作为剧情参考的信息，不是实际的情况。不应该过度引入，适当把握\n</pkm_zone_npc_comfort>`;
+    
+    return card;
+}
+
+// 挂载到 window
+if (typeof window !== 'undefined') {
+    window.NPC_TRIGGERS = NPC_TRIGGERS;
+    window.NPC_ADDON_DATA = NPC_ADDON_DATA;
+    window.ZONE_DATA = ZONE_DATA;
+    window.getZoneCharacters = getZoneCharacters;
+    window.generateZoneStatusCard = generateZoneStatusCard;
+}
+
+
+
+// ================================================================
+//  训练家数据内联结束
+// ================================================================
+
+(async function() {
+  'use strict';
+
+  const PLUGIN_NAME = '[PKM战斗插件]';
+  const PKM_BATTLE_TAG = 'PKM_BATTLE';
+  const PKM_INJECT_ID = 'pkm_player_data';
+  
+  // 防重复处理
+  let lastHandledMk = null;
+  let isProcessing = false;
+
+  console.log(`${PLUGIN_NAME} 插件加载中...`);
+
+  // ============================================
+  //    工具函数
+  // ============================================
+
+  /**
+   * 等待指定毫秒
+   */
+  function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * 从ERA获取变量
+   */
+  async function getEraVars() {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        console.warn(`${PLUGIN_NAME} ERA 查询超时`);
+        resolve(null);
+      }, 5000);
+
+      eventOn('era:queryResult', (detail) => {
+        if (detail.queryType === 'getCurrentVars') {
+          clearTimeout(timeout);
+          resolve(detail.result?.statWithoutMeta || null);
+        }
+      }, { once: true });
+
+      eventEmit('era:getCurrentVars');
+    });
+  }
+
+  /**
+   * 检测ERA变量是否使用新格式（无pkm前缀）
+   * @param {object} eraVars - ERA变量对象
+   * @returns {boolean} - true表示新格式，false表示旧格式
+   */
+  function isNewFormat(eraVars) {
+    if (!eraVars) return true; // 默认使用新格式
+    // 新格式：直接有 player/world_state/settings
+    // 旧格式：有 pkm.player/pkm.world_state/pkm.settings
+    return !eraVars.pkm && (eraVars.player || eraVars.world_state || eraVars.settings);
+  }
+
+  /**
+   * 获取兼容路径（自动适配新旧格式）
+   * @param {object} eraVars - ERA变量对象
+   * @param {string} path - 原始路径（如 'pkm.player.party'）
+   * @returns {string} - 适配后的路径
+   */
+  function getCompatPath(eraVars, path) {
+    const useNewFormat = isNewFormat(eraVars);
+    if (useNewFormat && path.startsWith('pkm.')) {
+      return path.slice(4); // 去掉 'pkm.' 前缀
+    }
+    if (!useNewFormat && !path.startsWith('pkm.')) {
+      return 'pkm.' + path; // 添加 'pkm.' 前缀
+    }
+    return path;
+  }
+
+  /**
+   * 兼容版 _.get，自动适配新旧格式
+   * @param {object} eraVars - ERA变量对象
+   * @param {string} path - 路径（如 'pkm.player.party' 或 'player.party'）
+   * @param {*} defaultValue - 默认值
+   * @returns {*} - 获取的值
+   */
+  function getEraValue(eraVars, path, defaultValue) {
+    if (!eraVars) return defaultValue;
+    
+    // 先尝试原始路径
+    let value = _.get(eraVars, path);
+    if (value !== undefined) return value;
+    
+    // 尝试兼容路径
+    const compatPath = getCompatPath(eraVars, path);
+    if (compatPath !== path) {
+      value = _.get(eraVars, compatPath);
+      if (value !== undefined) return value;
+    }
+    
+    return defaultValue;
+  }
+
+  /**
+   * 转换更新数据的路径为当前格式
+   * @param {object} eraVars - ERA变量对象
+   * @param {object} data - 要更新的数据对象
+   * @returns {object} - 转换后的数据对象
+   */
+  function convertUpdatePaths(eraVars, data) {
+    const useNewFormat = isNewFormat(eraVars);
+    const converted = {};
+    
+    for (const [path, value] of Object.entries(data)) {
+      let newPath = path;
+      
+      if (useNewFormat && path.startsWith('pkm.')) {
+        newPath = path.slice(4); // 去掉 'pkm.' 前缀
+      } else if (!useNewFormat && !path.startsWith('pkm.')) {
+        newPath = 'pkm.' + path; // 添加 'pkm.' 前缀
+      }
+      
+      converted[newPath] = value;
+    }
+    
+    return converted;
+  }
+
+  /**
+   * 更新ERA变量
+   * @param {object} data - 要更新的变量对象（支持嵌套路径如 'player.party' 或 'pkm.player.party'）
+   * @returns {Promise} - 更新完成的 Promise
+   */
+  async function updateEraVars(data) {
+    return new Promise(async (resolve) => {
+      // 获取当前 ERA 变量用于智能判断
+      const currentVars = await getEraVars();
+      
+      // 转换路径为当前格式（兼容新旧格式）
+      const convertedData = convertUpdatePaths(currentVars, data);
+      
+      // 构建完整的嵌套对象结构
+      const nestedData = {};
+      
+      for (const [path, value] of Object.entries(convertedData)) {
+        const parts = path.split('.');
+        let current = nestedData;
+        
+        // === 智能 ev_level 处理 ===
+        // 如果路径是 pkm.player.party.slotX.stats_meta 或包含 ev_level
+        if (path.includes('stats_meta') && typeof value === 'object' && value.ev_level !== undefined) {
+          // 获取当前槽位的 ev_level
+          const currentEvLevel = _.get(currentVars, `${path}.ev_level`, 0);
+          const newEvLevel = value.ev_level;
+          
+          console.log(`${PLUGIN_NAME} [EV_LEVEL] 路径: ${path}, 当前: ${currentEvLevel}, AI输出: ${newEvLevel}`);
+          
+          // 智能判断：小于当前值 -> 累加；大于等于当前值 -> 替换
+          if (newEvLevel < currentEvLevel) {
+            value.ev_level = currentEvLevel + newEvLevel;
+            console.log(`${PLUGIN_NAME} [EV_LEVEL] 检测到小值，累加模式: ${currentEvLevel} + ${newEvLevel} = ${value.ev_level}`);
+          } else {
+            console.log(`${PLUGIN_NAME} [EV_LEVEL] 检测到大值，替换模式: ${currentEvLevel} -> ${newEvLevel}`);
+          }
+        }
+        
+        // 构建嵌套路径
+        for (let i = 0; i < parts.length - 1; i++) {
+          const part = parts[i];
+          if (!current[part]) {
+            current[part] = {};
+          }
+          current = current[part];
+        }
+        
+        current[parts[parts.length - 1]] = value;
+      }
+      
+      console.log(`${PLUGIN_NAME} [DEBUG] 准备更新 ERA 变量:`, JSON.stringify(nestedData, null, 2));
+      
+      // 使用 era:updateByObject 更新
+      eventEmit('era:updateByObject', nestedData);
+      
+      // 短暂延迟后 resolve
+      setTimeout(() => {
+        console.log(`${PLUGIN_NAME} [DEBUG] ERA 变量更新已发送`);
+        resolve();
+      }, 100);
+    });
+  }
+
+  /**
+   * 插入ERA变量（新增）
+   */
+  function insertEraVars(data) {
+    eventEmit('era:insertByObject', data);
+  }
+
+  // ============================================
+  //    玩家队伍管理
+  // ============================================
+
+  /**
+   * 获取玩家队伍数据
+   */
+  async function getPlayerParty() {
+    const eraVars = await getEraVars();
+    if (!eraVars) return null;
+
+    const playerData = getEraValue(eraVars, 'player', null);
+    return playerData;
+  }
+
+  /**
+   * 创建空的宝可梦槽位模板
+   */
+  function createEmptySlot(slotNum) {
+    return {
+      slot: slotNum,
+      name: null,
+      nickname: null,
+      species: null,
+      gender: null,
+      lv: null,
+      quality: null,
+      nature: null,
+      ability: null,
+      shiny: false,
+      item: null,
+      moves: {
+        move1: null,
+        move2: null,
+        move3: null,
+        move4: null
+      },
+      stats_meta: {
+        ivs: {
+          hp: null,
+          atk: null,
+          def: null,
+          spa: null,
+          spd: null,
+          spe: null
+        },
+        ev_level: null
+      },
+      notes: null
+    };
+  }
+
+
+  /**
+   * 获取所有宝可梦（从 party 和 reserve 中）
+   * @param {object} playerData - 玩家数据
+   * @returns {array} - 所有宝可梦数组
+   */
+  function getAllPokemon(playerData) {
+    const partyPokemon = parsePartyData(playerData?.party);
+    const reservePokemon = parsePartyData(playerData?.reserve);
+    return [...partyPokemon, ...reservePokemon];
+  }
+
+  /**
+   * 设置玩家队伍（已弃用，改用 VariableEdit）
+   * 注意：新的槽位格式下，队伍更新应该由 AI 的 VariableEdit 直接操作
+   * @param {string} mode - 'full' (全队), 'single' (单个), 'custom' (自定义)
+   * @param {string|object} input - 宝可梦名称或自定义数据
+   */
+  async function setPlayerParty(mode, input = null) {
+    console.warn(`${PLUGIN_NAME} setPlayerParty 已弃用，请使用 VariableEdit 直接更新槽位`);
+    
+    const eraVars = await getEraVars();
+    const playerData = getEraValue(eraVars, 'player', { 
+      name: '训练家', 
+      party: {
+        slot1: createEmptySlot(1),
+        slot2: createEmptySlot(2),
+        slot3: createEmptySlot(3),
+        slot4: createEmptySlot(4),
+        slot5: createEmptySlot(5),
+        slot6: createEmptySlot(6)
+      }, 
+      reserve: {} 
+    });
+
+    // 获取所有宝可梦用于查找
+    const allPokemon = getAllPokemon(playerData);
+
+    switch (mode) {
+      case 'single':
+        // 载入单个宝可梦到 slot1
+        if (typeof input === 'string') {
+          const found = allPokemon.find(p => 
+            p.name?.toLowerCase() === input.toLowerCase() ||
+            p.nickname?.toLowerCase() === input.toLowerCase()
+          );
+          if (found) {
+            // 更新 slot1
+            updateEraVars({
+              'player.party.slot1': found
+            });
+            console.log(`${PLUGIN_NAME} ✓ 已将 ${found.name} 设置到 slot1`);
+            return found;
+          } else {
+            console.warn(`${PLUGIN_NAME} 未找到宝可梦: ${input}`);
+            return null;
+          }
+        }
+        break;
+
+      default:
+        console.warn(`${PLUGIN_NAME} 模式 ${mode} 不再支持，请使用 VariableEdit`);
+        return null;
+    }
+
+    return null;
+  }
+
+  // ============================================
+  //    AI输出解析
+  // ============================================
+
+  /**
+   * 解析AI生成的简单战斗格式
+   * 
+   * AI输出格式示例:
+   * <PKM_BATTLE>
+   * {
+   *   "type": "wild",           // wild | trainer
+   *   "enemy_name": "Pikachu",  // 训练家名或野生标识
+   *   "party": [
+   *     { "name": "Rattata", "lv": 5 }
+   *   ],
+   *   "lines": {
+   *     "start": "野生的皮卡丘出现了！"
+   *   }
+   * }
+   * </PKM_BATTLE>
+   */
+  /**
+   * 移除 JSON 字符串中的注释（支持 // 单行注释和 /* *\/ 多行注释）
+   * @param {string} jsonStr - 包含注释的 JSON 字符串
+   * @returns {string} - 移除注释后的 JSON 字符串
+   */
+  function stripJsonComments(jsonStr) {
+    let result = '';
+    let i = 0;
+    let inString = false;
+    let stringChar = null;
+    
+    while (i < jsonStr.length) {
+      const char = jsonStr[i];
+      const nextChar = jsonStr[i + 1];
+      
+      // 处理字符串
+      if (!inString && (char === '"' || char === "'")) {
+        inString = true;
+        stringChar = char;
+        result += char;
+        i++;
+        continue;
+      }
+      
+      if (inString) {
+        result += char;
+        // 检查转义字符
+        if (char === '\\' && nextChar) {
+          result += nextChar;
+          i += 2;
+          continue;
+        }
+        // 检查字符串结束
+        if (char === stringChar) {
+          inString = false;
+          stringChar = null;
+        }
+        i++;
+        continue;
+      }
+      
+      // 处理单行注释 //
+      if (char === '/' && nextChar === '/') {
+        // 跳过直到行尾
+        i += 2;
+        while (i < jsonStr.length && jsonStr[i] !== '\n' && jsonStr[i] !== '\r') {
+          i++;
+        }
+        continue;
+      }
+      
+      // 处理多行注释 /* */
+      if (char === '/' && nextChar === '*') {
+        // 跳过直到 */
+        i += 2;
+        while (i < jsonStr.length - 1) {
+          if (jsonStr[i] === '*' && jsonStr[i + 1] === '/') {
+            i += 2;
+            break;
+          }
+          i++;
+        }
+        continue;
+      }
+      
+      // 普通字符
+      result += char;
+      i++;
+    }
+    
+    return result;
+  }
+
+  /**
+   * 从原始文本中提取 JSON 候选字符串（参考 ERA 脚本的 extractJsonCandidate）
+   */
+  function extractJsonCandidate(rawText) {
+    if (!rawText) return null;
+    const trimmed = rawText.trim();
+    if (!trimmed) return null;
+
+    // 如果已经是 JSON 开头，直接返回
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      // 找到匹配的结束括号
+      const closingChar = trimmed.startsWith('{') ? '}' : ']';
+      const endIndex = trimmed.lastIndexOf(closingChar);
+      if (endIndex !== -1) {
+        return trimmed.slice(0, endIndex + 1);
+      }
+      return trimmed;
+    }
+
+    // 否则找第一个 { 或 [
+    const braceIndex = trimmed.indexOf('{');
+    let startIndex = -1;
+    let closingChar = null;
+
+    if (braceIndex !== -1) {
+      startIndex = braceIndex;
+      closingChar = '}';
+    } else {
+      const bracketIndex = trimmed.indexOf('[');
+      if (bracketIndex !== -1) {
+        startIndex = bracketIndex;
+        closingChar = ']';
+      }
+    }
+
+    if (startIndex === -1) {
+      return null;
+    }
+
+    const sliced = trimmed.slice(startIndex);
+    const endIndex = closingChar ? sliced.lastIndexOf(closingChar) : -1;
+    if (endIndex !== -1) {
+      return sliced.slice(0, endIndex + 1);
+    }
+    return sliced;
+  }
+
+  function parseAiBattleOutput(messageText) {
+    // 预处理：移除 SillyTavern 的 thinking tags 之前的所有内容
+    // 这些标签内的内容是 AI 的思考过程，不应该被解析
+    let cleanedText = messageText;
+    
+    // 移除从文本开头到 </planning> 标签的所有内容（包括标签本身）
+    cleanedText = cleanedText.replace(/[\s\S]*<\/planning>/gi, '');
+    
+    // 移除从文本开头到 </think> 标签的所有内容（包括标签本身）
+    cleanedText = cleanedText.replace(/[\s\S]*<\/think>/gi, '');
+    
+    // 在清理后的文本中查找 PKM_BATTLE 标签
+    const regex = new RegExp(`<${PKM_BATTLE_TAG}>([\\s\\S]*?)<\\/${PKM_BATTLE_TAG}>`, 'gi');
+    let match = null;
+    let latestMatch = null;
+    while ((match = regex.exec(cleanedText)) !== null) {
+      latestMatch = match;
+    }
+
+    if (!latestMatch) return null;
+
+    try {
+      const jsonStr = extractJsonCandidate(latestMatch[1]);
+      if (!jsonStr) {
+        throw new Error('未找到合法的JSON对象');
+      }
+
+      console.log(`${PLUGIN_NAME} 提取到JSON字符串:`, jsonStr.substring(0, 100) + '...');
+      
+      // 移除 JSON 中的注释（// 单行注释 和 /* */ 多行注释）
+      const jsonWithoutComments = stripJsonComments(jsonStr);
+      
+      const battleData = JSON.parse(jsonWithoutComments);
+      console.log(`${PLUGIN_NAME} 解析到AI战斗数据:`, battleData);
+      
+      // 转换 p1/p2 格式为 player/enemy 格式
+      return normalizeP1P2Format(battleData);
+    } catch (e) {
+      console.error(`${PLUGIN_NAME} 解析AI战斗数据失败:`, e);
+      return null;
+    }
+  }
+
+  /**
+   * 将 p1/p2 双人对战格式转换为标准 player/enemy 格式
+   * @param {object} battleData - 原始战斗数据
+   * @returns {object} - 标准化后的战斗数据
+   */
+  /**
+   * 从训练家数据库中提取指定宝可梦
+   * @param {string} trainerName - 训练家名字
+   * @param {Array} pokemonNames - 宝可梦名字列表
+   * @param {number} tier - 难度等级
+   * @returns {Array} - 提取的宝可梦数据
+   */
+  function extractPokemonFromTrainerDB(trainerName, pokemonNames, tier = 2) {
+    console.log(`${PLUGIN_NAME} [DEBUG] 尝试从训练家数据库提取: ${trainerName}, 宝可梦: ${pokemonNames.join(', ')}, Tier: ${tier}`);
+    
+    // 检查是否是"玩家"关键词（不查数据库，返回空让后续从 ERA 变量提取）
+    const playerKeywords = ['player', '玩家', '主角', '训练家', '{{user}}', 'user'];
+    const normalizedName = trainerName.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]/g, '');
+    
+    // 支持 {{user}} 宏匹配
+    const isPlayer = playerKeywords.some(kw => normalizedName.includes(kw) || trainerName.includes(kw)) || 
+                     trainerName === '{{user}}' || 
+                     trainerName.includes('{{user}}');
+    
+    if (isPlayer) {
+      console.log(`${PLUGIN_NAME} [DEBUG] "${trainerName}" 是玩家，从 ERA 变量提取`);
+      return { party: [], unlocks: null }; // 返回空，让后续逻辑从 ERA 变量提取
+    }
+    
+    const db = getTrainerDatabase();
+    
+    // 尝试别名匹配
+    const aliasMap = {
+      'hexmaniac': 'hex',
+      'ionostreamer': 'iono',
+      'nanjamo': 'iono',
+      'hikari': 'dawn',
+      'mei': 'rosa',
+      'yuuri': 'gloria'
+    };
+    
+    const matchedKey = aliasMap[normalizedName] || normalizedName;
+    console.log(`${PLUGIN_NAME} [DEBUG] 训练家名字匹配: "${trainerName}" -> "${normalizedName}" -> "${matchedKey}"`);
+    
+    const trainerData = db[matchedKey];
+    
+    if (!trainerData) {
+      console.log(`${PLUGIN_NAME} [DEBUG] 训练家 "${trainerName}" 不在数据库中，无法提取宝可梦`);
+      console.log(`${PLUGIN_NAME} [DEBUG] 可用的训练家:`, Object.keys(db).join(', '));
+      return { party: [], unlocks: null };
+    }
+    
+    // 获取指定 tier 的队伍，如果不存在则尝试其他 tier
+    const validTier = Math.max(1, Math.min(4, tier));
+    let tierData = trainerData[validTier];
+    let usedTier = validTier;
+    
+    // 辅助函数：从 tierData 提取 party 数组（支持新旧两种格式）
+    // 新格式: { unlocks: {...}, party: [...] }
+    // 旧格式: [...] (直接是数组)
+    const extractPartyFromTierData = (data) => {
+      if (!data) return null;
+      if (Array.isArray(data)) return data; // 旧格式
+      if (data.party && Array.isArray(data.party)) return data.party; // 新格式
+      return null;
+    };
+    
+    // 辅助函数：从 tierData 提取 unlocks 对象
+    const extractUnlocksFromTierData = (data) => {
+      if (!data) return null;
+      if (Array.isArray(data)) return null; // 旧格式没有 unlocks
+      if (data.unlocks) return data.unlocks; // 新格式
+      return null;
+    };
+    
+    let party = extractPartyFromTierData(tierData);
+    let unlocks = extractUnlocksFromTierData(tierData);
+    
+    if (!party) {
+      // 尝试找到任意可用的 tier
+      const availableTiers = Object.keys(trainerData).filter(k => /^\d+$/.test(k)).map(Number).sort((a, b) => a - b);
+      console.log(`${PLUGIN_NAME} [DEBUG] 训练家 "${trainerName}" 没有 Tier ${validTier}，可用: ${availableTiers.join(', ')}`);
+      
+      if (availableTiers.length > 0) {
+        // 自纠正规则：
+        // 1. Tier 3 不存在 -> 默认 Tier 4
+        // 2. Tier 1 不存在且是 Cynthia -> 默认 Tier 2
+        // 3. 其他情况 -> 选择最接近的
+        if (validTier === 3 && !availableTiers.includes(3) && availableTiers.includes(4)) {
+          usedTier = 4;
+          console.log(`${PLUGIN_NAME} [自纠正] Tier 3 不存在，使用 Tier 4`);
+        } else if (validTier === 1 && !availableTiers.includes(1) && matchedKey === 'cynthia' && availableTiers.includes(2)) {
+          usedTier = 2;
+          console.log(`${PLUGIN_NAME} [自纠正] Cynthia 没有 Tier 1，使用 Tier 2`);
+        } else {
+          // 优先选择最接近请求 tier 的
+          usedTier = availableTiers.reduce((prev, curr) => 
+            Math.abs(curr - validTier) < Math.abs(prev - validTier) ? curr : prev
+          );
+          console.log(`${PLUGIN_NAME} [DEBUG] 使用最接近的 Tier ${usedTier} 作为替代`);
+        }
+        tierData = trainerData[usedTier];
+        party = extractPartyFromTierData(tierData);
+        unlocks = extractUnlocksFromTierData(tierData);
+      }
+    }
+    
+    if (!party) {
+      console.log(`${PLUGIN_NAME} [DEBUG] 训练家 "${trainerName}" 没有可用的配置`);
+      return { party: [], unlocks: null };
+    }
+    
+    console.log(`${PLUGIN_NAME} [DEBUG] ${trainerName} Tier ${usedTier} 队伍:`, party.map(p => p.name).join(', '));
+    if (unlocks) {
+      console.log(`${PLUGIN_NAME} [DEBUG] ${trainerName} Tier ${usedTier} unlocks:`, unlocks);
+    }
+    
+    // 如果 pokemonNames 为空，返回完整队伍和 unlocks
+    if (!pokemonNames || pokemonNames.length === 0) {
+      console.log(`${PLUGIN_NAME} [DEBUG] 返回 ${trainerName} 的完整队伍 (${party.length} 只)`);
+      return { party, unlocks };
+    }
+    
+    // 从队伍中提取指定的宝可梦
+    const extracted = [];
+    for (const pokemonName of pokemonNames) {
+      const normalizedPokemonName = pokemonName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const found = party.find(p => {
+        const pName = (p.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        return pName === normalizedPokemonName || pName.includes(normalizedPokemonName) || normalizedPokemonName.includes(pName);
+      });
+      
+      if (found) {
+        extracted.push(found);
+        console.log(`${PLUGIN_NAME} [DEBUG] ✓ 从 ${trainerName} 数据库提取: ${found.name}, mechanic: ${found.mechanic || 'null'}`);
+      } else {
+        // 数据库中找不到，标记为需要生成
+        console.warn(`${PLUGIN_NAME} [DEBUG] ✗ 在 ${trainerName} 的队伍中找不到: ${pokemonName}，将根据 tier 生成`);
+        extracted.push({ name: pokemonName, _needGenerate: true, _tier: tier });
+      }
+    }
+    
+    return { party: extracted, unlocks };
+  }
+
+  /**
+   * 检测训练家类型：固定NPC / 生成式NPC / 野生
+   * @param {string} name - 训练家名字
+   * @param {string} type - 显式指定的类型 ('wild', 'trainer', etc)
+   * @returns {string} - 'db_trainer' | 'generated_trainer' | 'wild'
+   */
+  function detectTrainerType(name, type = '') {
+    const normalizedName = (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    // 检查是否是玩家（{{user}} 宏或玩家关键词）
+    const playerKeywords = ['player', '玩家', '主角', 'user'];
+    const isPlayer = playerKeywords.some(kw => normalizedName.includes(kw)) || 
+                     name === '{{user}}' || 
+                     name.includes('{{user}}');
+    
+    if (isPlayer) {
+      return 'player'; // 玩家（从 ERA 变量提取）
+    }
+    
+    // 显式指定或名称包含 wild/野生 -> 野生
+    if (type.toLowerCase() === 'wild' || normalizedName.includes('wild') || /野生/.test(name || '')) {
+      return 'wild';
+    }
+    
+    // 检查是否在数据库中
+    const db = getTrainerDatabase();
+    
+    // 别名映射
+    const aliasMap = {
+      'hexmaniac': 'hex', 'ionostreamer': 'iono', 'nanjamo': 'iono',
+      'hikari': 'dawn', 'mei': 'rosa', 'yuuri': 'gloria'
+    };
+    const matchedKey = aliasMap[normalizedName] || normalizedName;
+    
+    if (db[matchedKey]) {
+      return 'db_trainer'; // 固定NPC（数据库中存在）
+    }
+    
+    return 'generated_trainer'; // 生成式NPC（数据库中不存在）
+  }
+
+  /**
+   * 处理单个训练家的队伍数据
+   * @param {object} trainer - 训练家配置 { name, party, tier, type }
+   * @param {number} defaultTier - 默认难度等级
+   * @returns {object} - { name, party: [...], trainerType, isPlayer }
+   */
+  function processTrainerParty(trainer, defaultTier = 2) {
+    const trainerName = trainer.name || 'Unknown';
+    const tier = trainer.tier || defaultTier;
+    const trainerType = detectTrainerType(trainerName, trainer.type || '');
+    
+    console.log(`${PLUGIN_NAME} [DOUBLE] 处理训练家: ${trainerName}, 类型: ${trainerType}, Tier: ${tier}`);
+    
+    // 检查是否是玩家（从 ERA 变量提取）
+    const playerKeywords = ['player', '玩家', '主角', '{{user}}', 'user'];
+    const isPlayer = playerKeywords.some(kw => 
+      trainerName.toLowerCase().includes(kw.toLowerCase())
+    ) || trainerName === '{{user}}' || trainerName.includes('{{user}}');
+    
+    let resolvedParty = [];
+    let dbUnlocks = null; // 从数据库获取的 unlocks
+    
+    if (isPlayer) {
+      // 玩家：从 ERA 变量提取，party 只是名字列表
+      console.log(`${PLUGIN_NAME} [DOUBLE] "${trainerName}" 是玩家，队伍将从 ERA 变量提取`);
+      resolvedParty = trainer.party || []; // 保持原样，后续 resolveTrainerParty 处理
+    } else if (trainerType === 'db_trainer') {
+      // 固定NPC：从数据库提取完整数据
+      if (trainer.party && Array.isArray(trainer.party)) {
+        // 检查 AI 是否提供了详细的宝可梦对象（包含 lv/moves 等）
+        const hasDetailedParty = trainer.party.some(p => 
+          typeof p === 'object' && (p.lv !== undefined || p.moves !== undefined)
+        );
+        
+        if (hasDetailedParty) {
+          // AI 提供了详细数据，直接使用（模式 B：现场实例化）
+          // 但仍然需要从数据库获取该训练家的 unlocks
+          console.log(`${PLUGIN_NAME} [DOUBLE] ${trainerName} 使用 AI 提供的详细队伍数据`);
+          resolvedParty = trainer.party.map(p => {
+            if (typeof p === 'string') return { name: p, _needGenerate: true, _tier: tier };
+            return { ...p, _needGenerate: true, _tier: tier };
+          });
+          // 获取数据库中该训练家的 unlocks
+          const dbResult = extractPokemonFromTrainerDB(trainerName, [], tier);
+          dbUnlocks = dbResult.unlocks;
+        } else {
+          // AI 只提供了名字列表，从数据库提取（模式 A：库数据引用）
+          const pokemonNames = trainer.party.map(p => typeof p === 'string' ? p : p.name);
+          const dbResult = extractPokemonFromTrainerDB(trainerName, pokemonNames, tier);
+          const dbPokemon = dbResult.party || dbResult; // 兼容新旧返回格式
+          dbUnlocks = dbResult.unlocks;
+          
+          if (dbPokemon.length > 0) {
+            resolvedParty = dbPokemon;
+          } else {
+            // 数据库中找不到指定宝可梦，使用 AI 提供的数据生成
+            console.log(`${PLUGIN_NAME} [DOUBLE] 数据库中找不到指定宝可梦，使用生成模式`);
+            resolvedParty = trainer.party.map(p => {
+              if (typeof p === 'string') return { name: p, _needGenerate: true, _tier: tier };
+              return { ...p, _needGenerate: true, _tier: tier };
+            });
+          }
+        }
+      } else {
+        // 没有指定具体宝可梦，从数据库获取完整队伍
+        const dbResult = lookupTrainerFromDB(trainerName, tier);
+        if (dbResult && dbResult.party) {
+          resolvedParty = dbResult.party;
+          dbUnlocks = dbResult.unlocks;
+        }
+      }
+      
+      if (dbUnlocks) {
+        console.log(`${PLUGIN_NAME} [DOUBLE] ${trainerName} 数据库 unlocks:`, dbUnlocks);
+      }
+    } else if (trainerType === 'wild') {
+      // 野生：必须使用 AI 提供的生成式数据
+      console.log(`${PLUGIN_NAME} [DOUBLE] 野生模式，使用 AI 提供的数据`);
+      resolvedParty = (trainer.party || []).map(p => {
+        if (typeof p === 'string') return { name: p, _needGenerate: true, _tier: tier };
+        return { ...p, _needGenerate: true, _tier: tier };
+      });
+    } else {
+      // 生成式NPC：使用 AI 提供的数据
+      console.log(`${PLUGIN_NAME} [DOUBLE] 生成式NPC "${trainerName}"，使用 AI 提供的数据`);
+      resolvedParty = (trainer.party || []).map(p => {
+        if (typeof p === 'string') return { name: p, _needGenerate: true, _tier: tier };
+        return { ...p, _needGenerate: true, _tier: tier };
+      });
+    }
+    
+    // 自动检测 mechanic 字段并设置 unlock 权限
+    const autoDetectedUnlocks = detectUnlocksFromParty(resolvedParty);
+    // 合并：AI 指定 > 数据库 > 自动检测
+    const finalUnlocks = mergeUnlocks(trainer.unlocks, dbUnlocks, autoDetectedUnlocks);
+    
+    console.log(`${PLUGIN_NAME} [DOUBLE] ${trainerName} 最终 unlocks:`, finalUnlocks);
+    
+    return {
+      name: trainerName,
+      party: resolvedParty,
+      trainerType,
+      isPlayer,
+      tier,
+      unlocks: finalUnlocks,
+      lines: trainer.lines
+    };
+  }
+
+  /**
+   * 根据队伍中的 mechanic 字段自动检测需要的 unlock 权限
+   * @param {Array} party - 队伍数组
+   * @returns {object} 自动检测到的 unlocks
+   */
+  function detectUnlocksFromParty(party) {
+    const detected = {
+      enable_mega: false,
+      enable_dynamax: false,
+      enable_tera: false,
+      enable_z_move: false
+    };
+    
+    if (!Array.isArray(party)) return detected;
+    
+    for (const pokemon of party) {
+      const mechanic = (pokemon.mechanic || '').toLowerCase();
+      if (mechanic === 'mega') detected.enable_mega = true;
+      if (mechanic === 'dynamax' || mechanic === 'gmax') detected.enable_dynamax = true;
+      if (mechanic === 'tera') detected.enable_tera = true;
+      if (mechanic === 'z_move' || mechanic === 'zmove' || mechanic === 'z') detected.enable_z_move = true;
+    }
+    
+    return detected;
+  }
+
+  /**
+   * 合并多个 unlocks 对象，只保留值为 true 的属性
+   * @param {...object} unlocksList - 多个 unlocks 对象
+   * @returns {object} 合并后的 unlocks
+   */
+  function mergeUnlocks(...unlocksList) {
+    const merged = {
+      enable_bond: false,
+      enable_styles: false,
+      enable_insight: false,
+      enable_mega: false,
+      enable_z_move: false,
+      enable_dynamax: false,
+      enable_tera: false,
+      enable_proficiency_cap: false  // 训练度突破155上限
+    };
+    
+    for (const unlocks of unlocksList) {
+      if (!unlocks) continue;
+      for (const key of Object.keys(merged)) {
+        if (unlocks[key] === true) {
+          merged[key] = true;
+        }
+      }
+    }
+    
+    return merged;
+  }
+
+  /**
+   * 合并多个训练家的队伍，限制最多6只
+   * @param {Array} trainersData - 训练家数据数组
+   * @returns {object} - { party, trainerMetadata, names }
+   */
+  function mergeTrainerParties(trainersData) {
+    const allParty = [];
+    const trainerMetadata = [];
+    const names = [];
+    
+    trainersData.forEach(t => {
+      names.push(t.name);
+      t.party.forEach(p => {
+        allParty.push(p);
+        trainerMetadata.push(t.name);
+      });
+    });
+    
+    // 如果超过6只，随机剔除
+    if (allParty.length > 6) {
+      console.log(`${PLUGIN_NAME} [DOUBLE] 队伍超过6只 (${allParty.length})，随机剔除至6只`);
+      
+      // 随机打乱后取前6个
+      const indices = allParty.map((_, i) => i);
+      for (let i = indices.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indices[i], indices[j]] = [indices[j], indices[i]];
+      }
+      
+      const keepIndices = indices.slice(0, 6).sort((a, b) => a - b);
+      const trimmedParty = keepIndices.map(i => allParty[i]);
+      const trimmedMetadata = keepIndices.map(i => trainerMetadata[i]);
+      
+      console.log(`${PLUGIN_NAME} [DOUBLE] 剔除后队伍: ${trimmedParty.map(p => typeof p === 'string' ? p : p.name).join(', ')}`);
+      
+      return {
+        party: trimmedParty,
+        trainerMetadata: trimmedMetadata,
+        names: names.join(' & ')
+      };
+    }
+    
+    return {
+      party: allParty,
+      trainerMetadata,
+      names: names.join(' & ')
+    };
+  }
+
+  function normalizeP1P2Format(battleData) {
+    // 如果已经是标准格式，直接返回
+    if (battleData.player || battleData.enemy) {
+      return battleData;
+    }
+    
+    // 检测 p1/p2 格式
+    if (!battleData.p1 && !battleData.p2) {
+      return battleData;
+    }
+    
+    console.log(`${PLUGIN_NAME} ========== 双打模式转换开始 ==========`);
+    
+    const normalized = {
+      difficulty: battleData.difficulty || 'normal',
+      battle_type: battleData.battle_type || 'double'
+    };
+    
+    const defaultTier = battleData.tier || 2;
+    
+    // ========== 转换 p1 (玩家方) ==========
+    if (battleData.p1) {
+      // 兼容 entrants (V4) 和 trainers (旧版)
+      const p1Entrants = battleData.p1.entrants || battleData.p1.trainers;
+      if (p1Entrants && Array.isArray(p1Entrants)) {
+        // 多实体对战格式
+        console.log(`${PLUGIN_NAME} [P1] 多实体模式: ${p1Entrants.length} 人`);
+        
+        const trainersData = p1Entrants.map(t => 
+          processTrainerParty(t, defaultTier)
+        );
+        
+        const merged = mergeTrainerParties(trainersData);
+        
+        // 合并 unlocks（将所有训练家的 unlocks 中为 true 的属性合并）
+        console.log(`${PLUGIN_NAME} [P1] 各训练家 unlocks:`, trainersData.map(t => ({ name: t.name, unlocks: t.unlocks })));
+        const mergedUnlocks = mergeUnlocks(...trainersData.map(t => t.unlocks));
+        console.log(`${PLUGIN_NAME} [P1] 合并后的 unlocks:`, mergedUnlocks);
+        
+        normalized.player = {
+          name: merged.names,
+          party: merged.party,
+          _trainerMetadata: merged.trainerMetadata,
+          _trainersData: trainersData, // 保存完整训练家信息供后续使用
+          unlocks: battleData.p1.unlocks || mergedUnlocks // 优先使用 AI 指定的 unlocks，否则合并各训练家的 unlocks
+        };
+        
+        console.log(`${PLUGIN_NAME} [P1] 转换完成: ${merged.names}, 队伍: ${merged.party.map(p => typeof p === 'string' ? p : p.name).join(', ')}`);
+      } else {
+        // 单人格式
+        normalized.player = battleData.p1;
+      }
+    }
+    
+    // ========== 转换 p2 (敌方) ==========
+    if (battleData.p2) {
+      // 兼容 entrants (V4) 和 trainers (旧版)
+      const p2Entrants = battleData.p2.entrants || battleData.p2.trainers;
+      if (p2Entrants && Array.isArray(p2Entrants)) {
+        // 多实体对战格式
+        console.log(`${PLUGIN_NAME} [P2] 多实体模式: ${p2Entrants.length} 人`);
+        
+        const trainersData = p2Entrants.map(t => 
+          processTrainerParty(t, defaultTier)
+        );
+        
+        const merged = mergeTrainerParties(trainersData);
+        
+        // 确定敌方类型：如果任一训练家是 wild，整体为 wild
+        const hasWild = trainersData.some(t => t.trainerType === 'wild');
+        const allDbTrainers = trainersData.every(t => t.trainerType === 'db_trainer');
+        
+        // 合并 lines（取第一个有 lines 的训练家）
+        const firstWithLines = trainersData.find(t => t.lines);
+        
+        // 合并 unlocks（将所有训练家的 unlocks 中为 true 的属性合并）
+        const mergedUnlocks = mergeUnlocks(...trainersData.map(t => t.unlocks));
+        
+        normalized.enemy = {
+          type: hasWild ? 'wild' : 'trainer',
+          name: merged.names,
+          party: merged.party,
+          _trainerMetadata: merged.trainerMetadata,
+          _trainersData: trainersData,
+          lines: battleData.p2.lines || (firstWithLines ? firstWithLines.lines : {}),
+          unlocks: battleData.p2.unlocks || mergedUnlocks,
+          // 如果全是数据库训练家，难度可能更高
+          _allDbTrainers: allDbTrainers
+        };
+        
+        console.log(`${PLUGIN_NAME} [P2] 转换完成: ${merged.names}, 类型: ${normalized.enemy.type}`);
+      } else {
+        // 单人格式（兼容旧格式）
+        const trainerData = processTrainerParty({
+          name: battleData.p2.name,
+          party: battleData.p2.party,
+          tier: battleData.p2.tier || defaultTier,
+          type: battleData.p2.type,
+          unlocks: battleData.p2.unlocks,
+          lines: battleData.p2.lines
+        }, defaultTier);
+        
+        normalized.enemy = {
+          type: trainerData.trainerType === 'wild' ? 'wild' : 'trainer',
+          name: trainerData.name,
+          party: trainerData.party,
+          lines: battleData.p2.lines || {},
+          unlocks: battleData.p2.unlocks || trainerData.unlocks,
+          tier: battleData.p2.tier
+        };
+        
+        console.log(`${PLUGIN_NAME} [P2] 单训练家: ${trainerData.name}, 类型: ${trainerData.trainerType}`);
+      }
+    }
+    
+    // ========== 保留其他顶层字段 ==========
+    // 保留 environment（环境配置）
+    if (battleData.environment) {
+      normalized.environment = battleData.environment;
+      console.log(`${PLUGIN_NAME} [ENV] 保留 AI 传入的环境配置:`, battleData.environment.overlay?.env_name || battleData.environment.weather || 'none');
+    }
+    
+    // 保留 script（脚本）
+    if (battleData.script) {
+      normalized.script = battleData.script;
+    }
+    
+    // 保留 settings（设置）
+    if (battleData.settings) {
+      normalized.settings = battleData.settings;
+    }
+    
+    console.log(`${PLUGIN_NAME} ========== 双打模式转换完成 ==========`);
+    return normalized;
+  }
+
+  /**
+   * 规范技能列表，保证最多4个且为字符串
+   */
+  function sanitizeMoves(moves) {
+    if (!Array.isArray(moves)) return [];
+    return moves
+      .map(m => (typeof m === 'string' ? m.trim() : ''))
+      .filter(Boolean)
+      .slice(0, 4);
+  }
+
+  /**
+   * 自动检测并注入特殊形态（Primal/Crowned）
+   * @param {string} pokemonName - 宝可梦名称
+   * @returns {string|null} - 形态标记 ('primal', 'crowned') 或 null
+   */
+  function autoDetectSpecialForm(pokemonName) {
+    if (!pokemonName) return null;
+    const name = pokemonName.toLowerCase().trim();
+    
+    // Primal Reversion（原始回归）
+    if (name === 'kyogre' || name === 'groudon') {
+      return 'primal';
+    }
+    
+    // Crowned Form（剑盾之王）
+    if (name === 'zacian' || name === 'zamazenta') {
+      return 'crowned';
+    }
+    
+    return null;
+  }
+
+  // ============================================
+  //    双轨制数据库 & 随机生成器
+  // ============================================
+
+  // 性格列表（用于随机抽取）
+  const NATURES = [
+    'Hardy', 'Lonely', 'Brave', 'Adamant', 'Naughty',
+    'Bold', 'Docile', 'Relaxed', 'Impish', 'Lax',
+    'Timid', 'Hasty', 'Serious', 'Jolly', 'Naive',
+    'Modest', 'Mild', 'Quiet', 'Bashful', 'Rash',
+    'Calm', 'Gentle', 'Sassy', 'Careful', 'Quirky'
+  ];
+
+  // 训练家数据库引用（已内置 trainer_data.js）
+  // 格式: { 'iono': IONO_DATA, 'cynthia': CYNTHIA_DATA, ... }
+  function getTrainerDatabase() {
+    const db = {};
+    const trainerGlobals = [
+      ['gloria', 'GLORIA_DATA'],
+      ['selene', 'SELENE_DATA'],
+      ['rosa', 'ROSA_DATA'],
+      ['dawn', 'DAWN_DATA'],
+      ['akari', 'AKARI_DATA'],
+      ['serena', 'SERENA_DATA'],
+      ['juliana', 'JULIANA_DATA'],
+      ['lusamine', 'LUSAMINE_DATA'],
+      ['lillie', 'LILLIE_DATA'],
+      ['mallow', 'MALLOW_DATA'],
+      ['lana', 'LANA_DATA'],
+      ['irida', 'IRIDA_DATA'],
+      ['sonia', 'SONIA_DATA'],
+      ['roxie', 'ROXIE_DATA'],
+      ['iono', 'IONO_DATA'],
+      ['erika', 'ERIKA_DATA'],
+      ['nessa', 'NESSA_DATA'],
+      ['marnie', 'MARNIE_DATA'],
+      ['hex', 'HEX_DATA'],
+      ['bea', 'BEA_DATA'],
+      ['cynthia', 'CYNTHIA_DATA'],
+      ['may', 'MAY_DATA'],
+      ['lacey', 'LACEY_DATA'],
+      ['misty', 'MISTY_DATA'],
+      ['acerola', 'ACEROLA_DATA'],
+      ['skyla', 'SKYLA_DATA'],
+      ['iris', 'IRIS_DATA'],
+      ['nemona', 'NEMONA_DATA']
+    ];
+
+    const missing = [];
+    trainerGlobals.forEach(([key, globalName]) => {
+      if (typeof window[globalName] !== 'undefined') {
+        db[key] = window[globalName];
+      } else {
+        missing.push(globalName);
+      }
+    });
+
+    if (missing.length > 0) {
+      console.warn(`${PLUGIN_NAME} [DEBUG] 缺失的全局变量:`, missing.join(', '));
+    }
+
+    return db;
+  }
+
+  /**
+   * 生成随机个体值 (IVs)
+   * @param {string} quality - 'low' | 'normal' | 'high' | 'perfect'
+   * @returns {object} { hp, atk, def, spa, spd, spe }
+   */
+  function generateRandomIVs(quality = 'normal') {
+    const roll = () => Math.floor(Math.random() * 32); // 0-31
+    
+    switch (quality) {
+      case 'low':
+        // 低品质：0-15
+        return {
+          hp: Math.floor(Math.random() * 16),
+          atk: Math.floor(Math.random() * 16),
+          def: Math.floor(Math.random() * 16),
+          spa: Math.floor(Math.random() * 16),
+          spd: Math.floor(Math.random() * 16),
+          spe: Math.floor(Math.random() * 16)
+        };
+      case 'high':
+        // 高品质：20-31，至少 3V
+        const highIvs = { hp: roll(), atk: roll(), def: roll(), spa: roll(), spd: roll(), spe: roll() };
+        const stats = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'];
+        // 随机选 3 个拉满
+        const perfectStats = stats.sort(() => Math.random() - 0.5).slice(0, 3);
+        perfectStats.forEach(s => highIvs[s] = 31);
+        return highIvs;
+      case 'perfect':
+        // 完美 6V
+        return { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 };
+      default:
+        // 普通：完全随机
+        return { hp: roll(), atk: roll(), def: roll(), spa: roll(), spd: roll(), spe: roll() };
+    }
+  }
+
+  /**
+   * 随机抽取性格
+   * @returns {string}
+   */
+  function getRandomNature() {
+    return NATURES[Math.floor(Math.random() * NATURES.length)];
+  }
+
+  /**
+   * 宝可梦名称规范化器 ("宽进"策略)
+   * 将 AI 生成的自然语言形容词转换为标准的 ID 后缀
+   * 例如: "Grimer-Alolan" -> "Grimer-Alola"
+   * @param {string} rawName - 原始名称
+   * @returns {string} 规范化后的名称
+   */
+  function normalizePokemonName(rawName) {
+    if (!rawName) return '';
+    let name = String(rawName).trim();
+    
+    // 处理形容词后缀 (Alolan -> Alola, Galarian -> Galar, etc.)
+    const adjectiveMap = [
+      { pattern: /-Alolan$/i, replacement: '-Alola' },
+      { pattern: /\s+Alolan$/i, replacement: '-Alola' },
+      { pattern: /-Galarian$/i, replacement: '-Galar' },
+      { pattern: /\s+Galarian$/i, replacement: '-Galar' },
+      { pattern: /-Hisuian$/i, replacement: '-Hisui' },
+      { pattern: /\s+Hisuian$/i, replacement: '-Hisui' },
+      { pattern: /-Paldean$/i, replacement: '-Paldea' },
+      { pattern: /\s+Paldean$/i, replacement: '-Paldea' }
+    ];
+
+    for (const { pattern, replacement } of adjectiveMap) {
+      if (pattern.test(name)) {
+        name = name.replace(pattern, replacement);
+        console.log(`${PLUGIN_NAME} [NORMALIZE] "${rawName}" -> "${name}"`);
+        break;
+      }
+    }
+
+    return name;
+  }
+
+  /**
+   * 安全获取宝可梦数据 (带智能回退机制)
+   * 策略: 规范化名称 -> 直接查找 -> 修正后缀 -> 回退到基础形态 -> 最终兜底
+   * @param {string} pokemonName - 宝可梦名称
+   * @returns {object|null} 宝可梦数据对象，包含 { data, usedName, fallbackType }
+   */
+  function getPokemonDataSafe(pokemonName) {
+    if (!pokemonName || typeof POKEDEX === 'undefined') return null;
+
+    // === 第一步: 规范化名称 (宽进) ===
+    const normalizedName = normalizePokemonName(pokemonName);
+    let id = normalizedName.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // === 第二步: 直接查找 ===
+    if (POKEDEX[id]) {
+      return { data: POKEDEX[id], usedName: normalizedName, fallbackType: 'direct' };
+    }
+
+    // === 第三步: 修正常见的形容词后缀错误 ===
+    // 处理 "alolan" -> "alola" 等情况
+    const suffixFixes = [
+      { from: 'alolan', to: 'alola' },
+      { from: 'galarian', to: 'galar' },
+      { from: 'hisuian', to: 'hisui' },
+      { from: 'paldean', to: 'paldea' }
+    ];
+
+    for (const fix of suffixFixes) {
+      if (id.endsWith(fix.from)) {
+        const fixedId = id.slice(0, -fix.from.length) + fix.to;
+        if (POKEDEX[fixedId]) {
+          console.log(`${PLUGIN_NAME} [SUFFIX FIX] "${id}" -> "${fixedId}"`);
+          return { data: POKEDEX[fixedId], usedName: normalizedName, fallbackType: 'suffix_fix' };
+        }
+      }
+    }
+
+    // === 第四步: 智能回退到基础形态 ===
+    // 尝试去除横杠或空格后的后缀: "Grimer-Alola" -> "Grimer"
+    console.warn(`${PLUGIN_NAME} [FALLBACK] Data missing for "${pokemonName}" (normalized: "${normalizedName}", id: "${id}"). Trying base form...`);
+    
+    const splitChars = ['-', ' '];
+    for (const splitChar of splitChars) {
+      if (normalizedName.includes(splitChar)) {
+        const potentialBaseName = normalizedName.split(splitChar)[0];
+        if (potentialBaseName && potentialBaseName !== normalizedName) {
+          const baseId = potentialBaseName.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (POKEDEX[baseId]) {
+            console.log(`${PLUGIN_NAME} [FALLBACK SUCCESS] Using base species "${potentialBaseName}" (id: "${baseId}") instead of "${normalizedName}"`);
+            return { data: POKEDEX[baseId], usedName: potentialBaseName, fallbackType: 'base_form' };
+          }
+        }
+      }
+    }
+
+    // === 第五步: 最终兜底 (返回 null，让调用者决定是否使用 Pikachu) ===
+    console.error(`${PLUGIN_NAME} [FATAL] Pokemon "${pokemonName}" totally unknown. No fallback available.`);
+    return null;
+  }
+
+  /**
+   * 从 POKEDEX 获取宝可梦的可用特性并随机抽取
+   * @param {string} pokemonName
+   * @returns {string|null}
+   */
+  function getRandomAbility(pokemonName) {
+    if (typeof POKEDEX === 'undefined') return null;
+    
+    const result = getPokemonDataSafe(pokemonName);
+    if (!result || !result.data || !result.data.abilities) return null;
+    
+    const data = result.data;
+    
+    // 收集所有可用特性
+    const abilities = [];
+    if (data.abilities['0']) abilities.push(data.abilities['0']);
+    if (data.abilities['1']) abilities.push(data.abilities['1']);
+    // 梦特有较低概率 (20%)
+    if (data.abilities['H'] && Math.random() < 0.2) {
+      abilities.push(data.abilities['H']);
+    }
+    
+    if (abilities.length === 0) return null;
+    return abilities[Math.floor(Math.random() * abilities.length)];
+  }
+
+  /**
+   * 从 POKEDEX 获取宝可梦的可学技能并随机抽取 4 个
+   * @param {string} pokemonName
+   * @param {number} level
+   * @returns {string[]}
+   */
+  function getRandomMoves(pokemonName, level = 50) {
+    if (typeof POKEDEX === 'undefined' || typeof MOVES === 'undefined') {
+      return ['Tackle', 'Scratch', 'Growl', 'Leer']; // Fallback
+    }
+    
+    const result = getPokemonDataSafe(pokemonName);
+    if (!result || !result.data) return ['Tackle', 'Scratch', 'Growl', 'Leer'];
+    
+    const data = result.data;
+    
+    // 从 learnset 获取可学技能（简化处理）
+    // Pokemon Showdown 的 learnset 格式较复杂，这里用类型匹配作为后备
+    const pokemonTypes = data.types || ['Normal'];
+    const candidateMoves = [];
+    
+    // 从 MOVES 中筛选同属性或普通属性的攻击技能
+    for (const moveId in MOVES) {
+      const move = MOVES[moveId];
+      if (!move || move.category === 'Status') continue;
+      if (pokemonTypes.includes(move.type) || move.type === 'Normal') {
+        if (move.basePower && move.basePower > 0 && move.basePower <= 100) {
+          candidateMoves.push(move.name);
+        }
+      }
+    }
+    
+    // 随机抽取 4 个
+    const shuffled = candidateMoves.sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 4);
+  }
+
+  /**
+   * 生成野生宝可梦的完整数据
+   * @param {object} baseData - AI 提供的基础数据 { name, lv, shiny?, moves? }
+   * @returns {object} 完整的宝可梦数据
+   */
+  /**
+   * 根据 tier 推断默认等级
+   * @param {number} tier - 难度等级 (1-4)
+   * @returns {number} - 对应的等级
+   */
+  function getTierDefaultLevel(tier) {
+    const tierLevelMap = {
+      1: 25,
+      2: 50,
+      3: 75,
+      4: 85
+    };
+    return tierLevelMap[tier] || 50; // 默认 50 级
+  }
+
+  /**
+   * 生成野生/自定义宝可梦
+   * @param {object} baseData - 基础数据
+   * @param {number} tier - 难度等级
+   * @param {boolean} isCustomNpc - 是否为自定义 NPC（决定 EV 是否生效）
+   */
+  function generateWildPokemon(baseData, tier = null, isCustomNpc = false) {
+    // 规范化名称 (处理 Alolan/Galarian 等形容词)
+    const rawName = baseData.name || 'Rattata';
+    const name = normalizePokemonName(rawName);
+    
+    // 等级优先级：AI 指定 > tier 推断 > 默认 5
+    let level = baseData.lv || baseData.level;
+    if (!level && tier) {
+      level = getTierDefaultLevel(tier);
+      console.log(`${PLUGIN_NAME} [GEN] 根据 tier ${tier} 推断等级: ${level}`);
+    }
+    if (!level) {
+      level = 5; // 最终默认值
+    }
+    
+    // 异色判断：AI 指定 > 随机（1/4096 概率）
+    const shiny = baseData.shiny !== undefined ? baseData.shiny : (Math.random() < 1/4096);
+    
+    // quality 字段支持：low/medium/high/perfect
+    // 优先使用 AI 指定的 quality，否则根据等级/神兽/闪光自动判断
+    let ivQuality = baseData.quality;
+    if (!ivQuality) {
+      const isLegendary = ['mewtwo', 'mew', 'lugia', 'hooh', 'rayquaza', 'dialga', 'palkia', 'giratina', 
+                           'reshiram', 'zekrom', 'kyurem', 'xerneas', 'yveltal', 'zygarde',
+                           'solgaleo', 'lunala', 'necrozma', 'zacian', 'zamazenta', 'eternatus',
+                           'koraidon', 'miraidon'].includes(name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+      // 异色宝可梦至少保证 3V（high）
+      ivQuality = shiny ? 'high' : (isLegendary ? 'high' : (level >= 50 ? 'medium' : 'low'));
+    }
+    
+    // quality 映射到 IV 生成
+    const qualityMap = {
+      'low': 'low',
+      'medium': 'normal',
+      'high': 'high',
+      'perfect': 'perfect'
+    };
+    const ivs = generateRandomIVs(qualityMap[ivQuality] || ivQuality);
+    
+    // EV 处理：野生宝可梦没有 EV，自定义 NPC 根据 quality 决定
+    let evLevel = 0;
+    if (isCustomNpc) {
+      // 自定义 NPC：quality 决定 EV
+      const evLevelMap = {
+        'low': Math.min(30, Math.floor(level * 0.3)),
+        'medium': Math.min(100, Math.floor(level * 0.8)),
+        'high': Math.min(200, Math.floor(level * 1.5)),
+        'perfect': 252
+      };
+      evLevel = evLevelMap[ivQuality] || Math.min(30, Math.floor(level * 0.5));
+    }
+    // 野生宝可梦：evLevel = 0（无 EV）
+    
+    // ST 插件没有 POKEDEX，只做名称规范化，数据验证由前端处理
+    // 规范化后的名称传给前端，前端的 battle-engine.js 会做智能回退
+    const finalName = name;
+    console.log(`${PLUGIN_NAME} [GEN] Pokemon name normalized: "${rawName}" -> "${finalName}"`);
+    
+    // 随机性格和特性
+    const nature = baseData.nature || getRandomNature();
+    const ability = baseData.ability || getRandomAbility(finalName);
+    
+    // 技能：优先使用 AI 指定，否则随机生成 (使用最终确定的名称)
+    const moves = (baseData.moves && baseData.moves.length > 0) 
+      ? sanitizeMoves(baseData.moves) 
+      : getRandomMoves(finalName, level);
+    
+    // 性别随机
+    const gender = baseData.gender || (Math.random() > 0.5 ? 'M' : 'F');
+    
+    // 自动检测特殊形态 (使用最终确定的名称)
+    const autoForm = autoDetectSpecialForm(finalName);
+    
+    return {
+      name: finalName,
+      gender: gender,
+      lv: level,
+      nature: nature,
+      ability: ability,
+      shiny: shiny,
+      item: baseData.item || null,
+      mechanic: baseData.mechanic || null,
+      teraType: baseData.teraType || null,
+      stats_meta: {
+        ivs: ivs,
+        ev_level: evLevel
+      },
+      moves: moves,
+      mega: baseData.mega || autoForm
+    };
+  }
+
+  /**
+   * 从训练家数据库查找配置
+   * @param {string} trainerName - 训练家名称
+   * @param {number} tier - 难度等级 (1-4)
+   * @returns {object|null} { party: [...], unlocks: {...}, difficulty: '...' }
+   */
+  function lookupTrainerFromDB(trainerName, tier = 2) {
+    const db = getTrainerDatabase();
+    const normalizedName = trainerName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    // 别名映射表（支持多种输入方式）
+    const aliasMap = {
+      'hexmaniac': 'hex',
+      'hexgirl': 'hex',
+      'ionostreamer': 'iono',
+      'nanjamo': 'iono',  // 日文名
+      'champion cynthia': 'cynthia',
+      'championcynthia': 'cynthia',
+      'shirona': 'cynthia',  // 日文名
+      'gym leader nessa': 'nessa',
+      'gymleadernessa': 'nessa',
+      'gym leader bea': 'bea',
+      'gymleaderbea': 'bea',
+      'gym leader erika': 'erika',
+      'gymleadererika': 'erika',
+      'gym leader marnie': 'marnie',
+      'gymleadermarnie': 'marnie',
+      'professor sonia': 'sonia',
+      'professorsonia': 'sonia',
+      'captain mallow': 'mallow',
+      'captainmallow': 'mallow',
+      'captain lana': 'lana',
+      'captainlana': 'lana',
+      'aether president lusamine': 'lusamine',
+      'presidentlusamine': 'lusamine',
+      'hikari': 'dawn',  // 日文名
+      'mei': 'rosa',  // 日文名
+      'serena kalos': 'serena',
+      'yuuri': 'gloria',  // 日文名
+      'gloriagalar': 'gloria'
+    };
+    
+    // 尝试直接匹配或别名匹配
+    let matchedKey = normalizedName;
+    if (!db[normalizedName]) {
+      // 尝试别名
+      if (aliasMap[normalizedName]) {
+        matchedKey = aliasMap[normalizedName];
+        console.log(`${PLUGIN_NAME} [DEBUG] 别名匹配: "${normalizedName}" -> "${matchedKey}"`);
+      } else {
+        // 尝试部分匹配（名字包含数据库 key）
+        const dbKeys = Object.keys(db);
+        const partialMatch = dbKeys.find(key => normalizedName.includes(key) || key.includes(normalizedName));
+        if (partialMatch) {
+          matchedKey = partialMatch;
+          console.log(`${PLUGIN_NAME} [DEBUG] 部分匹配: "${normalizedName}" -> "${matchedKey}"`);
+        }
+      }
+    }
+    
+    // 在数据库中查找
+    const trainerData = db[matchedKey];
+    if (!trainerData) {
+      console.log(`${PLUGIN_NAME} 训练家 "${trainerName}" (${normalizedName}) 不在数据库中，将使用随机生成`);
+      return null;
+    }
+    
+    // 获取指定 tier 的队伍，带自纠正
+    const validTier = Math.max(1, Math.min(4, tier));
+    let tierData = trainerData[validTier];
+    let usedTier = validTier;
+    
+    // 辅助函数：从 tierData 提取 party 数组（支持新旧两种格式）
+    const extractParty = (data) => {
+      if (!data) return null;
+      if (Array.isArray(data)) return data; // 旧格式
+      if (data.party && Array.isArray(data.party)) return data.party; // 新格式
+      return null;
+    };
+    
+    // 辅助函数：从 tierData 提取 unlocks 对象
+    const extractUnlocks = (data) => {
+      if (!data) return null;
+      if (Array.isArray(data)) return null; // 旧格式没有 unlocks
+      if (data.unlocks) return data.unlocks; // 新格式
+      return null;
+    };
+    
+    // 辅助函数：从 tierData 提取 trainerProficiency
+    const extractProficiency = (data) => {
+      if (!data) return 0;
+      if (Array.isArray(data)) return 0; // 旧格式没有 trainerProficiency
+      if (typeof data.trainerProficiency === 'number') return data.trainerProficiency;
+      return 0;
+    };
+    
+    let party = extractParty(tierData);
+    let unlocks = extractUnlocks(tierData);
+    let proficiency = extractProficiency(tierData);
+    
+    if (!party || party.length === 0) {
+      // 尝试找到任意可用的 tier
+      const availableTiers = Object.keys(trainerData).filter(k => /^\d+$/.test(k)).map(Number).sort((a, b) => a - b);
+      console.log(`${PLUGIN_NAME} [DEBUG] 训练家 "${trainerName}" 没有 Tier ${validTier}，可用: ${availableTiers.join(', ')}`);
+      
+      if (availableTiers.length > 0) {
+        // 自纠正规则：
+        // 1. Tier 3 不存在 -> 默认 Tier 4
+        // 2. Tier 1 不存在且是 Cynthia -> 默认 Tier 2
+        // 3. 其他情况 -> 选择最接近的
+        if (validTier === 3 && !availableTiers.includes(3) && availableTiers.includes(4)) {
+          usedTier = 4;
+          console.log(`${PLUGIN_NAME} [自纠正] Tier 3 不存在，使用 Tier 4`);
+        } else if (validTier === 1 && !availableTiers.includes(1) && matchedKey === 'cynthia' && availableTiers.includes(2)) {
+          usedTier = 2;
+          console.log(`${PLUGIN_NAME} [自纠正] Cynthia 没有 Tier 1，使用 Tier 2`);
+        } else {
+          // 优先选择最接近请求 tier 的
+          usedTier = availableTiers.reduce((prev, curr) => 
+            Math.abs(curr - validTier) < Math.abs(prev - validTier) ? curr : prev
+          );
+          console.log(`${PLUGIN_NAME} [DEBUG] 使用最接近的 Tier ${usedTier} 作为替代`);
+        }
+        tierData = trainerData[usedTier];
+        party = extractParty(tierData);
+        unlocks = extractUnlocks(tierData);
+        proficiency = extractProficiency(tierData);
+      }
+      
+      if (!party || party.length === 0) {
+        console.warn(`${PLUGIN_NAME} 训练家 "${trainerName}" 没有可用的配置`);
+        return null;
+      }
+    }
+    
+    // 根据 tier 确定 AI 难度
+    const difficultyMap = {
+      1: 'easy',
+      2: 'hard',
+      3: 'expert',
+      4: 'expert'
+    };
+    
+    console.log(`${PLUGIN_NAME} ✓ 从数据库加载训练家 "${trainerName}" Tier ${usedTier} 配置`);
+    if (unlocks) {
+      console.log(`${PLUGIN_NAME} [DEBUG] ${trainerName} unlocks:`, unlocks);
+    }
+    
+    return {
+      party: party,
+      unlocks: unlocks,
+      trainerProficiency: proficiency,
+      difficulty: difficultyMap[usedTier] || 'normal'
+    };
+  }
+
+  /**
+   * 解析敌方数据（双轨制）
+   * 轨道 A: 注册训练家 -> 查数据库
+   * 轨道 B: 野生/未注册 -> 随机生成
+   * 
+   * @param {object} enemySource - AI 输出的 enemy 对象
+   * @param {object} aiBattleData - AI 输出的完整数据
+   * @returns {object} { party, type, name, lines, unlocks, difficulty }
+   */
+  function resolveEnemyData(enemySource, aiBattleData) {
+    const rawType = (enemySource.type || '').toString().toLowerCase();
+    const isWild = rawType === 'wild';
+    const enemyName = enemySource.name || (isWild ? 'wild' : 'Trainer');
+    const enemyLines = enemySource.lines || {};
+    const enemyId = enemySource.id || enemyName;
+    const tier = enemySource.tier || aiBattleData.tier || 1;
+    
+    // 特殊处理：双打格式已经在 processTrainerParty 中处理过，直接返回
+    if (enemySource._trainersData && Array.isArray(enemySource._trainersData)) {
+      console.log(`${PLUGIN_NAME} 双打格式敌方已预处理，直接使用`);
+      
+      // 第一步：处理每个训练家的队伍（生成缺失的宝可梦）
+      const trainersWithParty = enemySource._trainersData.map(trainerData => {
+        // 判断是否为自定义 NPC（非野生且非数据库训练家）
+        const isCustomNpc = trainerData.trainerType !== 'wild' && trainerData.trainerType !== 'db_trainer';
+        
+        let trainerParty = trainerData.party.map(p => {
+          // 检测是否需要生成
+          if (p._needGenerate) {
+            const pokemonTier = p._tier || trainerData.tier || tier;
+            const isWild = trainerData.trainerType === 'wild';
+            console.log(`${PLUGIN_NAME} [P2] 为 ${trainerData.name} 生成宝可梦: ${p.name} (Tier ${pokemonTier}, ${isWild ? '野生' : '自定义NPC'})`);
+            return generateWildPokemon(p, pokemonTier, !isWild);
+          }
+          return p;
+        });
+        
+        // 按等级排序
+        trainerParty.sort((a, b) => (b.lv || 0) - (a.lv || 0));
+        
+        return {
+          name: trainerData.name,
+          party: trainerParty,
+          originalCount: trainerParty.length,
+          trainerProficiency: trainerData.trainerProficiency || 0
+        };
+      });
+      
+      // 第二步：计算总数并按比例分配
+      const totalCount = trainersWithParty.reduce((sum, t) => sum + t.originalCount, 0);
+      const finalParty = [];
+      
+      if (totalCount <= 6) {
+        // 总数不超过6，全部保留
+        trainersWithParty.forEach(t => {
+          finalParty.push(...t.party);
+          console.log(`${PLUGIN_NAME} [P2] ${t.name} 队伍: ${t.party.map(p => p.name).join(', ')}`);
+        });
+      } else {
+        // 总数超过6，按比例分配
+        console.log(`${PLUGIN_NAME} [P2] 总队伍数 ${totalCount} > 6，按比例分配`);
+        
+        // 计算每个训练家的分配数量（至少1只）
+        const allocations = trainersWithParty.map(t => {
+          const ratio = t.originalCount / totalCount;
+          const allocated = Math.max(1, Math.round(ratio * 6));
+          return { ...t, allocated };
+        });
+        
+        // 调整分配以确保总数为6
+        let totalAllocated = allocations.reduce((sum, a) => sum + a.allocated, 0);
+        while (totalAllocated > 6) {
+          // 找到分配最多且超过1的训练家，减1
+          const maxAlloc = allocations.filter(a => a.allocated > 1).sort((a, b) => b.allocated - a.allocated)[0];
+          if (maxAlloc) {
+            maxAlloc.allocated--;
+            totalAllocated--;
+          } else break;
+        }
+        
+        // 按分配数量取宝可梦
+        allocations.forEach(alloc => {
+          const selected = alloc.party.slice(0, alloc.allocated);
+          finalParty.push(...selected);
+          console.log(`${PLUGIN_NAME} [P2] ${alloc.name} 分配 ${alloc.allocated}/${alloc.originalCount} 只: ${selected.map(p => `${p.name}(Lv${p.lv})`).join(', ')}`);
+        });
+      }
+      
+      // 自动检测 mechanic 字段并设置 unlock 权限
+      const autoDetectedUnlocks = detectUnlocksFromParty(finalParty);
+      const finalUnlocks = mergeUnlocks(enemySource.unlocks, autoDetectedUnlocks);
+      
+      // 多人合并时选择最高的 trainerProficiency
+      const maxProficiency = Math.max(...trainersWithParty.map(t => t.trainerProficiency || 0));
+      console.log(`${PLUGIN_NAME} [多人合并] 选择最高 trainerProficiency: ${maxProficiency}`);
+      
+      return {
+        party: finalParty,
+        type: enemySource.type || 'trainer',
+        name: enemyName,
+        id: enemyId,
+        lines: enemyLines,
+        unlocks: finalUnlocks,
+        trainerProficiency: maxProficiency,
+        difficulty: aiBattleData.difficulty || 'normal'
+      };
+    }
+    
+    // 检查 AI 是否提供了详细的队伍数据（包含 lv/moves 等字段）
+    const aiProvidedParty = Array.isArray(enemySource.party) && enemySource.party.length > 0;
+    const hasDetailedParty = aiProvidedParty && enemySource.party.some(p => 
+      typeof p === 'object' && (p.lv !== undefined || p.moves !== undefined)
+    );
+    
+    // 轨道 A: AI 提供了详细队伍数据（核心逻辑 B：野生/路人）- 最高优先级
+    if (hasDetailedParty) {
+      // 判断是否为自定义 NPC（type 为 trainer 但不在数据库中）
+      const isCustomNpc = !isWild;
+      console.log(`${PLUGIN_NAME} AI 指定了详细队伍数据，使用 AI 数据（${isWild ? '野生' : '自定义NPC'}模式）`);
+      const generatedParty = enemySource.party.map(p => {
+        const baseData = typeof p === 'string' ? { name: p } : p;
+        const pokemonTier = baseData._tier || tier;
+        return generateWildPokemon(baseData, pokemonTier, isCustomNpc);
+      });
+      
+      // 自动检测 mechanic 字段并设置 unlock 权限
+      const autoDetectedUnlocks = detectUnlocksFromParty(generatedParty);
+      const finalUnlocks = mergeUnlocks(enemySource.unlocks, autoDetectedUnlocks);
+      
+      // 自定义 NPC 或野生默认 proficiency 为 0
+      const customProficiency = enemySource.trainerProficiency || 0;
+      
+      return {
+        party: generatedParty,
+        type: isWild ? 'wild' : 'trainer',
+        name: enemyName,
+        id: enemyId,
+        lines: enemyLines,
+        unlocks: finalUnlocks,
+        trainerProficiency: customProficiency,
+        difficulty: aiBattleData.difficulty || 'normal'
+      };
+    }
+    
+    // 轨道 B: 训练家数据库查找（核心逻辑 A：数据库名将）- 中等优先级
+    if (!isWild && enemyName && enemyName !== 'wild') {
+      const dbResult = lookupTrainerFromDB(enemyName, tier);
+      
+      if (dbResult) {
+        // 数据库命中！
+        let finalParty = dbResult.party;
+        
+        // 如果 AI 提供了名字列表，从数据库队伍中筛选指定的宝可梦
+        if (aiProvidedParty) {
+          console.log(`${PLUGIN_NAME} 从数据库 ${enemyName} Tier ${tier} 中筛选: ${enemySource.party.join(', ')}`);
+          const requestedNames = enemySource.party.map(p => 
+            typeof p === 'string' ? p.toLowerCase() : (p.name || '').toLowerCase()
+          );
+          
+          finalParty = dbResult.party.filter(pokemon => 
+            requestedNames.includes((pokemon.name || '').toLowerCase())
+          );
+          
+          if (finalParty.length === 0) {
+            console.warn(`${PLUGIN_NAME} 筛选后队伍为空，使用完整数据库队伍`);
+            finalParty = dbResult.party;
+          }
+        }
+        
+        return {
+          party: finalParty,
+          type: 'trainer',
+          name: enemyName,
+          id: enemyId,
+          lines: enemyLines,
+          unlocks: dbResult.unlocks || null,
+          trainerProficiency: dbResult.trainerProficiency || 0,
+          difficulty: aiBattleData.difficulty || dbResult.difficulty
+        };
+      }
+    }
+    
+    // 轨道 C: AI 提供了名字但数据库查不到 - 根据名字生成宝可梦
+    if (aiProvidedParty) {
+      const isCustomNpc = !isWild;
+      console.log(`${PLUGIN_NAME} 数据库未命中，根据 AI 提供的名字生成宝可梦（${isWild ? '野生' : '自定义NPC'}）`);
+      const generatedParty = enemySource.party.map(p => {
+        const baseData = typeof p === 'string' ? { name: p } : p;
+        const pokemonTier = baseData._tier || tier;
+        return generateWildPokemon(baseData, pokemonTier, isCustomNpc);
+      });
+      
+      // 自动检测 mechanic 字段并设置 unlock 权限
+      const autoDetectedUnlocks = detectUnlocksFromParty(generatedParty);
+      const finalUnlocks = mergeUnlocks(enemySource.unlocks, autoDetectedUnlocks);
+      
+      // 数据库未命中的自定义 NPC，默认 proficiency 为 0
+      const customProficiency = enemySource.trainerProficiency || 0;
+      
+      return {
+        party: generatedParty,
+        type: isWild ? 'wild' : 'trainer',
+        name: enemyName,
+        id: enemyId,
+        lines: enemyLines,
+        unlocks: finalUnlocks,
+        trainerProficiency: customProficiency,
+        difficulty: aiBattleData.difficulty || 'normal'
+      };
+    }
+    
+    // 轨道 D: 完全随机生成（兜底）
+    console.log(`${PLUGIN_NAME} 使用随机生成模式`);
+    
+    // 获取 AI 提供的原始队伍数据（从顶层 aiBattleData.party）
+    let rawParty = (Array.isArray(aiBattleData.party) && aiBattleData.party.length > 0)
+      ? aiBattleData.party
+      : [];
+    
+    // 如果 AI 没提供队伍，给个默认
+    if (rawParty.length === 0) {
+      rawParty = [{ name: enemyName !== 'wild' ? enemyName : 'Rattata', lv: 5 }];
+    }
+    
+    // 为每个宝可梦生成完整数据
+    const isCustomNpc = !isWild;
+    const generatedParty = rawParty.map(p => {
+      const baseData = typeof p === 'string' ? { name: p } : p;
+      const pokemonTier = baseData._tier || tier;
+      return generateWildPokemon(baseData, pokemonTier, isCustomNpc);
+    });
+    
+    // 随机生成的敌方默认 proficiency 为 0
+    return {
+      party: generatedParty,
+      type: isWild ? 'wild' : 'trainer',
+      name: enemyName,
+      id: enemyId,
+      lines: enemyLines,
+      unlocks: null,
+      trainerProficiency: enemySource.trainerProficiency || 0,
+      difficulty: aiBattleData.difficulty || (isWild ? 'easy' : 'normal')
+    };
+  }
+
+  /**
+   * 解析队伍数据（支持新的对象槽位格式 slot1-slot6）
+   * @param {object|array} party - 队伍数据，可以是对象 {slot1: {...}, slot2: {...}} 或数组
+   * @returns {array} - 有效宝可梦数组（过滤掉空槽位）
+   */
+  function parsePartyData(party) {
+    console.log(`${PLUGIN_NAME} [DEBUG] parsePartyData 输入:`, typeof party, party);
+    
+    if (!party) return [];
+    
+    let partyArray = [];
+    
+    // 新格式：对象槽位 {slot1: {...}, slot2: {...}, ...}
+    if (!Array.isArray(party) && typeof party === 'object') {
+      // 检查是否是 slot1-slot6 格式
+      const slotKeys = Object.keys(party).filter(k => /^slot\d+$/.test(k)).sort((a, b) => {
+        const numA = parseInt(a.replace('slot', ''));
+        const numB = parseInt(b.replace('slot', ''));
+        return numA - numB;
+      });
+      
+      if (slotKeys.length > 0) {
+        // 新的槽位格式
+        partyArray = slotKeys.map(k => party[k]);
+        console.log(`${PLUGIN_NAME} [DEBUG] 槽位格式转数组:`, partyArray.length, '个槽位');
+      } else {
+        // 旧格式：数字索引对象 {"0": {...}, "1": {...}}
+        const numKeys = Object.keys(party).filter(k => /^\d+$/.test(k)).sort((a, b) => Number(a) - Number(b));
+        if (numKeys.length > 0) {
+          partyArray = numKeys.map(k => party[k]);
+          console.log(`${PLUGIN_NAME} [DEBUG] 数字索引转数组:`, partyArray);
+        } else if (party.name) {
+          // 单个宝可梦对象
+          partyArray = [party];
+        } else {
+          return [];
+        }
+      }
+    } else if (Array.isArray(party)) {
+      partyArray = party;
+    } else {
+      return [];
+    }
+    
+    // 处理每个槽位
+    return partyArray.map((p, index) => {
+      if (!p) return null;
+      
+      // 如果是字符串，尝试解析为JSON
+      if (typeof p === 'string') {
+        try {
+          const parsed = JSON.parse(p);
+          return normalizePokemonData(parsed, index);
+        } catch (e) {
+          console.warn(`${PLUGIN_NAME} 解析宝可梦数据失败:`, p);
+          return null;
+        }
+      }
+      
+      // 如果是对象但属性是字符索引（字符数组问题）
+      if (p && typeof p === 'object' && p['0'] !== undefined && typeof p['0'] === 'string') {
+        const keys = Object.keys(p).filter(k => /^\d+$/.test(k)).sort((a, b) => Number(a) - Number(b));
+        const jsonStr = keys.map(k => p[k]).join('');
+        console.log(`${PLUGIN_NAME} [DEBUG] 重组字符数组为 JSON:`, jsonStr.substring(0, 50) + '...');
+        try {
+          const parsed = JSON.parse(jsonStr);
+          return normalizePokemonData(parsed, index);
+        } catch (e) {
+          console.warn(`${PLUGIN_NAME} 重组 JSON 解析失败:`, e);
+          return null;
+        }
+      }
+      
+      return normalizePokemonData(p, index);
+    }).filter(p => p !== null && p.name); // 过滤掉空槽位（name 为 null 的）
+  }
+
+  /**
+   * 规范化宝可梦数据（处理 moves 对象格式）
+   * @param {object} pokemon - 原始宝可梦数据
+   * @param {number} slotIndex - 槽位索引
+   * @returns {object} - 规范化后的宝可梦数据
+   */
+  function normalizePokemonData(pokemon, slotIndex) {
+    if (!pokemon || typeof pokemon !== 'object') return null;
+    
+    // 处理 moves：可能是对象 {move1, move2, move3, move4} 或数组
+    let moves = [];
+    if (pokemon.moves) {
+      if (Array.isArray(pokemon.moves)) {
+        moves = sanitizeMoves(pokemon.moves);
+      } else if (typeof pokemon.moves === 'object') {
+        // 对象格式 {move1: "Scratch", move2: "Tail Whip", ...}
+        moves = sanitizeMoves([
+          pokemon.moves.move1,
+          pokemon.moves.move2,
+          pokemon.moves.move3,
+          pokemon.moves.move4
+        ]);
+      }
+    }
+    
+    return {
+      ...pokemon,
+      slot: pokemon.slot || (slotIndex + 1),
+      moves: moves
+    };
+  }
+
+  /**
+   * 判断是否为完整的宝可梦数据（包含 name, lv, moves）
+   */
+  function isCompletePokemonData(pokemon) {
+    if (!pokemon || typeof pokemon !== 'object') return false;
+    return pokemon.name && 
+           typeof pokemon.lv === 'number' && 
+           Array.isArray(pokemon.moves) && 
+           pokemon.moves.length > 0;
+  }
+
+  /**
+   * 从玩家队伍中按名字筛选宝可梦
+   * @param {Array} playerParty - 玩家完整队伍数据
+   * @param {Array} nameList - AI输出的宝可梦名字列表
+   * @returns {Array} 筛选后的队伍
+   */
+  function selectPokemonByNames(playerParty, nameList) {
+    if (!playerParty || !Array.isArray(playerParty)) return [];
+    if (!nameList || !Array.isArray(nameList)) return [];
+
+    console.log(`${PLUGIN_NAME} [DEBUG] 筛选宝可梦:`, nameList);
+    console.log(`${PLUGIN_NAME} [DEBUG] 可用队伍:`, playerParty.map(p => p.name || p.nickname));
+
+    const result = [];
+    for (const name of nameList) {
+      const normalizedName = (typeof name === 'string' ? name : name?.name || '').toLowerCase();
+      
+      // 尝试精确匹配
+      let found = playerParty.find(p => 
+        p.name?.toLowerCase() === normalizedName ||
+        p.nickname?.toLowerCase() === normalizedName
+      );
+      
+      // 如果精确匹配失败，尝试部分匹配（支持形态变体如 Vulpix-Alola）
+      if (!found) {
+        // 提取基础名字（去掉形态后缀）
+        const baseName = normalizedName.split('-')[0];
+        found = playerParty.find(p => {
+          const pokemonName = (p.name || '').toLowerCase();
+          const pokemonBaseName = pokemonName.split('-')[0];
+          // 匹配基础名字，或者宝可梦名字包含搜索名字
+          return pokemonBaseName === baseName || 
+                 pokemonName.includes(normalizedName) ||
+                 normalizedName.includes(pokemonName);
+        });
+        
+        if (found) {
+          console.log(`${PLUGIN_NAME} [DEBUG] 部分匹配成功: "${name}" -> "${found.name}"`);
+        }
+      }
+      
+      if (found) {
+        result.push(found);
+      } else {
+        console.warn(`${PLUGIN_NAME} 未在玩家队伍中找到: ${name}`);
+      }
+    }
+    
+    console.log(`${PLUGIN_NAME} [DEBUG] 筛选结果:`, result.map(p => p.name));
+    return result;
+  }
+
+  /**
+   * 解析AI输出的训练家队伍配置（软编码，支持任意角色）
+   * 
+   * 四种模式：
+   * 1. AI输出完整数据（name + lv + moves）→ 直接使用AI数据
+   * 2. AI输出宝可梦名字列表（仅name或字符串数组）→ 从数据库或ERA变量筛选
+   * 3. AI仅输出训练家名（无party或party为空）→ 从数据库查询或使用ERA全队
+   * 4. 训练家是NPC → 从训练家数据库提取完整配置
+   * 
+   * @param {Object} aiTrainerConfig - AI输出的训练家配置
+   * @param {Object} eraPlayerData - ERA变量中的玩家数据（仅当训练家是玩家时使用）
+   * @param {string} role - 'p1' | 'p2' | 'player' | 'enemy'（用于日志）
+   * @returns {Object} 最终的训练家配置
+   */
+  function resolveTrainerParty(aiTrainerConfig, eraPlayerData, role = 'trainer') {
+    const trainerName = aiTrainerConfig?.name || eraPlayerData?.name || '训练家';
+    
+    // === 步骤1: 检测训练家类型 ===
+    const playerKeywords = ['player', '玩家', '主角', '训练家', '{{user}}', 'user'];
+    const normalizedName = trainerName.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]/g, '');
+    const isPlayer = playerKeywords.some(kw => normalizedName.includes(kw) || trainerName.includes(kw)) || 
+                     trainerName === '{{user}}' || 
+                     trainerName.includes('{{user}}');
+    
+    console.log(`${PLUGIN_NAME} [${role}] 解析训练家: "${trainerName}", 是否玩家: ${isPlayer}`);
+
+    // 检测双人对战格式（name 包含 '&'）
+    const isDoubleBattle = trainerName.includes('&');
+    
+    // === 特殊处理：双打对战且有 _trainersData ===
+    if (isDoubleBattle && aiTrainerConfig._trainersData && Array.isArray(aiTrainerConfig._trainersData)) {
+      console.log(`${PLUGIN_NAME} [${role}] 双打对战模式，分别处理各训练家队伍`);
+      const eraParty = parsePartyData(eraPlayerData?.party);
+      
+      // 第一步：处理每个训练家的队伍（生成缺失的宝可梦）
+      const trainersWithParty = aiTrainerConfig._trainersData.map(trainerData => {
+        let trainerParty = [];
+        
+        if (trainerData.isPlayer) {
+          // 玩家：从 ERA 提取
+          if (trainerData.party && trainerData.party.length > 0) {
+            trainerParty = trainerData.party.map(p => {
+              const pokemonName = typeof p === 'string' ? p : p?.name;
+              return selectPokemonByNames(eraParty, [pokemonName])[0];
+            }).filter(Boolean);
+          } else {
+            trainerParty = eraParty;
+          }
+        } else {
+          // NPC：使用已解析的完整数据，并生成标记为 _needGenerate 的宝可梦
+          const isWild = trainerData.trainerType === 'wild';
+          trainerParty = trainerData.party.map(p => {
+            if (p._needGenerate) {
+              const pokemonTier = p._tier || trainerData.tier || 2;
+              console.log(`${PLUGIN_NAME} [${role}] 为 ${trainerData.name} 生成宝可梦: ${p.name} (Tier ${pokemonTier}, ${isWild ? '野生' : '自定义NPC'})`);
+              return generateWildPokemon(p, pokemonTier, !isWild);
+            }
+            console.log(`${PLUGIN_NAME} [${role}] 使用数据库数据: ${p.name}, mechanic: ${p.mechanic || 'null'}, _needGenerate: ${p._needGenerate}`);
+            return p;
+          });
+        }
+        
+        // 按等级排序
+        trainerParty.sort((a, b) => (b.lv || 0) - (a.lv || 0));
+        
+        return {
+          name: trainerData.name,
+          party: trainerParty,
+          originalCount: trainerParty.length,
+          trainerProficiency: trainerData.trainerProficiency || 0
+        };
+      });
+      
+      // 第二步：计算总数并按比例分配
+      const totalCount = trainersWithParty.reduce((sum, t) => sum + t.originalCount, 0);
+      const finalParty = [];
+      
+      if (totalCount <= 6) {
+        // 总数不超过6，全部保留
+        trainersWithParty.forEach(t => {
+          finalParty.push(...t.party);
+          console.log(`${PLUGIN_NAME} [${role}] ${t.name} 队伍: ${t.party.map(p => p.name).join(', ')}`);
+        });
+      } else {
+        // 总数超过6，按比例分配
+        console.log(`${PLUGIN_NAME} [${role}] 总队伍数 ${totalCount} > 6，按比例分配`);
+        
+        // 计算每个训练家的分配数量（至少1只）
+        const allocations = trainersWithParty.map(t => {
+          const ratio = t.originalCount / totalCount;
+          const allocated = Math.max(1, Math.round(ratio * 6));
+          return { ...t, allocated };
+        });
+        
+        // 调整分配以确保总数为6
+        let totalAllocated = allocations.reduce((sum, a) => sum + a.allocated, 0);
+        while (totalAllocated > 6) {
+          // 找到分配最多且超过1的训练家，减1
+          const maxAlloc = allocations.filter(a => a.allocated > 1).sort((a, b) => b.allocated - a.allocated)[0];
+          if (maxAlloc) {
+            maxAlloc.allocated--;
+            totalAllocated--;
+          } else break;
+        }
+        
+        // 按分配数量取宝可梦
+        allocations.forEach(alloc => {
+          const selected = alloc.party.slice(0, alloc.allocated);
+          finalParty.push(...selected);
+          console.log(`${PLUGIN_NAME} [${role}] ${alloc.name} 分配 ${alloc.allocated}/${alloc.originalCount} 只: ${selected.map(p => `${p.name}(Lv${p.lv})`).join(', ')}`);
+        });
+      }
+      
+      // 合并各个训练家自带的 unlocks（从 _trainersData 中提取）
+      const trainerUnlocks = aiTrainerConfig._trainersData
+        .map(t => t.unlocks)
+        .filter(Boolean);
+      
+      // 合并：aiTrainerConfig.unlocks > 训练家自带 unlocks
+      // 注意：不再使用自动检测，因为玩家方的 unlocks 应该由训练家数据明确定义
+      // 自动检测会导致宝可梦的 mechanic 字段覆盖训练家的权限设置
+      const mergedUnlocks = mergeUnlocks(aiTrainerConfig.unlocks, ...trainerUnlocks);
+      
+      console.log(`${PLUGIN_NAME} [${role}] aiTrainerConfig.unlocks:`, aiTrainerConfig.unlocks);
+      console.log(`${PLUGIN_NAME} [${role}] 训练家 unlocks:`, trainerUnlocks);
+      console.log(`${PLUGIN_NAME} [${role}] 最终合并 unlocks:`, mergedUnlocks);
+      
+      // 调试：检查 finalParty 中的 mechanic 字段
+      finalParty.forEach(p => {
+        if (p.mechanic) {
+          console.log(`${PLUGIN_NAME} [${role}] finalParty 中 ${p.name} 的 mechanic: ${p.mechanic}`);
+        }
+      });
+      
+      // 多人合并时选择最高的 trainerProficiency
+      const maxProficiency = Math.max(...trainersWithParty.map(t => t.trainerProficiency || 0));
+      console.log(`${PLUGIN_NAME} [${role}] [多人合并] 选择最高 trainerProficiency: ${maxProficiency}`);
+      
+      return {
+        name: trainerName,
+        unlocks: mergedUnlocks,
+        party: finalParty,
+        trainerProficiency: maxProficiency
+      };
+    }
+    
+    // === 步骤2: 如果是玩家，使用 ERA 变量；如果是 NPC，使用数据库 ===
+    const eraParty = parsePartyData(eraPlayerData?.party);
+    
+    // 情况1: AI没有输出party → 根据训练家类型处理
+    if (!aiTrainerConfig?.party || !Array.isArray(aiTrainerConfig.party) || aiTrainerConfig.party.length === 0) {
+      if (isPlayer) {
+        // 玩家：使用ERA全队
+        console.log(`${PLUGIN_NAME} [${role}] 模式: 玩家全队配置`);
+        return {
+          name: trainerName,
+          unlocks: null,
+          party: eraParty.length > 0 ? eraParty : [
+            { name: 'Pikachu', lv: 5, moves: ['Thunder Shock', 'Quick Attack'] }
+          ]
+        };
+      } else {
+        // NPC：从数据库提取（使用默认 tier 2）
+        console.log(`${PLUGIN_NAME} [${role}] 模式: NPC数据库查询（无party指定）`);
+        const dbResult = extractPokemonFromTrainerDB(trainerName, [], 2);
+        const dbParty = dbResult.party || dbResult; // 兼容新旧返回格式
+        const dbUnlocks = dbResult.unlocks || null;
+        if (dbParty.length > 0) {
+          return {
+            name: trainerName,
+            unlocks: dbUnlocks,
+            party: dbParty
+          };
+        } else {
+          // 上下文感知：如果 role 是 'p1' 且有 ERA 数据，优先使用玩家数据
+          if (role === 'p1' && eraParty.length > 0) {
+            console.log(`${PLUGIN_NAME} [${role}] NPC "${trainerName}" 不在数据库中，但 role=p1，使用 ERA 玩家数据`);
+            return {
+              name: trainerName,
+              unlocks: null,
+              party: eraParty
+            };
+          }
+          
+          console.warn(`${PLUGIN_NAME} [${role}] NPC "${trainerName}" 不在数据库中，使用默认队伍`);
+          return {
+            name: trainerName,
+            unlocks: null,
+            party: [{ name: 'Pikachu', lv: 5, moves: ['Thunder Shock', 'Quick Attack'] }]
+          };
+        }
+      }
+    }
+
+    const aiParty = aiTrainerConfig.party;
+    const trainerMetadata = aiTrainerConfig._trainerMetadata || []; // 从 p1/p2 转换中获取
+
+    // 检查是否有混合数据（既有完整对象，也有字符串）
+    const hasCompleteData = aiParty.some(p => isCompletePokemonData(p));
+    const hasStringData = aiParty.some(p => typeof p === 'string');
+    
+    // 情况2: 全部是完整数据（有lv和moves）→ 直接使用
+    if (hasCompleteData && !hasStringData) {
+      console.log(`${PLUGIN_NAME} [${role}] 模式: AI完整数据`);
+      const partyWithMega = aiParty.map((p, index) => ({
+        ...p,
+        moves: sanitizeMoves(p.moves),
+        mega: p.mega,
+        trainer: trainerMetadata[index] // 添加训练家标记
+      }));
+      return {
+        name: trainerName,
+        unlocks: null,
+        party: partyWithMega
+      };
+    }
+    
+    // 情况2.5: 混合数据（部分完整，部分字符串）→ 分别处理
+    if (hasCompleteData && hasStringData) {
+      console.log(`${PLUGIN_NAME} [${role}] 模式: 混合数据`);
+      const finalParty = [];
+      
+      for (let i = 0; i < aiParty.length; i++) {
+        const p = aiParty[i];
+        if (isCompletePokemonData(p)) {
+          // 完整数据，直接使用
+          finalParty.push({
+            ...p,
+            moves: sanitizeMoves(p.moves),
+            trainer: trainerMetadata[i]
+          });
+        } else {
+          // 字符串，根据训练家类型查找
+          const pokemonName = typeof p === 'string' ? p : p?.name;
+          let found = null;
+          
+          if (isPlayer && eraParty.length > 0) {
+            // 玩家：从 ERA 变量筛选
+            found = selectPokemonByNames(eraParty, [pokemonName])[0];
+          } else {
+            // NPC：从数据库提取
+            const dbResult = extractPokemonFromTrainerDB(trainerName, [pokemonName], 2);
+            const dbParty = dbResult.party || dbResult; // 兼容新旧返回格式
+            found = dbParty[0];
+          }
+          
+          if (found) {
+            finalParty.push({
+              ...found,
+              trainer: trainerMetadata[i]
+            });
+          } else {
+            console.warn(`${PLUGIN_NAME} [${role}] 未找到: ${pokemonName}`);
+          }
+        }
+      }
+      
+      return {
+        name: trainerName,
+        unlocks: null,
+        party: finalParty
+      };
+    }
+
+    // 情况3: 全部是名字列表 → 根据训练家类型筛选
+    console.log(`${PLUGIN_NAME} [${role}] 模式: 按名字筛选`);
+    const nameList = aiParty.map(p => typeof p === 'string' ? p : p?.name).filter(Boolean);
+    let selectedParty = [];
+    
+    let trainerUnlocks = null;
+    if (isPlayer && eraParty.length > 0) {
+      // 玩家：从 ERA 变量筛选
+      selectedParty = selectPokemonByNames(eraParty, nameList);
+    } else {
+      // NPC：从数据库提取
+      const dbResult = extractPokemonFromTrainerDB(trainerName, nameList, 2);
+      selectedParty = dbResult.party || dbResult; // 兼容新旧返回格式
+      trainerUnlocks = dbResult.unlocks || null;
+      
+      // 上下文感知：如果 NPC 不在数据库中且 role='p1'，尝试从 ERA 筛选
+      if (selectedParty.length === 0 && role === 'p1' && eraParty.length > 0) {
+        console.log(`${PLUGIN_NAME} [${role}] NPC "${trainerName}" 不在数据库中，但 role=p1，尝试从 ERA 筛选`);
+        selectedParty = selectPokemonByNames(eraParty, nameList);
+      }
+    }
+
+    if (selectedParty.length === 0) {
+      console.warn(`${PLUGIN_NAME} [${role}] 筛选结果为空`);
+      if ((isPlayer || role === 'p1') && eraParty.length > 0) {
+        // 玩家或 p1 位置：使用全队
+        console.log(`${PLUGIN_NAME} [${role}] 使用 ERA 全队作为后备`);
+        selectedParty = eraParty;
+      } else {
+        // NPC：使用默认队伍
+        selectedParty = [{ name: 'Pikachu', lv: 5, moves: ['Thunder Shock', 'Quick Attack'] }];
+      }
+    }
+
+    // 双人对战：为每个宝可梦添加 trainer 标记
+    if (isDoubleBattle) {
+      console.log(`${PLUGIN_NAME} [${role}] 检测到双人对战格式: ${trainerName}`);
+      
+      // 使用 _trainerMetadata 来正确分配训练家标记
+      if (trainerMetadata.length > 0) {
+        // 有元数据，使用元数据分配
+        const partyWithTrainers = selectedParty.map((pokemon, index) => ({
+          ...pokemon,
+          trainer: trainerMetadata[index] || trainerName.split('&')[0].trim()
+        }));
+        
+        return {
+          name: trainerName,
+          unlocks: trainerUnlocks,
+          party: partyWithTrainers
+        };
+      } else {
+        // 没有元数据，使用简单的前半后半分配
+        const trainerNames = trainerName.split('&').map(n => n.trim());
+        const midPoint = Math.ceil(selectedParty.length / 2);
+        
+        const partyWithTrainers = selectedParty.map((pokemon, index) => ({
+          ...pokemon,
+          trainer: index < midPoint ? trainerNames[0] : (trainerNames[1] || trainerNames[0])
+        }));
+        
+        return {
+          name: trainerName,
+          unlocks: trainerUnlocks,
+          party: partyWithTrainers
+        };
+      }
+    }
+
+    return {
+      name: trainerName,
+      unlocks: trainerUnlocks,
+      party: selectedParty
+    };
+  }
+
+  /**
+   * 构建完整的战斗JSON（软编码，支持任意角色组合）
+   * 
+   * 支持三种对战模式：
+   * - 玩家 vs NPC
+   * - 玩家 vs 玩家（理论上）
+   * - NPC vs NPC（新增支持）
+   * 
+   * 双轨制处理：
+   * - 轨道 A: 注册训练家 (name 在 TRAINER_DB 中) -> 查表获取完整配置
+   * - 轨道 B: 野生/未注册 -> 随机生成 IVs/性格/特性
+   */
+  async function buildCompleteBattleJson(aiBattleData) {
+    // 获取 ERA 玩家数据（仅当 p1 或 p2 是玩家时需要）
+    const eraPlayerData = await getPlayerParty();
+
+    if (!eraPlayerData || !eraPlayerData.party || eraPlayerData.party.length === 0) {
+      console.warn(`${PLUGIN_NAME} ERA玩家队伍为空（如果是纯NPC对战则无影响）`);
+    }
+
+    // === 使用标准化后的 player/enemy 格式 ===
+    // normalizeP1P2Format 已将 p1/p2.entrants 转换为 player/enemy
+    const p1Source = aiBattleData.player || aiBattleData.p1 || {};
+    const p2Source = aiBattleData.enemy || aiBattleData.p2 || {};
+
+    // 解析 p1（player）配置（软编码，可以是玩家或NPC）
+    const resolvedPlayer = resolveTrainerParty(p1Source, eraPlayerData, 'p1');
+
+    // 解析 p2（enemy）配置
+    const resolvedEnemy = resolveEnemyData(p2Source, aiBattleData);
+
+    // === 合并 unlocks ===
+    // 将 p1 和 p2 的 unlocks 中为 true 的属性合并
+    // 前端只需要知道"哪些机制可用"，不区分来源
+    // 注意：bonds（女主角羁绊道具）也需要合并到 unlocks 中
+    const eraBonds = eraPlayerData?.bonds || {};
+    const playerUnlocks = mergeUnlocks(resolvedPlayer.unlocks, eraPlayerData?.unlocks, eraBonds);
+    const enemyUnlocks = resolvedEnemy.unlocks || null;
+
+    // === 处理全局系统开关 (settings) ===
+    // 从 ERA 数据或 AI 数据中获取 settings
+    const defaultSettings = {
+      enableAVS: true,
+      enableCommander: true,
+      enableEVO: true,
+      enableBGM: true,
+      enableSFX: true,
+      enableClash: false,
+      enableEnvironment: true
+    };
+    const eraSettings = eraPlayerData?.settings || {};
+    const aiSettings = aiBattleData?.settings || {};
+    // AI 数据优先，然后是 ERA 数据，最后是默认值
+    const finalSettings = { ...defaultSettings, ...eraSettings, ...aiSettings };
+    
+    // === 处理 trainerProficiency ===
+    // 从 ERA 数据获取（已经在 handleGenerationBeforeInject 中处理了 proficiency_up）
+    // 多人合并时，选择 resolvedPlayer.trainerProficiency 和 eraPlayerData.trainerProficiency 中的最大值
+    // 注意：酒馆脚本不做上限限制（始终 0-255），上限限制由战斗前端根据 enable_proficiency_cap 处理
+    const eraProficiency = eraPlayerData?.trainerProficiency || 0;
+    const resolvedProficiency = resolvedPlayer.trainerProficiency || 0;
+    const trainerProficiency = Math.min(255, Math.max(0, Math.max(eraProficiency, resolvedProficiency)));
+
+    // === 处理环境配置 ===
+    // 合并逻辑:
+    //   - AI 指定 weather → 使用 AI 的天气
+    //   - AI 没指定 weather → 从 ERA weather_grid 补充
+    //   - AI 指定 overlay → 始终保留（与天气来源无关）
+    const eraVars = await getEraVars();
+    let environmentConfig = null;
+    
+    // 1. 从 ERA weather_grid 获取当前位置天气
+    let eraWeather = null;
+    let eraSuppression = null;
+    if (eraVars) {
+      const locationData = getEraValue(eraVars, 'world_state.location', null);
+      const weatherGrid = getEraValue(eraVars, 'world_state.weather_grid', null);
+      
+      if (locationData && weatherGrid && typeof locationData.x === 'number') {
+        const MAP_CENTER_X = 26;
+        const MAP_CENTER_Y = 26;
+        let gx = locationData.x;
+        if (gx > 0) gx -= 1;
+        gx = gx + MAP_CENTER_X;
+        let gy = locationData.y;
+        if (gy > 0) gy -= 1;
+        gy = MAP_CENTER_Y - gy - 1;
+        
+        const gridKey = `${gx}_${gy}`;
+        const gridWeather = weatherGrid[gridKey];
+        
+        if (gridWeather) {
+          eraWeather = gridWeather.weather;
+          eraSuppression = gridWeather.suppression || null;
+          console.log(`${PLUGIN_NAME} [ERA WEATHER] 当前格子天气: ${eraWeather} @ ${gridKey}`);
+        }
+      }
+    }
+    
+    // 2. 构建最终环境配置
+    const aiEnv = aiBattleData.environment || {};
+    
+    // 天气优先级: AI 指定有效天气 > ERA weather_grid
+    // 注意: AI 传入 null 视为"未指定"，应从 ERA 补充
+    const finalWeather = aiEnv.weather ? aiEnv.weather : eraWeather;
+    const finalWeatherTurns = aiEnv.weatherTurns || 0;
+    const finalSuppression = aiEnv.suppression || eraSuppression;
+    
+    // 只要有天气或 overlay，就创建 environmentConfig
+    if (finalWeather || aiEnv.overlay) {
+      environmentConfig = {
+        weather: finalWeather,
+        weatherTurns: finalWeatherTurns
+      };
+      
+      // 保留 AI 传入的 overlay（自定义场地规则）
+      if (aiEnv.overlay) {
+        environmentConfig.overlay = aiEnv.overlay;
+        console.log(`${PLUGIN_NAME} [ENV OVERLAY] AI 传入自定义环境: ${aiEnv.overlay.env_name}`);
+        console.log(`${PLUGIN_NAME} [ENV OVERLAY] 规则数: ${aiEnv.overlay.rules?.length || 0}`);
+      }
+      
+      // 添加 suppression
+      if (finalSuppression) {
+        environmentConfig.suppression = finalSuppression;
+      }
+      
+      // 日志：显示最终配置来源
+      const weatherSource = aiEnv.weather !== undefined ? 'AI' : (eraWeather ? 'ERA' : 'none');
+      console.log(`${PLUGIN_NAME} [ENVIRONMENT] 最终配置 - 天气: ${finalWeather || 'none'} (来源: ${weatherSource}), overlay: ${aiEnv.overlay ? 'AI' : 'none'}`);
+    }
+
+    // 构建最终的战斗 JSON（前端 player/enemy 格式）
+    const completeBattle = {
+      settings: finalSettings,
+      difficulty: resolvedEnemy.difficulty || aiBattleData.difficulty || 'normal',
+      player: {
+        name: resolvedPlayer.name,
+        trainerProficiency: trainerProficiency,
+        party: resolvedPlayer.party,
+        unlocks: playerUnlocks
+      },
+      enemy: {
+        id: resolvedEnemy.id,
+        type: resolvedEnemy.type,
+        name: resolvedEnemy.name,
+        trainerProficiency: resolvedEnemy.trainerProficiency || 0,
+        lines: resolvedEnemy.lines,
+        unlocks: enemyUnlocks
+      },
+      party: resolvedEnemy.party,
+      script: aiBattleData.script || null
+    };
+    
+    // 添加环境天气（与 player 同级）
+    if (environmentConfig) {
+      completeBattle.environment = environmentConfig;
+    }
+
+    console.log(`${PLUGIN_NAME} 构建完整战斗JSON:`, completeBattle);
+    console.log(`${PLUGIN_NAME} [SETTINGS] 全局系统开关:`, finalSettings);
+    console.log(`${PLUGIN_NAME} [PROFICIENCY] 玩家熟练度:`, trainerProficiency);
+    console.log(`${PLUGIN_NAME} [PROFICIENCY] 敌方熟练度:`, resolvedEnemy.trainerProficiency || 0);
+    console.log(`${PLUGIN_NAME} [UNLOCK] player unlocks:`, playerUnlocks);
+    if (enemyUnlocks) {
+      console.log(`${PLUGIN_NAME} [UNLOCK] enemy unlocks:`, enemyUnlocks);
+    }
+    return completeBattle;
+  }
+
+  // ============================================
+  //    前端注入
+  // ============================================
+
+  /**
+   * 注入战斗前端到消息
+   */
+  async function injectBattleFrontend(messageId, battleJson) {
+    try {
+      const messages = getChatMessages(messageId);
+      if (!messages || messages.length === 0) return false;
+
+      const msg = messages[0];
+      let content = msg.message;
+
+      // === 格式标准化：AI 输入 → PKM_FRONTEND ===
+      // 处理：friendship → avs, 保留 mechanic/teraType
+      const normalizePokemonFormat = (pokemon) => {
+        if (!pokemon) return pokemon;
+        
+        // 如果有嵌套的 friendship，提取为扁平 avs
+        if (pokemon.friendship && pokemon.friendship.avs) {
+          pokemon.avs = { ...pokemon.friendship.avs };
+          // 删除 friendship，PKM_FRONTEND 只保留扁平 avs
+          delete pokemon.friendship;
+        } else if (pokemon.friendship && !pokemon.friendship.avs) {
+          // 旧格式：friendship 直接是 avs
+          if (typeof pokemon.friendship === 'object' && 
+              ('trust' in pokemon.friendship || 'passion' in pokemon.friendship)) {
+            pokemon.avs = { ...pokemon.friendship };
+            delete pokemon.friendship;
+          }
+        }
+        
+        // 如果没有 avs，初始化为 0
+        if (!pokemon.avs) {
+          pokemon.avs = { trust: 0, passion: 0, insight: 0, devotion: 0 };
+        }
+        
+        // === 确保 mechanic 和 teraType 被保留 ===
+        // mechanic: 'mega' | 'zmove' | 'dynamax' | 'tera' | null
+        // teraType: 'Fire' | 'Water' | ... | null (仅当 mechanic='tera' 时有效)
+        if (pokemon.mechanic) {
+          console.log(`${PLUGIN_NAME} [MECHANIC] ${pokemon.name}: ${pokemon.mechanic}${pokemon.teraType ? ` (${pokemon.teraType})` : ''}`);
+        }
+        
+        // === 确保 isAce 和 isLead 被保留 ===
+        // isAce: 标记王牌宝可梦（用于羁绊共鸣等特殊机制）
+        // isLead: 标记首发宝可梦（自动移到队伍第一位）
+        if (pokemon.isAce !== undefined) {
+          pokemon.isAce = Boolean(pokemon.isAce);
+        }
+        if (pokemon.isLead !== undefined) {
+          pokemon.isLead = Boolean(pokemon.isLead);
+          if (pokemon.isLead) {
+            console.log(`${PLUGIN_NAME} [LEAD] ${pokemon.name} marked as lead Pokemon`);
+          }
+        }
+        
+        return pokemon;
+      };
+      
+      // 标准化玩家队伍
+      if (battleJson.player && battleJson.player.party) {
+        battleJson.player.party = battleJson.player.party.map(normalizePokemonFormat);
+      }
+      
+      // 标准化敌方队伍
+      if (battleJson.party) {
+        battleJson.party = battleJson.party.map(normalizePokemonFormat);
+      }
+
+      // 添加占位符（供酒馆正则替换现有前端模板）
+      const frontendPayload = `<PKM_FRONTEND>\n${JSON.stringify(battleJson)}\n</PKM_FRONTEND>`;
+      content = content.trim() + '\n\n' + frontendPayload;
+
+      // 更新消息
+      await setChatMessages([{
+        message_id: messageId,
+        message: content
+      }], { refresh: 'affected' });
+
+      console.log(`${PLUGIN_NAME} ✓ 战斗前端已注入到消息 #${messageId}`);
+      return true;
+    } catch (e) {
+      console.error(`${PLUGIN_NAME} 注入前端失败:`, e);
+      return false;
+    }
+  }
+
+  // ============================================
+  //    事件监听 & 主流程
+  // ============================================
+
+  /**
+   * 重置处理状态
+   */
+  function resetState(reason) {
+    console.log(`${PLUGIN_NAME} ${reason} -> 重置状态`);
+    lastHandledMk = null;
+    isProcessing = false;
+  }
+
+  /**
+   * 格式化 IVs 为简洁显示
+   * @param {object} ivs - { hp, atk, def, spa, spd, spe }
+   * @returns {string} - 如 "6V", "5V0A", "4V" 等
+   */
+  function formatIVsDisplay(ivs) {
+    if (!ivs) return '???';
+    
+    const stats = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'];
+    let perfectCount = 0;
+    let zeroAtk = false;
+    
+    for (const stat of stats) {
+      const val = ivs[stat];
+      if (val === 31) perfectCount++;
+      if (stat === 'atk' && val === 0) zeroAtk = true;
+    }
+    
+    if (perfectCount === 6) return '6V';
+    if (perfectCount === 5 && zeroAtk) return '5V0A';
+    if (perfectCount >= 4) return `${perfectCount}V`;
+    return `${perfectCount}V`;
+  }
+
+  /**
+   * 格式化性别符号
+   * @param {string} gender - 'M' | 'F' | null
+   * @returns {string}
+   */
+  function formatGender(gender) {
+    if (gender === 'M') return '♂';
+    if (gender === 'F') return '♀';
+    return '⚪';
+  }
+
+  /**
+   * 根据资质等级生成随机 IVs
+   * @param {string} quality - 'low' | 'medium' | 'high' | 'perfect'
+   * @returns {object} - { hp, atk, def, spa, spd, spe }
+   */
+  function generateIVsByQuality(quality) {
+    const targets = {
+      'low': 90,      // 低资质：总和 90 (平均 15)
+      'medium': 120,  // 中资质：总和 120 (平均 20)
+      'high': 150,    // 高资质：总和 150 (平均 25)
+      'perfect': 186  // 顶级：总和 186 (全满)
+    };
+    
+    const targetSum = targets[quality] || targets['low'];
+    
+    // 如果是顶级，直接返回全满
+    if (quality === 'perfect') {
+      return { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 };
+    }
+    
+    // 随机分配，确保总和符合目标
+    const stats = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'];
+    const ivs = {};
+    let remaining = targetSum;
+    
+    for (let i = 0; i < stats.length; i++) {
+      const stat = stats[i];
+      if (i === stats.length - 1) {
+        // 最后一个属性：分配剩余值
+        ivs[stat] = Math.min(31, Math.max(0, remaining));
+      } else {
+        // 随机分配，但保证后续属性有空间
+        const maxForThis = Math.min(31, remaining - (stats.length - i - 1) * 0);
+        const minForThis = Math.max(0, remaining - (stats.length - i - 1) * 31);
+        ivs[stat] = Math.floor(Math.random() * (maxForThis - minForThis + 1)) + minForThis;
+        remaining -= ivs[stat];
+      }
+    }
+    
+    return ivs;
+  }
+
+  /**
+   * 检查 IVs 是否有效（包含所有六个属性且为数字）
+   * @param {object} ivs - IVs 对象
+   * @returns {boolean}
+   */
+  function isValidIVs(ivs) {
+    if (!ivs || typeof ivs !== 'object') return false;
+    const requiredStats = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'];
+    return requiredStats.every(stat => 
+      typeof ivs[stat] === 'number' && ivs[stat] >= 0 && ivs[stat] <= 31
+    );
+  }
+
+  /**
+   * 自动补全宝可梦的 stats_meta（IVs 和 EVs）
+   * @param {object} pokemon - 宝可梦数据对象
+   * @returns {object} - 补全后的 stats_meta
+   */
+  function autoFillStatsMeta(pokemon) {
+    const statsMeta = pokemon.stats_meta || {};
+    let ivs = statsMeta.ivs;
+    let evLevel = statsMeta.ev_level;
+    
+    // IVs 只生成一次，如果已存在有效的 IVs，永远不重新生成
+    if (!isValidIVs(ivs)) {
+      const quality = pokemon.quality || pokemon.iv_quality || null;
+      
+      if (quality && ['low', 'medium', 'high', 'perfect'].includes(quality)) {
+        // AI 指定了资质等级
+        ivs = generateIVsByQuality(quality);
+      } else {
+        // 随机资质（权重：低30% 中40% 高25% 顶5%）
+        const rand = Math.random();
+        let randomQuality;
+        if (rand < 0.30) randomQuality = 'low';
+        else if (rand < 0.70) randomQuality = 'medium';
+        else if (rand < 0.95) randomQuality = 'high';
+        else randomQuality = 'perfect';
+        
+        ivs = generateIVsByQuality(randomQuality);
+      }
+      console.log(`${PLUGIN_NAME} [IVs] 为 ${pokemon.name} 生成新 IVs:`, ivs);
+    } else {
+      console.log(`${PLUGIN_NAME} [IVs] ${pokemon.name} 已有 IVs，保持不变`);
+    }
+    
+    // EVs 只增不减：根据等级计算新值，取现有值和新值的较大者
+    const lv = typeof pokemon.lv === 'number' ? pokemon.lv : (typeof pokemon.level === 'number' ? pokemon.level : 5);
+    const calculatedEV = Math.min(252, Math.floor(lv * 2.5));
+    
+    if (evLevel === undefined || evLevel === null) {
+      // 如果没有现有 EV，使用计算值
+      evLevel = calculatedEV;
+    } else {
+      // 如果有现有 EV，取较大值（只增不减）
+      evLevel = Math.max(evLevel, calculatedEV);
+    }
+    
+    return { ivs, ev_level: evLevel };
+  }
+
+  /**
+   * 生成玩家队伍注入内容（详细 XML 格式）
+   */
+  function generatePlayerDataPrompt(playerData) {
+    const parsedParty = parsePartyData(playerData?.party);
+
+    if (!playerData || parsedParty.length === 0) {
+      return null;
+    }
+
+    const playerName = playerData?.name || '训练家';
+    // 从 bonds 和 unlocks 读取解锁状态
+    const bonds = playerData?.bonds || {};
+    const unlocks = playerData?.unlocks || {};
+    const partyCount = parsedParty.length;
+
+    // 构建每个槽位的详细信息（空槽位显示占位符）
+    const partyLines = Array.from({ length: 6 }).map((_, idx) => {
+      const slotNum = idx + 1;
+      const pokemon = parsedParty.find(p => (p.slot || slotNum) === slotNum);
+
+      if (!pokemon) {
+        return `slot${slotNum}. —`;
+      }
+
+      const name = pokemon.nickname || pokemon.name || `Pokemon ${slotNum}`;
+      const level = typeof pokemon.lv === 'number'
+        ? pokemon.lv
+        : (typeof pokemon.level === 'number' ? pokemon.level : '??');
+      const gender = formatGender(pokemon.gender);
+      const nature = pokemon.nature || '???';
+      const ability = pokemon.ability || '???';
+      
+      // 领队标记
+      const isLead = pokemon.isLead === true;
+      const leadTag = isLead ? ' [🎯领队]' : '';
+      
+      // IVs 和 EVs - 自动补全缺失数据
+      const filledStatsMeta = autoFillStatsMeta(pokemon);
+      const ivs = filledStatsMeta.ivs;
+      const evLevel = filledStatsMeta.ev_level;
+      const ivsDisplay = formatIVsDisplay(ivs);
+      
+      // AVs (情感努力值) - 洛迪亚特区专属系统
+      const avs = pokemon.avs || { trust: 0, passion: 0, insight: 0, devotion: 0 };
+      const avsTotal = (avs.trust || 0) + (avs.passion || 0) + (avs.insight || 0) + (avs.devotion || 0);
+      const avsDisplay = avsTotal > 0 
+        ? `T:${avs.trust || 0}/P:${avs.passion || 0}/I:${avs.insight || 0}/D:${avs.devotion || 0}`
+        : '0/0/0/0';
+      
+      // 技能
+      const moves = Array.isArray(pokemon.moves) && pokemon.moves.length > 0 ? pokemon.moves : [];
+      const movesCount = moves.length;
+      const movesDetailed = Array.from({ length: 4 }).map((_, moveIdx) => {
+        const moveName = moves[moveIdx] || '—';
+        return `move${moveIdx + 1}: ${moveName}`;
+      }).join(' | ');
+
+      return `slot${slotNum}. ${gender} ${name} (Lv.${level})${leadTag}
+   🧬 [Nature: ${nature}] [Ability: ${ability}]
+   💎 [Stats: ${ivsDisplay}] [EVs: ${evLevel}] [AVs: ${avsDisplay}]
+   ⚔️ Moves (${movesCount}/4): ${movesDetailed}`;
+    }).join('\n\n');
+
+    // 构建解锁状态显示（简略版）
+    const unlocksDisplay = [];
+    if (unlocks.enable_mega) unlocksDisplay.push('Mega');
+    if (unlocks.enable_z_move) unlocksDisplay.push('Z');
+    if (unlocks.enable_dynamax) unlocksDisplay.push('Dmax');
+    if (unlocks.enable_tera) unlocksDisplay.push('Tera');
+    if (unlocks.enable_bond) unlocksDisplay.push('Bond');
+    if (unlocks.enable_styles) unlocksDisplay.push('Style');
+    if (unlocks.enable_insight) unlocksDisplay.push('Insight');
+    if (unlocks.enable_proficiency_cap) unlocksDisplay.push('ProfCap');
+    const unlocksStr = unlocksDisplay.length > 0 ? unlocksDisplay.join('/') : '无';
+
+    // 构建羁绊遗物清单（详细版）- 区分 bonds（女主角羁绊道具）和 unlocks（普通能力）
+    const bondItems = [];  // 女主角羁绊道具（优先显示）
+    const unlockItems = []; // 普通解锁能力（非羁绊来源）
+    
+    // 羁绊 (Bond) - Rosa
+    if (bonds.enable_bond) {
+      bondItems.push(`  💠💚 「嵌有『未碎之钻』的同步耳返」 —— [合众] Rosa赠 [💍誓约]
+     [外观] 经过野路子改装的专业舞台耳返。电池仓被暴力拆除，强行嵌入了一枚散发着高热、理应在一次性使用后就粉碎的“普通宝石”作为永续核心。
+     📈 效果: 绝境安可 - 【特殊机制】耳返实时传输着甚至令人感到过载的心跳声。当你的王牌宝可梦陷入**濒死绝境**（HP危机/最后一只）时，引发如同消耗道具般的一次性极具爆发力演出。`);
+    } else if (unlocks.enable_bond) {
+      unlockItems.push(`  💚 羁绊共鸣 (Bond) [🔓解锁] - 来源: 通用共鸣手环`);
+    }
+    
+    // 刚猛/迅疾 (Style) - Akari
+    if (bonds.enable_styles) {
+      bondItems.push(`  🧣🔮 「留有牙印的朱红色头巾」 —— [洗翠] Akari赠 [💍誓约]
+     [考据] 银河队调查组制式三角巾。织物粗糙，表面并不且只有火药味，边角处留有几圈极其深刻的、甚至咬穿了布料的陈旧齿痕。
+     ⚔️ 效果: 生存本能 - 【形态转化】不再拘泥于现代竞技规则。战斗中可以随时根据求生本能切换指令：或是以透支体能为代价使出力道浑厚的一击（刚猛），或是通过减少发力来换取让人无法反应的神速（迅疾）。`);
+    } else if (unlocks.enable_styles) {
+      unlockItems.push(`  🔮 刚猛/迅疾 (Style) [🔓解锁] - 来源: 洗翠护符`);
+    }
+    
+    // 心眼 (Insight) - Dawn
+    if (bonds.enable_insight) {
+      bondItems.push(`  ⌚💟 「按键凹陷的粉闪型号旧表」 —— [神奥] Dawn贈 [💍誓约]
+     [状态] 老式宝可梦手表。右侧的物理切换按键因长期经受超高强度的按压，已彻底凹陷卡死在机身内部，导致屏幕画面永久固化在【亲密值MAX】界面。
+     👁️ 效果: 协调师视界  - 【弱点识破】虽然显示界面卡死，但内部核心处于运算状态，会将敌方的“大破绽（弱点属性）”直接高亮投射在训练家的视野中；且全队因此恒定处于突破好感度的“满恩返”状态。`);
+    } else if (unlocks.enable_insight) {
+      unlockItems.push(`  👁️ 心眼 [🔓解锁] - 来源: 宝可梦手表（量产型）`);
+    }
+    
+    // Mega进化 - Serena
+    if (bonds.enable_mega) {
+      bondItems.push(`  🎗️💎 「蓝色缎带·钥石项圈」—— [卡洛斯] Serena赠 [💍誓约]
+     [构造] 由一条原本用于系头发的标志性蓝缎带裁剪而成。这枚触发进化的“钥石”并非通过金属镶嵌，而是由笨拙但结实的针线手工缝在布料正中的。
+     🌟 效果: 接触信赖  - 【Mega槽位】替代了缺乏触感的工业手环。不需要喊出口令，该道具紧贴颈部动脉，即可完成MEGA进化。`);
+    } else if (unlocks.enable_mega) {
+      unlockItems.push(`  💎 Mega进化 [🔓解锁] - 来源: 制式钥石原石`);
+    }
+    
+    // Z招式 - Selene
+    if (bonds.enable_z_move) {
+      bondItems.push(`  💪🔥 「刻有名字的Z手环」—— [阿罗拉] Selene赠 [💍誓约]
+     [物证] 黑色涂装的旧款强力手环。内环残留着难以散去的高体温与高湿度，内侧刻有歪歪扭扭的私人签名。
+     ⚡ 效果: 限制解除 (Break Limit) - 【Z与Mega兼容】尽管尺寸略显紧绷，但因为甚至被强行固定在了腕部，赋予了让一只宝可梦可以突破物理规则的权限，使其能够承受并释放全力Z招式。`);
+    } else if (unlocks.enable_z_move) {
+      unlockItems.push(`  🔥 Z招式 [🔓解锁] - 来源: 白色Z手环`);
+    }
+    
+    // 极巨化 - Gloria
+    if (bonds.enable_dynamax) {
+      bondItems.push(`  ☄️🌀 「未被加工的许愿星原型」 —— [伽勒尔] Gloria赠 [💍誓约]
+     [原矿] 从闇夜源头剥离的深红色矿石，未经马洛科蒙集团的安全切削与工业封装，表面有点粗糙扎手。
+     🌋 效果: 能量点拟似 - 【全域展开】该矿石自身散发的能力浓度极高，不再受限于特定道馆或能量点。训练家可在**任何已进入战斗**的场合，无视空间限制皆强行诱发极巨化现象。`);
+    } else if (unlocks.enable_dynamax) {
+      unlockItems.push(`  🌀 极巨化 [🔓解锁] - 来源: 竞技场专用腕带`);
+    }
+    
+    // 太晶化 - Juliana
+    if (bonds.enable_tera) {
+      bondItems.push(`  🧳🔮 「满载的收纳箱与太晶珠」 —— [帕底亚] Juliana赠 [💍誓约]
+     [补给] 带有明显户外磕碰痕迹的重型铝箱。箱内防震海绵中按光谱分门别类嵌入了*全套18种高纯度太晶源石*，中央核心位置固定着一枚星晶原矿。
+     ✨ 效果: 移动充能站 - 【全属性随意切换】不再依赖一次性的充能服务。持有该箱体者，可在接触战中即时更换太晶珠核心，将任意宝可梦赋予可以随意指定的太晶属性。`);
+    } else if (unlocks.enable_tera) {
+      unlockItems.push(`  ✨ 太晶化 [🔓解锁] - 来源: 学院配给太晶珠`);
+    }
+    
+    // 训练度突破 - May
+    if (bonds.enable_proficiency_cap) {
+      bondItems.push(`  📓🍓 「沾有果酱的破旧笔记本」 —— [丰缘] May赠 [💍誓约]
+     [状态] 边角已经磨损起毛、封皮还用防水胶带补过好几次的便携式调查笔记。随便翻开一页，相比起正经的生态数据，更多的地方写满了诸如《这就去吃这家店！》、《完全不推荐！》之类的狂草注脚。
+     🚀 效果: 界限突破 - 【训练度上限提升】你的训练家熟练度上限提升至 255 (Max)。`);
+    } else if (unlocks.enable_proficiency_cap) {
+      unlockItems.push(`  🚀 训练度突破 [🔓解锁] - 来源: 通用训练手册`);
+    }
+
+    
+    // 构建显示内容：羁绊道具优先，普通解锁次之
+    let inventorySection = '';
+    if (bondItems.length > 0 || unlockItems.length > 0) {
+      inventorySection = '\n🎒 《洛迪亚特区 · 羁绊遗物清单》\n';
+      if (bondItems.length > 0) {
+        inventorySection += `【💍 羁绊道具】\n${bondItems.join('\n\n')}\n`;
+      }
+      if (unlockItems.length > 0) {
+        inventorySection += `\n【🔓 普通解锁】\n${unlockItems.join('\n')}\n`;
+      }
+    } else {
+      inventorySection = '\n🎒 《洛迪亚特区 · 羁绊遗物清单》\n  (空空如也...尚未获得任何羁绊遗物)\n';
+    }
+
+    // 构建 BOX 宝可梦简要显示
+    let boxSection = '';
+    const boxData = playerData?.box || {};
+    const boxPokemon = Object.entries(boxData)
+      .filter(([key, pokemon]) => pokemon && pokemon.name)
+      .map(([key, pokemon]) => {
+        const name = pokemon.nickname || pokemon.name;
+        const level = pokemon.lv || pokemon.level || '??';
+        return `${name}/Lv.${level}`;
+      });
+    
+    if (boxPokemon.length > 0) {
+      boxSection = `\n📦 《BOX 存储》(${boxPokemon.length})\n  ${boxPokemon.join(' | ')}\n`;
+    }
+
+    return `<pkm_team_summary>
+【当前玩家状态】
+👤 训练家: ${playerName} | 🔓 解锁: [${unlocksStr}] | 🎒 队伍: (${partyCount}/6)
+--------------------------------------------------
+${partyLines}
+--------------------------------------------------
+${inventorySection}${boxSection}
+--------------------------------------------------
+💡 提示: 战斗中请通过 <PKM_BATTLE> 标签调用队伍。
+</pkm_team_summary>`;
+  }
+
+  /**
+   * 处理生成前注入（GENERATION_AFTER_COMMANDS）
+   */
+  async function handleGenerationBeforeInject(detail) {
+    const isDryRun = Boolean(detail && detail.dryRun);
+    
+    try {
+      // 清除旧注入
+      try {
+        uninjectPrompts([PKM_INJECT_ID]);
+      } catch (e) {
+        // 忽略
+      }
+
+      // 获取玩家数据
+      const playerData = await getPlayerParty();
+      console.log(`${PLUGIN_NAME} [DEBUG] 原始 playerData:`, JSON.stringify(playerData, null, 2));
+      
+      // === 处理 ev_up：智能累加或替换 ===
+      const evUpdateData = {};
+      if (playerData && playerData.party) {
+        for (const [slotKey, slotData] of Object.entries(playerData.party)) {
+          if (slotData && slotData.stats_meta && slotData.stats_meta.ev_up > 0) {
+            const currentEvLevel = slotData.stats_meta.ev_level || 0;
+            const evUp = slotData.stats_meta.ev_up;
+            let newEvLevel;
+            let mode;
+            
+            // 智能判断：ev_up > ev_level 且 ev_level >= 20 -> AI 理解错了，应该替换
+            if (evUp > currentEvLevel && currentEvLevel >= 20) {
+              newEvLevel = evUp; // 替换模式
+              mode = '替换（AI 误输出总值）';
+            } else {
+              newEvLevel = currentEvLevel + evUp; // 累加模式
+              mode = '累加';
+            }
+            
+            console.log(`${PLUGIN_NAME} [EV_UP] 槽位: ${slotKey}, 当前 ev_level: ${currentEvLevel}, ev_up: ${evUp}, 新 ev_level: ${newEvLevel}, 模式: ${mode}`);
+            
+            // 标记需要更新
+            evUpdateData[`pkm.player.party.${slotKey}.stats_meta.ev_level`] = newEvLevel;
+            evUpdateData[`pkm.player.party.${slotKey}.stats_meta.ev_up`] = 0;
+            
+            // 立即更新本地数据（用于注入）
+            slotData.stats_meta.ev_level = newEvLevel;
+            slotData.stats_meta.ev_up = 0;
+          }
+        }
+      }
+      
+      // 如果有 ev_up 需要处理，立即更新到 ERA
+      if (Object.keys(evUpdateData).length > 0) {
+        try {
+          await updateEraVars(evUpdateData);
+          console.log(`${PLUGIN_NAME} ✓ 已处理 ev_up 并更新到 ERA`);
+        } catch (e) {
+          console.warn(`${PLUGIN_NAME} 更新 ev_up 失败:`, e);
+        }
+      }
+      
+      // === 处理 proficiency_up：累加到 trainerProficiency ===
+      // ERA 格式：player.trainerProficiency (基础值), player.proficiency_up (增量)
+      // 战斗格式：player.trainerProficiency (总值)
+      const proficiencyUpdateData = {};
+      if (playerData) {
+        const currentProficiency = playerData.trainerProficiency || 0;
+        const proficiencyUp = playerData.proficiency_up || 0;
+        
+        if (proficiencyUp !== 0) {
+          // 累加并限制在 0-255 范围内
+          const newProficiency = Math.max(0, Math.min(255, currentProficiency + proficiencyUp));
+          
+          console.log(`${PLUGIN_NAME} [PROFICIENCY] 当前: ${currentProficiency}, +${proficiencyUp} = ${newProficiency}`);
+          
+          // 标记需要更新
+          proficiencyUpdateData['player.trainerProficiency'] = newProficiency;
+          proficiencyUpdateData['player.proficiency_up'] = 0;
+          
+          // 立即更新本地数据（用于注入）
+          playerData.trainerProficiency = newProficiency;
+          playerData.proficiency_up = 0;
+        }
+      }
+      
+      // 如果有 proficiency_up 需要处理，立即更新到 ERA
+      if (Object.keys(proficiencyUpdateData).length > 0) {
+        try {
+          await updateEraVars(proficiencyUpdateData);
+          console.log(`${PLUGIN_NAME} ✓ 已处理 proficiency_up 并更新到 ERA`);
+        } catch (e) {
+          console.warn(`${PLUGIN_NAME} 更新 proficiency_up 失败:`, e);
+        }
+      }
+      
+      // === 处理 AVs (Affective Values / 情感努力值) ===
+      // ERA 格式：friendship = { avs: {...}, av_up: {...} }
+      // 战斗格式：friendship = { trust, passion, insight, devotion } (扁平)
+      // 玩家的所有宝可梦自动获得 isAce = true
+      const avUpdateData = {};
+      if (playerData && playerData.party) {
+        for (const [slotKey, slotData] of Object.entries(playerData.party)) {
+          if (!slotData) continue;
+          
+          // 初始化 friendship 结构
+          if (!slotData.friendship) {
+            slotData.friendship = {
+              avs: { trust: 0, passion: 0, insight: 0, devotion: 0 },
+              av_up: { trust: 0, passion: 0, insight: 0, devotion: 0 }
+            };
+          }
+          if (!slotData.friendship.avs) {
+            slotData.friendship.avs = { trust: 0, passion: 0, insight: 0, devotion: 0 };
+          }
+          if (!slotData.friendship.av_up) {
+            slotData.friendship.av_up = { trust: 0, passion: 0, insight: 0, devotion: 0 };
+          }
+          
+          // 玩家的所有宝可梦都是 Ace（主角光环）
+          if (!slotData.isAce) {
+            slotData.isAce = true;
+            avUpdateData[`pkm.player.party.${slotKey}.isAce`] = true;
+          }
+          
+          // 处理 av_up：累加到 avs
+          const avUp = slotData.friendship.av_up;
+          const currentAvs = slotData.friendship.avs;
+          let hasUpdate = false;
+          
+          for (const stat of ['trust', 'passion', 'insight', 'devotion']) {
+            if (avUp[stat] && typeof avUp[stat] === 'number' && avUp[stat] > 0) {
+              const currentVal = currentAvs[stat] || 0;
+              const upVal = avUp[stat];
+              let newVal;
+              let mode;
+              
+              // 智能判断：av_up > avs 且 avs >= 50 -> AI 理解错了，应该替换
+              if (upVal > currentVal && currentVal >= 50) {
+                newVal = Math.min(255, upVal); // 替换模式，上限255
+                mode = '替换（AI 误输出总值）';
+              } else {
+                newVal = Math.min(255, currentVal + upVal); // 累加模式，上限255
+                mode = '累加';
+              }
+              
+              console.log(`${PLUGIN_NAME} [AV_UP] 槽位: ${slotKey}, ${stat}: ${currentVal} -> ${newVal}, 模式: ${mode}`);
+              currentAvs[stat] = newVal;
+              hasUpdate = true;
+            }
+          }
+          
+          if (hasUpdate) {
+            // 标记需要更新
+            avUpdateData[`pkm.player.party.${slotKey}.friendship.avs`] = currentAvs;
+            avUpdateData[`pkm.player.party.${slotKey}.friendship.av_up`] = { trust: 0, passion: 0, insight: 0, devotion: 0 };
+            
+            // 立即更新本地数据（用于注入）
+            slotData.friendship.avs = currentAvs;
+            slotData.friendship.av_up = { trust: 0, passion: 0, insight: 0, devotion: 0 };
+          }
+          
+          // 为战斗注入准备扁平格式的 avs（直接从 friendship.avs 复制）
+          slotData.avs = { ...currentAvs };
+        }
+      }
+      
+      // 如果有 av_up 需要处理，立即更新到 ERA
+      if (Object.keys(avUpdateData).length > 0) {
+        try {
+          await updateEraVars(avUpdateData);
+          console.log(`${PLUGIN_NAME} ✓ 已处理 av_up 并更新到 ERA`);
+        } catch (e) {
+          console.warn(`${PLUGIN_NAME} 更新 av_up 失败:`, e);
+        }
+      }
+      
+      // 使用 parsePartyData 解析队伍（支持新的 slot1-slot6 对象格式）
+      const parsedParty = parsePartyData(playerData?.party);
+      
+      if (!playerData || parsedParty.length === 0) {
+        console.log(`${PLUGIN_NAME} 玩家队伍为空，跳过注入`);
+        return;
+      }
+
+      console.log(`${PLUGIN_NAME} [DEBUG] 解析后 parsedParty:`, JSON.stringify(parsedParty, null, 2));
+
+      // 补全 stats_meta 并持久化到 ERA（针对具体槽位更新，不覆盖整个 party）
+      const slotsToUpdate = {};
+      const displayParty = parsedParty.map(p => {
+        const statsMeta = p.stats_meta || {};
+        const hasValidIVs = isValidIVs(statsMeta.ivs);
+        const hasEVLevel = statsMeta.ev_level !== undefined && statsMeta.ev_level !== null;
+        
+        // 如果缺少 IVs 或 EVs，生成并标记需要更新
+        if (!hasValidIVs || !hasEVLevel) {
+          const filled = autoFillStatsMeta(p);
+          const slotKey = `slot${p.slot || 1}`;
+          
+          // 只更新 stats_meta，不覆盖其他字段
+          slotsToUpdate[slotKey] = {
+            stats_meta: filled
+          };
+          
+          console.log(`${PLUGIN_NAME} [IVs] 为 ${p.name} (${slotKey}) 生成 stats_meta，将持久化`);
+          return {
+            ...p,
+            stats_meta: filled
+          };
+        }
+        return p;
+      });
+      
+      // 如果有需要更新的槽位，持久化到 ERA（只更新 stats_meta，不覆盖其他数据）
+      if (Object.keys(slotsToUpdate).length > 0) {
+        try {
+          // 构建更新对象，只更新具体槽位的 stats_meta
+          const updateData = {};
+          for (const [slotKey, data] of Object.entries(slotsToUpdate)) {
+            updateData[`pkm.player.party.${slotKey}.stats_meta`] = data.stats_meta;
+          }
+          await updateEraVars(updateData);
+          console.log(`${PLUGIN_NAME} ✓ 已持久化 ${Object.keys(slotsToUpdate).length} 个槽位的 stats_meta`);
+        } catch (e) {
+          console.warn(`${PLUGIN_NAME} 持久化 stats_meta 失败:`, e);
+        }
+      }
+
+      // 生成注入内容（使用显示用的数据）
+      const displayPlayerData = { ...playerData, party: displayParty };
+      const promptContent = generatePlayerDataPrompt(displayPlayerData);
+      if (!promptContent) return;
+
+      // 注入到上下文
+      injectPrompts([{
+        id: PKM_INJECT_ID,
+        position: 'in_chat',
+        depth: 2,
+        role: 'system',
+        should_scan: false,
+        content: promptContent
+      }]);
+
+      console.log(`${PLUGIN_NAME} ✓ 玩家队伍数据已注入到上下文`);
+
+    } catch (e) {
+      console.error(`${PLUGIN_NAME} 注入失败:`, e);
+    }
+  }
+
+  /**
+   * 处理消息渲染事件（era:writeDone）- 处理AI输出的战斗标签
+   */
+  async function handleWriteDone(detail) {
+    if (isProcessing) {
+      console.log(`${PLUGIN_NAME} 正在处理中，跳过`);
+      return;
+    }
+
+    const messageId = detail?.message_id ?? getLastMessageId();
+    
+    try {
+      isProcessing = true;
+
+      // 获取消息内容
+      const messages = getChatMessages(messageId);
+      if (!messages || messages.length === 0) {
+        isProcessing = false;
+        return;
+      }
+
+      const msg = messages[0];
+      const content = msg.message || '';
+
+      // 检查是否包含战斗标签
+      if (!content.includes(`<${PKM_BATTLE_TAG}>`)) {
+        isProcessing = false;
+        return;
+      }
+
+      // 检查是否已经处理过（已有 PKM_FRONTEND）
+      if (content.includes('<PKM_FRONTEND>')) {
+        console.log(`${PLUGIN_NAME} 已处理过，跳过`);
+        isProcessing = false;
+        return;
+      }
+
+      console.log(`${PLUGIN_NAME} 检测到战斗标签，开始处理...`);
+
+      // 解析AI输出
+      const aiBattleData = parseAiBattleOutput(content);
+      if (!aiBattleData) {
+        console.warn(`${PLUGIN_NAME} 无法解析战斗数据`);
+        isProcessing = false;
+        return;
+      }
+
+      // 构建完整战斗JSON
+      const completeBattle = await buildCompleteBattleJson(aiBattleData);
+
+      // 注入前端
+      await injectBattleFrontend(messageId, completeBattle);
+
+      isProcessing = false;
+    } catch (e) {
+      console.error(`${PLUGIN_NAME} 处理消息失败:`, e);
+      isProcessing = false;
+    }
+  }
+
+  // ============================================
+  //    E. 动态 NPC 注入系统
+  // ============================================
+  
+  const NPC_INJECT_ID = 'pkm_npc_status';
+  
+  /**
+   * 获取 NPC 关系阶段的四个 TAG（通用2个 + 角色专属2个）
+   * @param {string} npcId - NPC ID
+   * @param {number} stage - 当前阶段 (-2 ~ 4)
+   * @returns {object} - { tags: string[], tagsDisplay: string }
+   */
+  function getNpcStageTags(npcId, stage) {
+    const addon = NPC_ADDON_DATA[npcId];
+    const stageKey = String(stage);
+    
+    // 获取通用 TAG（2个）
+    const commonTags = RELATIONSHIP_TAGS_COMMON[stageKey] || ['未知', '未知'];
+    
+    // 获取角色专属 TAG（2个）
+    let characterTags = ['未知', '未知'];
+    if (addon && addon.relationship_tags && addon.relationship_tags[stageKey]) {
+      characterTags = addon.relationship_tags[stageKey];
+    }
+    
+    // 合并为四个 TAG
+    const allTags = [...commonTags, ...characterTags];
+    const tagsDisplay = allTags.map(t => `#${t}`).join(' ');
+    
+    return { tags: allTags, tagsDisplay };
+  }
+  
+  /**
+   * 获取 NPC 关系阶段描述（兼容旧格式）
+   * @param {string} npcId - NPC ID
+   * @param {number} stage - 当前阶段 (-2 ~ 4)
+   * @returns {object} - { label, desc }
+   */
+  function getNpcStageDesc(npcId, stage) {
+    const addon = NPC_ADDON_DATA[npcId];
+    
+    // 新格式：使用 relationship_tags
+    if (addon && addon.relationship_tags) {
+      const { tagsDisplay } = getNpcStageTags(npcId, stage);
+      return { label: tagsDisplay, desc: '' };
+    }
+    
+    // 旧格式兼容：relationship_stage
+    if (!addon || !addon.relationship_stage) {
+      return { label: '未知', desc: '未定义状态...' };
+    }
+    
+    const stageKey = String(stage);
+    const stageData = addon.relationship_stage;
+    
+    if (stage < 0 && stageData.negative?.[stageKey]) {
+      return stageData.negative[stageKey];
+    } else if (stage > 0 && stageData.positive?.[stageKey]) {
+      return stageData.positive[stageKey];
+    } else if (stageData.neutral?.[stageKey]) {
+      return stageData.neutral[stageKey];
+    }
+    
+    return { label: '未知', desc: '未定义状态...' };
+  }
+  
+  /**
+   * 获取下一阶段升级所需的 love 门槛
+   * @param {string} npcId - NPC ID
+   * @param {number} currentStage - 当前阶段
+   * @returns {number|null} - 门槛值，null 表示已满级
+   */
+  function getNextLoveThreshold(npcId, currentStage) {
+    const addon = NPC_ADDON_DATA[npcId];
+    if (!addon || !addon.love_thresholds) return null;
+    
+    const nextStage = currentStage + 1;
+    return addon.love_thresholds[nextStage] || null;
+  }
+  
+  /**
+   * 生成单个 NPC 的状态卡
+   * @param {string} npcId - NPC ID
+   * @param {object} npcState - { stage, love, love_up }
+   * @param {object} playerBonds - 玩家的 bonds 状态
+   * @returns {string} - 状态卡文本
+   */
+  function generateNpcStatusCard(npcId, npcState, playerBonds = {}) {
+    const addon = NPC_ADDON_DATA[npcId];
+    if (!addon) return null;
+    
+    const stage = npcState.stage || 0;
+    const love = npcState.love || 0;
+    const stageDesc = getNpcStageDesc(npcId, stage);
+    const nextThreshold = getNextLoveThreshold(npcId, stage);
+    
+    // 检查是否已获得该 NPC 的羁绊道具
+    const hasBond = addon.unlock_key && playerBonds[addon.unlock_key] === true;
+    
+    // 判断状态标签
+    let statusTag = '';
+    if (stage === 4 || stage === -2) {
+      statusTag = '[🔒Lock]';
+    } else if (stage === 3 && nextThreshold !== null && love >= nextThreshold) {
+      // Stage 3→4 特殊处理：需要 AI 显式升级
+      if (hasBond) {
+        statusTag = `[💍已获得羁绊道具，可由AI升级→Stage 4]`;
+      } else {
+        statusTag = `[🎁好感度已满，等待羁绊道具解锁事件]`;
+      }
+    } else if (nextThreshold !== null && love >= nextThreshold) {
+      // 显示下一阶段信息（0→1, 1→2, 2→3 自动升级）
+      const nextStage = stage + 1;
+      const nextStageDesc = getNpcStageDesc(npcId, nextStage);
+      statusTag = `[❤️可UP→Stage ${nextStage}: ${nextStageDesc.label}]`;
+    } else if (stage === 0 && love <= -20) {
+      statusTag = '[💔可降级DOWN]';
+    } else if (stage === -1 && love <= -40) {
+      statusTag = '[💔可降级DOWN]';
+    }
+    
+    // 格式化 love 显示
+    let loveDisplay;
+    if (nextThreshold !== null) {
+      loveDisplay = `${love}/${nextThreshold}`;
+    } else if (stage === 0) {
+      loveDisplay = `${love} (降级: -20)`;
+    } else if (stage === -1) {
+      loveDisplay = `${love} (降级: -40)`;
+    } else {
+      loveDisplay = `${love}/MAX`;
+    }
+    
+    // 新格式：使用四个 TAG 显示
+    if (addon.relationship_tags) {
+      const { tagsDisplay } = getNpcStageTags(npcId, stage);
+      const lines = [
+        `${addon.name_cn} (${addon.name_en})`,
+        `   - [Stage ${stage}] ${tagsDisplay} (Love: ${loveDisplay})`
+      ];
+      if (statusTag) lines.push(`   - ${statusTag}`);
+      return lines.join('\n');
+    }
+    
+    // 旧格式兼容
+    const legacyLines = [
+      `${addon.name_cn} (${addon.name_en})`,
+      `   - [Stage ${stage}: ${stageDesc.label}] (Love: ${loveDisplay})`
+    ];
+    if (statusTag || stageDesc.desc) {
+      legacyLines.push(`   - 状态: ${statusTag} ${stageDesc.desc}`.trim());
+    }
+    return legacyLines.join('\n');
+  }
+  
+  /**
+   * 扫描上下文并注入活跃 NPC 的状态
+   */
+  async function handleDynamicNpcInject() {
+    console.log(`${PLUGIN_NAME} [NPC] 开始扫描上下文以注入 NPC 状态...`);
+    
+    try {
+      // 1. 获取最近消息（扫描最近 10 条）
+      const historyDepth = 10;
+      const allMessages = getChatMessages('0-{{lastMessageId}}');
+      
+      if (!allMessages || allMessages.length === 0) {
+        console.log(`${PLUGIN_NAME} [NPC] 无消息可扫描`);
+        return;
+      }
+      
+      // 取最后 N 条
+      const messages = allMessages.slice(-historyDepth);
+      
+      // 过滤掉 ERA 变量标签，避免匹配到 JSON 里的 NPC ID
+      const contextText = messages.map(m => {
+        let text = m.message || '';
+        // 移除 <VariableInsert>、<VariableEdit>、<VariableDelete> 标签及其内容
+        text = text.replace(/<VariableInsert>[\s\S]*?<\/VariableInsert>/gi, '');
+        text = text.replace(/<VariableEdit>[\s\S]*?<\/VariableEdit>/gi, '');
+        text = text.replace(/<VariableDelete>[\s\S]*?<\/VariableDelete>/gi, '');
+        return text;
+      }).join('\n').toLowerCase();
+      
+      // 2. 获取 NPC 状态（优先使用快照，因为 processNpcLoveUp 可能刚更新）
+      const eraVars = await getEraVars();
+      const npcsState = getEraValue(eraVars, 'world_state.npcs', {});
+      const playerBonds = getEraValue(eraVars, 'player.bonds', {});
+      
+      // 新格式: world_state.location 是对象 { region, x, y }
+      const locationData = getEraValue(eraVars, 'world_state.location', {});
+      const currentLocation = typeof locationData === 'object' 
+        ? (locationData.region || 'Z') 
+        : (locationData || 'Z');
+      
+      // 合并快照数据（快照优先，因为是最新的）
+      const mergedNpcsState = {};
+      for (const npcId in npcsState) {
+        mergedNpcsState[npcId] = {
+          ...npcsState[npcId],
+          ...(window._npcStateSnapshot && window._npcStateSnapshot[npcId])
+        };
+      }
+      
+      // 3. 扫描关键词，找出活跃主要 NPC
+      const activeNpcs = [];
+      
+      for (const [npcId, keywords] of Object.entries(NPC_TRIGGERS)) {
+        const hit = keywords.some(k => contextText.includes(k.toLowerCase()));
+        if (hit && mergedNpcsState[npcId]) {
+          activeNpcs.push(npcId);
+        }
+      }
+      
+      console.log(`${PLUGIN_NAME} [NPC] 当前区域: ${currentLocation} (${ZONE_DATA[currentLocation]?.name_cn || '未知'})`);
+      console.log(`${PLUGIN_NAME} [NPC] 激活主要角色: ${activeNpcs.join(', ') || '无'}`);
+      
+      // 4. 生成状态卡
+      const sections = [];
+      
+      // 区域 NPC 舒适度卡（始终显示当前区域的 NPC 舒适度信息）
+      const zoneCard = generateZoneStatusCard(currentLocation);
+      sections.push(zoneCard);
+      
+      // 主要 NPC 状态卡
+      if (activeNpcs.length > 0) {
+        const mainCards = activeNpcs.map((npcId, index) => {
+          const state = mergedNpcsState[npcId] || { stage: 0, love: 0 };
+          const card = generateNpcStatusCard(npcId, state, playerBonds);
+          return `${index + 1}. ${card}`;
+        }).filter(Boolean).join('\n\n');
+        
+        sections.push(`【当前活跃/关注的主要 NPC 状态】\n${mainCards}`);
+      }
+      
+      const promptContent = `<npc_status_brief>
+${sections.join('\n\n')}
+</npc_status_brief>`;
+      
+      // 6. 注入到世界书上下文
+      injectPrompts([{
+        id: NPC_INJECT_ID,
+        position: 'after_wi_scan',
+        depth: 0,
+        role: 'system',
+        should_scan: false,
+        content: promptContent
+      }]);
+      
+      console.log(`${PLUGIN_NAME} [NPC] ✓ 已注入 ${activeNpcs.length} 个活跃主要 NPC 状态`);
+      
+    } catch (e) {
+      console.error(`${PLUGIN_NAME} [NPC] 注入失败:`, e);
+    }
+  }
+
+  // ============================================
+  //    F. PKM 时间系统 (DAY X 格式)
+  // ============================================
+  
+  const TIME_INJECT_ID = 'pkm_time_status';
+  
+  /**
+   * 时段定义
+   * 宝可梦世界的一天分为多个时段
+   */
+  const TIME_PERIODS = {
+    'dawn': { label: '黎明', emoji: '🌅', hours: [5, 6] },
+    'morning': { label: '早晨', emoji: '☀️', hours: [7, 8, 9, 10] },
+    'noon': { label: '中午', emoji: '🌞', hours: [11, 12, 13] },
+    'afternoon': { label: '下午', emoji: '🌤️', hours: [14, 15, 16, 17] },
+    'evening': { label: '傍晚', emoji: '🌇', hours: [18, 19] },
+    'night': { label: '夜晚', emoji: '🌙', hours: [20, 21, 22, 23] },
+    'midnight': { label: '深夜', emoji: '🌑', hours: [0, 1, 2, 3, 4] }
+  };
+  
+  /**
+   * 时段顺序（用于推进）
+   */
+  const PERIOD_ORDER = ['dawn', 'morning', 'noon', 'afternoon', 'evening', 'night', 'midnight'];
+  
+  /**
+   * 获取时段信息
+   */
+  function getPeriodInfo(period) {
+    return TIME_PERIODS[period] || TIME_PERIODS['morning'];
+  }
+  
+  /**
+   * 获取下一个时段
+   */
+  function getNextPeriod(currentPeriod) {
+    const idx = PERIOD_ORDER.indexOf(currentPeriod);
+    if (idx === -1) return 'morning';
+    return PERIOD_ORDER[(idx + 1) % PERIOD_ORDER.length];
+  }
+  
+  /**
+   * 从 DAY 数计算派生时间信息
+   * @param {number} day - 当前天数 (从 1 开始)
+   * @returns {object} - { year, month, week, dayOfMonth, dayOfWeek, dayOfWeekLabel }
+   */
+  function calculateDerivedTime(day) {
+    if (!day || day < 1) day = 1;
+    
+    // 每年 365 天，每月 30 天，每周 7 天
+    const DAYS_PER_YEAR = 365;
+    const DAYS_PER_MONTH = 30;
+    const DAYS_PER_WEEK = 7;
+    
+    const year = Math.floor((day - 1) / DAYS_PER_YEAR) + 1;
+    const dayOfYear = ((day - 1) % DAYS_PER_YEAR) + 1;
+    
+    const month = Math.floor((dayOfYear - 1) / DAYS_PER_MONTH) + 1;
+    const dayOfMonth = ((dayOfYear - 1) % DAYS_PER_MONTH) + 1;
+    
+    const week = Math.floor((day - 1) / DAYS_PER_WEEK) + 1;
+    const dayOfWeek = ((day - 1) % DAYS_PER_WEEK); // 0-6
+    
+    const dayOfWeekLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    const dayOfWeekLabel = dayOfWeekLabels[dayOfWeek];
+    
+    return {
+      year,
+      month,
+      week,
+      dayOfYear,
+      dayOfMonth,
+      dayOfWeek: dayOfWeek + 1, // 1-7
+      dayOfWeekLabel
+    };
+  }
+  
+  /**
+   * 解析 AI 输出的时间推进指令
+   * 支持格式：
+   * - "1day", "3days", "1 day"
+   * - "1week", "2weeks"
+   * - "1month"
+   * - "next_period" (推进到下一时段)
+   * - "skip_to_night", "skip_to_morning" 等
+   * @param {string} text - AI 输出的时间推进文本
+   * @returns {object|null} - { days: number, periods: number } 或 { skipTo: string }
+   */
+  function parseTimeAdvance(text) {
+    if (!text) return null;
+    text = String(text).toLowerCase().trim();
+    
+    // 匹配 "next_period" 或 "next period"
+    if (text === 'next_period' || text === 'next period') {
+      return { periods: 1 };
+    }
+    
+    // 匹配 "nextday" 或 "next_day" - 跳转到第二天早晨
+    if (text === 'nextday' || text === 'next_day' || text === 'next day') {
+      return { nextDay: true };
+    }
+    
+    // 匹配 "skip_to_xxx" 格式
+    const skipMatch = text.match(/^skip[_\s]?to[_\s]?(\w+)$/i);
+    if (skipMatch) {
+      const targetPeriod = skipMatch[1].toLowerCase();
+      if (TIME_PERIODS[targetPeriod]) {
+        return { skipTo: targetPeriod };
+      }
+    }
+    
+    // 匹配复合格式：数字+单位+时段，如 "3days_morning", "1week_night", "2days morning"
+    const compoundMatch = text.match(/^(\d+)\s*(day|days|week|weeks|month|months)[_\s]+(\w+)$/i);
+    if (compoundMatch) {
+      const value = parseInt(compoundMatch[1]);
+      const unit = compoundMatch[2].toLowerCase();
+      const targetPeriod = compoundMatch[3].toLowerCase();
+      
+      // 验证时段是否有效
+      if (!TIME_PERIODS[targetPeriod]) {
+        console.warn(`${PLUGIN_NAME} [TIME] 无效的时段: ${targetPeriod}`);
+        return null;
+      }
+      
+      let days = 0;
+      if (unit === 'day' || unit === 'days') {
+        days = value;
+      } else if (unit === 'week' || unit === 'weeks') {
+        days = value * 7;
+      } else if (unit === 'month' || unit === 'months') {
+        days = value * 30;
+      }
+      
+      console.log(`${PLUGIN_NAME} [TIME] 解析复合指令: +${days}天, 时段=${targetPeriod}`);
+      return { days: days, toPeriod: targetPeriod };
+    }
+    
+    // 匹配数字+单位格式（不带时段）
+    const match = text.match(/^(\d+)\s*(day|days|week|weeks|month|months|period|periods)$/i);
+    if (!match) {
+      console.warn(`${PLUGIN_NAME} [TIME] day_advance 格式错误: ${text}`);
+      return null;
+    }
+    
+    const value = parseInt(match[1]);
+    const unit = match[2].toLowerCase();
+    
+    if (unit === 'day' || unit === 'days') {
+      return { days: value };
+    } else if (unit === 'week' || unit === 'weeks') {
+      return { days: value * 7 };
+    } else if (unit === 'month' || unit === 'months') {
+      return { days: value * 30 };
+    } else if (unit === 'period' || unit === 'periods') {
+      return { periods: value };
+    }
+    
+    return null;
+  }
+  
+  /**
+   * 计算时间推进后的新状态
+   * @param {object} currentTime - { day, period }
+   * @param {object} advance - parseTimeAdvance 的返回值
+   * @returns {object} - { day, period, crossedDays }
+   */
+  function advanceTime(currentTime, advance) {
+    let day = currentTime.day || 1;
+    let period = currentTime.period || 'morning';
+    let crossedDays = 0;
+    
+    if (advance.nextDay) {
+      // 跳转到第二天早晨
+      day += 1;
+      period = 'morning';
+      crossedDays = 1;
+      return { day, period, crossedDays };
+    }
+    
+    if (advance.skipTo) {
+      // 跳转到指定时段
+      const currentIdx = PERIOD_ORDER.indexOf(period);
+      const targetIdx = PERIOD_ORDER.indexOf(advance.skipTo);
+      
+      if (targetIdx <= currentIdx) {
+        // 目标时段已过，跳到明天
+        day += 1;
+        crossedDays = 1;
+      }
+      period = advance.skipTo;
+    } else if (advance.periods) {
+      // 推进指定数量的时段
+      let periodsToAdvance = advance.periods;
+      const currentIdx = PERIOD_ORDER.indexOf(period);
+      
+      const totalPeriods = currentIdx + periodsToAdvance;
+      crossedDays = Math.floor(totalPeriods / PERIOD_ORDER.length);
+      const newPeriodIdx = totalPeriods % PERIOD_ORDER.length;
+      
+      day += crossedDays;
+      period = PERIOD_ORDER[newPeriodIdx];
+    } else if (advance.days) {
+      // 推进指定天数
+      day += advance.days;
+      crossedDays = advance.days;
+      
+      // 如果指定了目标时段，设置为该时段
+      if (advance.toPeriod && TIME_PERIODS[advance.toPeriod]) {
+        period = advance.toPeriod;
+      }
+      // 否则时段保持不变
+    }
+    
+    return { day, period, crossedDays };
+  }
+  
+  /**
+   * 生成时间状态卡
+   * @param {object} timeState - { day, period }
+   * @returns {string}
+   */
+  function generateTimeStatusCard(timeState) {
+    const day = timeState.day || 1;
+    const period = timeState.period || 'morning';
+    const periodInfo = getPeriodInfo(period);
+    const derived = calculateDerivedTime(day);
+    
+    // 格式：【当前时间】DAY 42 · 第2月第12天 · 周三 · 下午 🌤️
+    let card = `【当前时间】DAY ${day}`;
+    
+    if (derived.year > 1) {
+      card += ` · 第${derived.year}年`;
+    }
+    
+    card += ` · 第${derived.month}月第${derived.dayOfMonth}天`;
+    card += ` · ${derived.dayOfWeekLabel}`;
+    card += ` · ${periodInfo.label} ${periodInfo.emoji}`;
+    
+    return card;
+  }
+  
+  /**
+   * 处理时间推进（day_advance / period_set）
+   * 在 GENERATION_AFTER_COMMANDS 中调用
+   */
+  async function processTimeAdvance() {
+    const eraVars = await getEraVars();
+    const timeState = getEraValue(eraVars, 'world_state.time', { day: 1, period: 'morning' });
+    
+    const dayAdvance = getEraValue(eraVars, 'world_state.time.day_advance', null);
+    const periodSet = getEraValue(eraVars, 'world_state.time.period_set', null);
+    
+    if (!dayAdvance && !periodSet) return;
+    
+    const updateData = {};
+    let newDay = timeState.day || 1;
+    let newPeriod = timeState.period || 'morning';
+    
+    // 处理 day_advance
+    if (dayAdvance) {
+      console.log(`${PLUGIN_NAME} [TIME] 处理时间推进: ${dayAdvance}`);
+      const advance = parseTimeAdvance(dayAdvance);
+      
+      if (advance) {
+        const result = advanceTime({ day: newDay, period: newPeriod }, advance);
+        newDay = result.day;
+        newPeriod = result.period;
+        
+        console.log(`${PLUGIN_NAME} [TIME] 时间推进完成: DAY ${timeState.day} → DAY ${newDay}, ${timeState.period} → ${newPeriod}`);
+      }
+      
+      // 清除 day_advance
+      updateData['world_state.time.day_advance'] = null;
+    }
+    
+    // 处理 period_set（直接设置时段）
+    if (periodSet) {
+      const targetPeriod = String(periodSet).toLowerCase().trim();
+      if (TIME_PERIODS[targetPeriod]) {
+        const currentIdx = PERIOD_ORDER.indexOf(newPeriod);
+        const targetIdx = PERIOD_ORDER.indexOf(targetPeriod);
+        
+        // 如果目标时段在当前时段之前，说明跨天了
+        if (targetIdx < currentIdx) {
+          newDay += 1;
+          console.log(`${PLUGIN_NAME} [TIME] 时段设置跨天: DAY ${newDay - 1} → DAY ${newDay}`);
+          // 设置宝可梦刷新标志
+          window._pkmPendingPokemonRefresh = true;
+        }
+        
+        newPeriod = targetPeriod;
+        console.log(`${PLUGIN_NAME} [TIME] 时段设置: ${timeState.period} → ${newPeriod}`);
+      } else {
+        console.warn(`${PLUGIN_NAME} [TIME] 无效的时段: ${periodSet}`);
+      }
+      
+      // 清除 period_set
+      updateData['world_state.time.period_set'] = null;
+    }
+    
+    // 更新时间状态
+    if (newDay !== timeState.day || newPeriod !== timeState.period) {
+      updateData['world_state.time.day'] = newDay;
+      updateData['world_state.time.period'] = newPeriod;
+      
+      // 更新派生时间信息（供 AI 参考）
+      const derived = calculateDerivedTime(newDay);
+      updateData['world_state.time.derived'] = derived;
+      
+      // ========== 如果日期变化，触发宝可梦刷新 ==========
+      if (newDay > timeState.day) {
+        console.log(`${PLUGIN_NAME} [TIME] 日期变化，触发宝可梦刷新事件`);
+        // 使用事件通信触发刷新（跨 iframe）
+        eventEmit('pkm:refreshPokemonSpawns', { 
+          oldDay: timeState.day, 
+          newDay: newDay 
+        });
+      }
+    }
+    
+    // 应用更新
+    if (Object.keys(updateData).length > 0) {
+      try {
+        await updateEraVars(updateData);
+        console.log(`${PLUGIN_NAME} [TIME] ✓ 时间已更新: DAY ${newDay} · ${getPeriodInfo(newPeriod).label}`);
+      } catch (e) {
+        console.warn(`${PLUGIN_NAME} [TIME] 更新时间失败:`, e);
+      }
+    }
+  }
+  
+  /**
+   * 注入时间状态到上下文
+   */
+  async function handleTimeInject() {
+    try {
+      const eraVars = await getEraVars();
+      let timeState = getEraValue(eraVars, 'world_state.time', null);
+      
+      // 如果时间状态不存在，初始化
+      if (!timeState || timeState.day === undefined) {
+        console.log(`${PLUGIN_NAME} [TIME] 时间状态不存在，初始化为 DAY 1 · 早晨`);
+        timeState = { day: 1, period: 'morning' };
+        
+        // 写入初始时间
+        await updateEraVars({
+          'world_state.time': {
+            day: 1,
+            period: 'morning',
+            day_advance: null,
+            period_set: null,
+            derived: calculateDerivedTime(1)
+          }
+        });
+      }
+      
+      // 生成时间状态卡
+      const timeCard = generateTimeStatusCard(timeState);
+      const derived = calculateDerivedTime(timeState.day || 1);
+      const periodInfo = getPeriodInfo(timeState.period || 'morning');
+      
+      // 构建注入内容
+      const promptContent = `<pkm_time_status>
+${timeCard}
+[时间系统说明]
+- 当前: DAY ${timeState.day || 1}, 时段: ${periodInfo.label}
+- 派生: 第${derived.year}年第${derived.month}月第${derived.dayOfMonth}天, ${derived.dayOfWeekLabel}
+- 时段顺序: dawn→morning→noon→afternoon→evening→night→midnight→(nextday)dawn
+</pkm_time_status>`;
+      
+      // 注入
+      injectPrompts([{
+        id: TIME_INJECT_ID,
+        position: 'after_wi_scan',
+        depth: 2,
+        role: 'system',
+        should_scan: false,
+        content: promptContent
+      }]);
+      
+      console.log(`${PLUGIN_NAME} [TIME] ✓ 已注入时间状态: DAY ${timeState.day || 1} · ${periodInfo.label}`);
+      
+    } catch (e) {
+      console.error(`${PLUGIN_NAME} [TIME] 注入失败:`, e);
+    }
+  }
+
+  /**
+   * 处理 NPC love_up 累加到 love，并验证 stage 变更合法性
+   * 在 handleGenerationBeforeInject 中调用
+   */
+  async function processNpcLoveUp() {
+    const eraVars = await getEraVars();
+    const npcsState = getEraValue(eraVars, 'world_state.npcs', {});
+    
+    if (_.isEmpty(npcsState)) return;
+    
+    // 获取上一次的 NPC 状态快照（用于对比）
+    if (!window._npcStateSnapshot) {
+      window._npcStateSnapshot = {};
+    }
+    
+    const updateData = {};
+    const rollbackWarnings = [];
+    
+    for (const [npcId, state] of Object.entries(npcsState)) {
+      if (!state || typeof state !== 'object') continue;
+      
+      const currentStage = state.stage || 0;
+      const currentLove = state.love || 0;
+      const loveUp = state.love_up || 0;
+      
+      // 获取上一次记录的状态（仅用于 love_up 处理）
+      const lastSnapshot = window._npcStateSnapshot[npcId] || { stage: currentStage, love: currentLove };
+      
+      // === 1. 处理 love_up 累加 ===
+      let effectiveLove = currentLove;
+      if (loveUp !== 0) {
+        // 允许负值，范围 -100 到 100
+        effectiveLove = Math.max(-100, Math.min(100, currentLove + loveUp));
+        
+        console.log(`${PLUGIN_NAME} [NPC] ${npcId}: love ${currentLove} + ${loveUp} = ${effectiveLove}`);
+        
+        updateData[`pkm.world_state.npcs.${npcId}.love`] = effectiveLove;
+        updateData[`pkm.world_state.npcs.${npcId}.love_up`] = 0;
+      }
+      
+      // === 3. 检查自动升级 ===
+      // - Stage 0→1, 1→2, 2→3：所有 NPC 自动升级
+      // - Stage 3→4：只有【没有 unlock_item 的普通 NPC】自动升级
+      //              有 unlock_item 的七个女主必须由 AI 显式填入
+      const addon = NPC_ADDON_DATA[npcId];
+      const hasUnlockItem = addon && addon.unlock_key && addon.unlock_item;
+      
+      // 普通 NPC（无 unlock_item）：Stage 0→4 全部自动升级
+      // 七个女主（有 unlock_item）：Stage 0→3 自动升级，Stage 3→4 需要 AI 显式填入
+      const canAutoUpgrade = addon && (
+        currentStage < 3 || 
+        (currentStage === 3 && !hasUnlockItem)
+      );
+      
+      if (canAutoUpgrade) {
+        const nextThreshold = getNextLoveThreshold(npcId, currentStage);
+        
+        if (nextThreshold !== null && effectiveLove >= nextThreshold) {
+          const newStage = currentStage + 1;
+          console.log(`${PLUGIN_NAME} [NPC] 🔼 ${npcId}: 好感度达到 ${effectiveLove}/${nextThreshold}，自动升级 ${currentStage} → ${newStage}`);
+          updateData[`pkm.world_state.npcs.${npcId}.stage`] = newStage;
+          
+          if (!window._npcStateSnapshot[npcId]) {
+            window._npcStateSnapshot[npcId] = {};
+          }
+          window._npcStateSnapshot[npcId].stage = newStage;
+        }
+      }
+      
+      // === 4. Stage 3→4 解锁事件检测（仅七个女主，触发事件但不自动升级）===
+      if (addon && currentStage === 3 && hasUnlockItem) {
+        const nextThreshold = getNextLoveThreshold(npcId, 3); // Stage 4 的阈值
+        
+        if (nextThreshold !== null && effectiveLove >= nextThreshold) {
+          // 检查玩家是否已获得该女主角的羁绊道具（bonds，而非普通 unlocks）
+          const eraVars = await getEraVars();
+          const playerBonds = getEraValue(eraVars, 'player.bonds', {});
+          const hasBond = playerBonds[addon.unlock_key] === true;
+          
+          if (!hasBond) {
+            // 未获得羁绊道具，触发解锁事件（不升级 stage）
+            console.log(`${PLUGIN_NAME} [UNLOCK] 🎁 ${npcId} 好感度已满，触发羁绊道具解锁事件: ${addon.unlock_key}`);
+            
+            // 记录待触发的解锁事件（带好感度用于排序）
+            if (!window._pendingUnlockEvents) {
+              window._pendingUnlockEvents = [];
+            }
+            window._pendingUnlockEvents.push({
+              npcId: npcId,
+              npcName: addon.name_cn,
+              unlockKey: addon.unlock_key,
+              unlockItem: addon.unlock_item,
+              love: effectiveLove // 用于排序
+            });
+          } else {
+            // 已获得羁绊道具，但仍然不自动升级，等待 AI 显式填入 stage: 4
+            console.log(`${PLUGIN_NAME} [NPC] ${npcId}: 已获得羁绊道具 ${addon.unlock_key}，好感度已达标，等待 AI 升级到 Stage 4`);
+          }
+        }
+      }
+      
+      // === 3. 更新快照 ===
+      window._npcStateSnapshot[npcId] = {
+        stage: updateData[`pkm.world_state.npcs.${npcId}.stage`] !== undefined 
+          ? updateData[`pkm.world_state.npcs.${npcId}.stage`] 
+          : currentStage,
+        love: updateData[`pkm.world_state.npcs.${npcId}.love`] !== undefined
+          ? updateData[`pkm.world_state.npcs.${npcId}.love`]
+          : currentLove
+      };
+    }
+    
+    // === 4. 应用更新 ===
+    if (Object.keys(updateData).length > 0) {
+      try {
+        await updateEraVars(updateData);
+        console.log(`${PLUGIN_NAME} [NPC] ✓ 已处理 love_up 并更新到 ERA`);
+        
+        if (rollbackWarnings.length > 0) {
+          console.warn(`${PLUGIN_NAME} [NPC] ⚠️ 拦截了 ${rollbackWarnings.length} 个非法阶段变更:`);
+          rollbackWarnings.forEach(w => console.warn(`  - ${w}`));
+        }
+      } catch (e) {
+        console.warn(`${PLUGIN_NAME} [NPC] 更新 love_up 失败:`, e);
+      }
+    }
+    
+    // === 5. 处理待触发的解锁事件 ===
+    await processUnlockEvents();
+  }
+
+  /**
+   * 生成解锁事件注入提示
+   * 当 NPC 从 Stage 3 升级到 Stage 4 时，触发羁绊遗物赠送事件
+   */
+  function generateUnlockEventPrompt(event) {
+    const { npcId, npcName, unlockKey, unlockItem } = event;
+    
+    return `<pkm_unlock_event>
+═══════════════════════════════════════════════════════════════
+🎁 【羁绊遗物获得事件】 —— ${npcName} 的誓约之证
+═══════════════════════════════════════════════════════════════
+
+${unlockItem.emoji} ${unlockItem.name_cn} (${unlockItem.name_en})
+
+📜 物品描述:
+${unlockItem.desc}
+
+💬 ${npcName}的话语:
+"${unlockItem.dialogue}"
+
+⚡ 系统效果:
+${unlockItem.effect}
+
+═══════════════════════════════════════════════════════════════
+[系统指令] 请在本次回复中演绎 ${npcName} 将这件遗物交给玩家的场景。
+演绎完成后，请在 <VariableEdit> 中【同时】完成以下三项更新：
+1. 玩家羁绊状态 → bonds."${unlockKey}": true（特殊羁绊道具）
+2. 玩家解锁状态 → unlocks."${unlockKey}": true（战斗能力）
+3. 该 NPC 的阶段 → "stage": 4（保持 love 不变，仅确认阶段升级）
+
+<VariableEdit>
+{
+  "world_state": {
+    "npcs": {
+      "${npcId}": {
+        "stage": 4
+      }
+    }
+  },
+  "player": {
+    "bonds": {
+      "${unlockKey}": true
+    },
+    "unlocks": {
+      "${unlockKey}": true
+    }
+  }
+}
+</VariableEdit>
+═══════════════════════════════════════════════════════════════
+</pkm_unlock_event>`;
+  }
+
+  /**
+   * 处理待触发的解锁事件
+   * 按好感度排序，每次只处理一个事件，其余保留到下次
+   */
+  async function processUnlockEvents() {
+    if (!window._pendingUnlockEvents || window._pendingUnlockEvents.length === 0) {
+      return;
+    }
+    
+    // 按好感度从高到低排序
+    window._pendingUnlockEvents.sort((a, b) => (b.love || 0) - (a.love || 0));
+    
+    // 只取第一个（好感度最高的）
+    const event = window._pendingUnlockEvents.shift();
+    
+    console.log(`${PLUGIN_NAME} [UNLOCK] 处理解锁事件: ${event.npcName} (love: ${event.love})`);
+    if (window._pendingUnlockEvents.length > 0) {
+      console.log(`${PLUGIN_NAME} [UNLOCK] 剩余 ${window._pendingUnlockEvents.length} 个事件等待下次处理`);
+    }
+    
+    // 生成解锁事件的注入提示
+    const prompt = generateUnlockEventPrompt(event);
+    
+    // 注入到角色栏（使用 injectPrompts API）
+    try {
+      const injectionId = 'pkm_unlock_events';
+      // 先清除旧注入
+      try {
+        uninjectPrompts([injectionId]);
+      } catch (e) {
+        // 忽略
+      }
+      
+      // 注入新内容
+      injectPrompts([{
+        id: injectionId,
+        position: 'in_chat',
+        depth: 0, // 在最近的消息之后
+        role: 'system',
+        should_scan: false,
+        content: prompt
+      }]);
+      
+      console.log(`${PLUGIN_NAME} [UNLOCK] ✓ 已注入解锁事件提示: ${event.npcName}`);
+      
+      // 设置标记，在下次生成后清除注入
+      window._unlockEventInjected = true;
+    } catch (e) {
+      console.error(`${PLUGIN_NAME} [UNLOCK] 注入失败:`, e);
+    }
+  }
+
+  /**
+   * 清除已处理的解锁事件注入
+   */
+  async function clearUnlockEventInjection() {
+    if (window._unlockEventInjected) {
+      try {
+        uninjectPrompts(['pkm_unlock_events']);
+        window._unlockEventInjected = false;
+        console.log(`${PLUGIN_NAME} [UNLOCK] ✓ 已清除解锁事件注入`);
+      } catch (e) {
+        // 忽略清除失败
+      }
+    }
+  }
+
+  // ============================================
+  //    初始化 & 事件绑定
+  // ============================================
+
+  // 等待酒馆助手API可用
+  let retries = 0;
+  while (typeof eventEmit === 'undefined' && retries < 30) {
+    await wait(100);
+    retries++;
+  }
+
+  if (typeof eventEmit === 'undefined') {
+    console.error(`${PLUGIN_NAME} 酒馆助手API不可用，插件无法启动`);
+    return;
+  }
+
+  // 监听事件
+  eventOn('CHAT_CHANGED', () => resetState('切换对话'));
+  eventOn('tavern_events.MESSAGE_SWIPED', () => resetState('消息重骰'));
+  eventOn('tavern_events.MESSAGE_EDITED', () => resetState('消息编辑'));
+
+  // 监听生成前事件 - 注入玩家队伍数据到上下文 + NPC 状态 + 时间状态
+  eventOn('GENERATION_AFTER_COMMANDS', async (detail) => {
+    // 0. 清除上次的解锁事件注入（如果有）
+    await clearUnlockEventInjection();
+    
+    // 1. 处理玩家队伍数据
+    await handleGenerationBeforeInject(detail);
+    
+    // 2. 处理 NPC love_up 累加（会触发新的解锁事件）
+    await processNpcLoveUp();
+    
+    // 3. 处理时间推进（day_advance / period_set）
+    await processTimeAdvance();
+    
+    // 4. 动态注入活跃 NPC 状态
+    await handleDynamicNpcInject();
+    
+    // 5. 注入时间状态
+    await handleTimeInject();
+  });
+
+  // 监听 era:writeDone 事件 - 处理AI输出的战斗标签
+  eventOn('era:writeDone', async (detail) => {
+    await handleWriteDone(detail);
+  });
+
+  // 暴露全局接口供外部调用
+  window.PKMPlugin = {
+    // 获取玩家队伍
+    getPlayerParty,
+    
+    // 设置玩家队伍
+    // mode: 'full' | 'single' | 'custom'
+    // input: 宝可梦名称(single) 或 队伍数组(custom)
+    setPlayerParty,
+    
+    // 手动添加宝可梦到队伍
+    async addToParty(pokemon) {
+      const playerData = await getPlayerParty() || { name: '训练家', party: [], reserve: [] };
+      const newParty = [...playerData.party, pokemon];
+      return setPlayerParty('custom', newParty);
+    },
+    
+    // 手动添加宝可梦到备用库
+    async addToReserve(pokemon) {
+      const eraVars = await getEraVars();
+      const playerData = getEraValue(eraVars, 'player', { name: '训练家', party: [], reserve: [] });
+      const newReserve = [...(playerData.reserve || []), pokemon];
+      
+      updateEraVars({
+        player: {
+          ...playerData,
+          reserve: newReserve
+        }
+      });
+      
+      console.log(`${PLUGIN_NAME} ✓ 宝可梦已添加到备用库:`, pokemon);
+      return newReserve;
+    },
+    
+    // 设置玩家名称
+    async setPlayerName(name) {
+      const eraVars = await getEraVars();
+      const playerData = getEraValue(eraVars, 'player', { name: '训练家', party: [], reserve: [] });
+      
+      updateEraVars({
+        player: {
+          ...playerData,
+          name: name
+        }
+      });
+      
+      console.log(`${PLUGIN_NAME} ✓ 玩家名称已设置为: ${name}`);
+    },
+    
+    // 手动触发战斗（用于测试）
+    async triggerBattle(aiBattleData) {
+      const completeBattle = await buildCompleteBattleJson(aiBattleData);
+      
+      // 创建一个新消息，包含占位符供酒馆正则替换
+      const frontendPayload = `<PKM_FRONTEND>\n${JSON.stringify(completeBattle)}\n</PKM_FRONTEND>`;
+      await createChatMessages([{
+        role: 'assistant',
+        message: frontendPayload
+      }]);
+      
+      return completeBattle;
+    },
+    
+    // ========== 时间系统 API ==========
+    
+    // 获取当前时间状态
+    async getTime() {
+      const eraVars = await getEraVars();
+      const timeState = getEraValue(eraVars, 'world_state.time', { day: 1, period: 'morning' });
+      const derived = calculateDerivedTime(timeState.day || 1);
+      const periodInfo = getPeriodInfo(timeState.period || 'morning');
+      
+      return {
+        day: timeState.day || 1,
+        period: timeState.period || 'morning',
+        periodLabel: periodInfo.label,
+        periodEmoji: periodInfo.emoji,
+        ...derived
+      };
+    },
+    
+    // 设置时间（直接设置）
+    async setTime(day, period = 'morning') {
+      if (typeof day !== 'number' || day < 1) {
+        console.error(`${PLUGIN_NAME} [TIME] 无效的天数: ${day}`);
+        return null;
+      }
+      
+      const validPeriod = TIME_PERIODS[period] ? period : 'morning';
+      const derived = calculateDerivedTime(day);
+      
+      await updateEraVars({
+        'world_state.time': {
+          day: day,
+          period: validPeriod,
+          day_advance: null,
+          period_set: null,
+          derived: derived
+        }
+      });
+      
+      console.log(`${PLUGIN_NAME} [TIME] ✓ 时间已设置: DAY ${day} · ${getPeriodInfo(validPeriod).label}`);
+      return { day, period: validPeriod, ...derived };
+    },
+    
+    // 推进时间（使用自然语言）
+    async advanceTime(instruction) {
+      const eraVars = await getEraVars();
+      const timeState = getEraValue(eraVars, 'world_state.time', { day: 1, period: 'morning' });
+      
+      const advance = parseTimeAdvance(instruction);
+      if (!advance) {
+        console.error(`${PLUGIN_NAME} [TIME] 无法解析时间指令: ${instruction}`);
+        return null;
+      }
+      
+      const result = advanceTime(timeState, advance);
+      const derived = calculateDerivedTime(result.day);
+      
+      await updateEraVars({
+        'world_state.time.day': result.day,
+        'world_state.time.period': result.period,
+        'world_state.time.derived': derived
+      });
+      
+      console.log(`${PLUGIN_NAME} [TIME] ✓ 时间推进: DAY ${timeState.day} → DAY ${result.day}, ${timeState.period} → ${result.period}`);
+      return { day: result.day, period: result.period, crossedDays: result.crossedDays, ...derived };
+    },
+    
+    // 获取时间系统常量
+    getTimePeriods() {
+      return { ...TIME_PERIODS };
+    },
+    
+    // 获取当前版本
+    version: '1.1.0'
+  };
+
+  // ============================================
+  //    ERA 变量更新拦截器（ev_up 自动累加到 ev_level）
+  // ============================================
+  
+  /**
+   * 拦截并预处理 ERA 变量更新，处理 ev_up 增量
+   * @param {object} updateData - 要更新的数据对象
+   * @returns {Promise<object>} - 处理后的数据对象
+   */
+  async function preprocessEraUpdate(updateData) {
+    if (!updateData || typeof updateData !== 'object') return updateData;
+    
+    // 获取当前 ERA 变量
+    const currentVars = await getEraVars();
+    
+    // 递归处理嵌套对象
+    function processObject(obj, path = '') {
+      if (!obj || typeof obj !== 'object') return obj;
+      
+      // === 处理 proficiency_up：累加到 trainerProficiency ===
+      // 检查是否是 player 的更新且包含 proficiency_up
+      if (path === 'player' || path === 'pkm.player' || path.endsWith('.player')) {
+        const proficiencyUp = obj.proficiency_up;
+        if (proficiencyUp !== undefined && proficiencyUp !== null && typeof proficiencyUp === 'number' && proficiencyUp !== 0) {
+          const currentProficiency = getEraValue(currentVars, 'player.trainerProficiency', 0);
+          const newProficiency = Math.max(0, Math.min(255, currentProficiency + proficiencyUp));
+          
+          console.log(`${PLUGIN_NAME} [PROFICIENCY] 当前: ${currentProficiency}, +${proficiencyUp} = ${newProficiency}`);
+          
+          // 更新 trainerProficiency
+          obj.trainerProficiency = newProficiency;
+          
+          // 重置 proficiency_up 为 0
+          obj.proficiency_up = 0;
+        }
+      }
+      
+      // === 处理 ev_up：累加到 ev_level ===
+      // 检查是否是 party 的槽位更新（player.party.slotX 或 pkm.player.party.slotX）
+      if ((path.includes('player.party.slot') || path.includes('pkm.player.party.slot')) && obj.stats_meta && typeof obj.stats_meta === 'object') {
+        // 提取槽位键名 (slot1, slot2, ...)
+        const slotMatch = path.match(/slot\d+/);
+        if (slotMatch) {
+          const slotKey = slotMatch[0];
+          const evUp = obj.stats_meta.ev_up;
+          
+          // 如果有 ev_up 且大于 0，累加到 ev_level
+          if (evUp !== undefined && evUp !== null && typeof evUp === 'number' && evUp > 0) {
+            const currentEvLevel = getEraValue(currentVars, `player.party.${slotKey}.stats_meta.ev_level`, 0);
+            const newEvLevel = currentEvLevel + evUp;
+            
+            console.log(`${PLUGIN_NAME} [EV_UP] 槽位: ${slotKey}, 当前 ev_level: ${currentEvLevel}, ev_up: ${evUp}, 新 ev_level: ${newEvLevel}`);
+            
+            // 更新 ev_level
+            obj.stats_meta.ev_level = newEvLevel;
+            
+            // 重置 ev_up 为 0（保留字段，但清零以便下次累加）
+            obj.stats_meta.ev_up = 0;
+          }
+        }
+      }
+      
+      // 递归处理子对象
+      for (const [key, value] of Object.entries(obj)) {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          const newPath = path ? `${path}.${key}` : key;
+          processObject(value, newPath);
+        }
+      }
+      
+      return obj;
+    }
+    
+    return processObject(updateData);
+  }
+  
+  // 拦截 era:updateByObject 事件
+  const originalEventEmit = window.eventEmit;
+  if (originalEventEmit) {
+    window.eventEmit = function(eventName, data) {
+      if (eventName === 'era:updateByObject' && data) {
+        console.log(`${PLUGIN_NAME} [拦截] 检测到 ERA 变量更新事件`);
+        
+        // 异步预处理（需要读取当前 ERA 变量）
+        preprocessEraUpdate(data).then(processedData => {
+          originalEventEmit.call(window, eventName, processedData);
+        });
+      } else {
+        // 其他事件直接透传
+        originalEventEmit.apply(window, arguments);
+      }
+    };
+    console.log(`${PLUGIN_NAME} ✓ ERA 变量更新拦截器已安装（ev_up/proficiency_up 自动累加模式）`);
+  }
+
+  console.log(`${PLUGIN_NAME} ✓✓✓ 插件加载完成 (v1.1.0) ✓✓✓`);
+  console.log(`${PLUGIN_NAME} 可用接口: window.PKMPlugin`);
+  console.log(`${PLUGIN_NAME} [队伍] getPlayerParty() / setPlayerParty(mode, input) / addToParty(pokemon)`);
+  console.log(`${PLUGIN_NAME} [时间] getTime() / setTime(day, period) / advanceTime(instruction)`);
+  console.log(`${PLUGIN_NAME} [战斗] triggerBattle(data)`);
+  console.log(`${PLUGIN_NAME} [时间系统] DAY X 格式，时段: dawn/morning/noon/afternoon/evening/night/midnight`);
+
+})();

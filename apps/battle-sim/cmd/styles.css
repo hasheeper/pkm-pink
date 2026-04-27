@@ -1,0 +1,423 @@
+/* CMD 组件专用字体变量 - 不影响主项目 */
+#commander-overlay,
+#smart-bubble,
+.commander-container,
+.cmd-btn {
+    --cmd-font-main: 'Exo 2', sans-serif;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: #0c0f13;
+    background-image:
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 50px 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--cmd-font-main, 'Exo 2', sans-serif);
+    color: #f5f6fa;
+}
+
+/* 外部容器：提供一个展示舞台 */
+.commander-stage {
+    position: relative;
+    width: min(90vw, 720px);
+    aspect-ratio: 1;
+    border-radius: 48px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.15), transparent 45%),
+                radial-gradient(circle at 70% 70%, rgba(0,210,255,0.08), transparent 55%),
+                #050608;
+    box-shadow: 0 35px 80px rgba(0,0,0,0.65);
+    overflow: hidden;
+}
+
+.stage-backdrop,
+.stage-backdrop::after {
+    position: absolute;
+    inset: 0;
+}
+
+.stage-backdrop::after {
+    content: '';
+    background-image:
+        linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+    opacity: 0.4;
+}
+
+/* =========================================
+   COMMANDER SYSTEM STYLES (机械快门风格)
+   ========================================= */
+
+/* 1. Commander Layer (容器) */
+#commander-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+    opacity: 1;
+    pointer-events: auto;
+    backdrop-filter: blur(4px);
+    transition: opacity 0.25s ease, backdrop-filter 0.25s ease;
+}
+
+#commander-overlay:not(.hidden) {
+    animation: overlay-fade-in 0.3s ease-out;
+    visibility: visible;
+}
+
+#commander-overlay.hidden {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    backdrop-filter: blur(0px) !important;
+    visibility: hidden;
+    transition: opacity 0.25s ease, backdrop-filter 0.25s ease, visibility 0s linear 0.25s;
+}
+
+@keyframes overlay-fade-in {
+    0% {
+        opacity: 0;
+        backdrop-filter: blur(0px);
+    }
+    100% {
+        opacity: 1;
+        backdrop-filter: blur(4px);
+    }
+}
+
+/* 2. Center Core (机械快门核心) */
+.cmd-hub {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80px;
+    height: 80px;
+    z-index: 20;
+    pointer-events: none;
+    border-radius: 50%;
+    background: #1e1e1e;
+    box-shadow:
+        0 0 0 3px #2d3436,
+        0 0 0 5px #121417;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pulse-ring {
+    width: 10px;
+    height: 10px;
+    background: #333;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 50%;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+    transition: background 0.3s;
+}
+
+#commander-overlay:hover .pulse-ring {
+    background: #747d8c;
+}
+
+/* 3. The Radial System (旋转十字布局) */
+.commander-container {
+    position: relative;
+    width: 360px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+}
+
+.commander-title {
+    display: none;
+}
+
+.commander-wheel {
+    position: relative;
+    width: 360px;
+    height: 360px;
+    transform: rotate(-45deg);
+}
+
+.cmd-btn {
+    position: absolute;
+    width: calc(50% - 8px);
+    height: calc(50% - 8px);
+    background: #fff;
+    border: none;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    overflow: visible;
+    outline: none;
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), background-color 0.2s;
+    -webkit-mask: radial-gradient(circle at var(--org-x) var(--org-y), transparent 45px, black 46px);
+    mask: radial-gradient(circle at var(--org-x) var(--org-y), transparent 45px, black 46px);
+    opacity: 0;
+    animation: btn-slide-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes btn-slide-in {
+    0% {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.cmd-content {
+    width: 100%;
+    height: 100%;
+    transform: rotate(45deg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    position: relative;
+}
+
+.pos-top {
+    top: 0;
+    right: 0;
+    border-radius: 0 100px 0 0;
+    --org-x: 0%;
+    --org-y: 100%;
+    transform-origin: -20% 120%;
+    animation-delay: 0.1s;
+}
+
+.pos-right {
+    bottom: 0;
+    right: 0;
+    border-radius: 0 0 100px 0;
+    --org-x: 0%;
+    --org-y: 0%;
+    transform-origin: -20% -20%;
+    animation-delay: 0.15s;
+}
+
+.pos-bottom {
+    bottom: 0;
+    left: 0;
+    border-radius: 0 0 0 100px;
+    --org-x: 100%;
+    --org-y: 0%;
+    transform-origin: 120% -20%;
+    animation-delay: 0.2s;
+}
+
+.pos-left {
+    top: 0;
+    left: 0;
+    border-radius: 100px 0 0 0;
+    --org-x: 100%;
+    --org-y: 100%;
+    transform-origin: 120% 120%;
+    animation-delay: 0.25s;
+}
+
+.cmd-label {
+    font-family: var(--cmd-font-main, 'Exo 2', sans-serif);
+    font-size: 1.8rem;
+    font-weight: 900;
+    color: var(--active-c);
+    margin: 0;
+    padding: 0;
+    line-height: 0.9;
+    letter-spacing: -1px;
+    font-style: italic;
+    text-transform: uppercase;
+    transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+    display: inline-block;
+    transform-origin: center;
+}
+
+.cmd-sub {
+    font-family: var(--cmd-font-main, 'Exo 2', sans-serif);
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: var(--active-c);
+    opacity: 0.8;
+    margin-top: 6px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    transition: color 0.2s;
+}
+
+.icon-bg {
+    position: absolute;
+    top: 65%;
+    left: 65%;
+    transform: translate(-50%, -50%) rotate(45deg);
+    width: 200px;
+    height: 200px;
+    opacity: 0.15;
+    pointer-events: none;
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 0;
+}
+
+.theme-insight .icon-bg,
+.theme-insight .icon-bg path,
+.theme-insight .icon-bg g { fill: #00d2d3; }
+
+.theme-trust .icon-bg,
+.theme-trust .icon-bg path,
+.theme-trust .icon-bg g { fill: #ff9f43; }
+
+.theme-passion .icon-bg,
+.theme-passion .icon-bg path,
+.theme-passion .icon-bg g { fill: #ff6b6b; }
+
+.theme-devotion .icon-bg,
+.theme-devotion .icon-bg path,
+.theme-devotion .icon-bg g { fill: #a55eea; }
+
+.cmd-emoji {
+    display: none;
+}
+
+.theme-insight  { --active-c: #00d2d3; }
+.theme-trust    { --active-c: #ff9f43; }
+.theme-passion  { --active-c: #ff6b6b; }
+.theme-devotion { --active-c: #a55eea; }
+
+.cmd-btn:hover {
+    z-index: 50;
+    background: var(--active-c);
+    box-shadow: 0 0 0 6px rgba(255,255,255,0.1);
+}
+
+@keyframes text-shout {
+    0% {
+        transform: scale(1) rotate(0deg);
+        text-shadow: 0 0 0 transparent;
+    }
+    20% {
+        transform: scale(1.5) rotate(-3deg);
+        text-shadow: 0 0 20px rgba(255, 255, 255, 0.9);
+    }
+    40% {
+        transform: scale(1.2) rotate(2deg);
+        text-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
+    }
+    60% {
+        transform: scale(1.35) rotate(-1deg);
+        text-shadow: 0 0 15px rgba(255, 255, 255, 0.7);
+    }
+    80% {
+        transform: scale(1.25) rotate(0deg);
+        text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+    }
+    100% {
+        transform: scale(1.3);
+        text-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+    }
+}
+
+.cmd-btn:hover .cmd-label {
+    color: #121417;
+    animation: text-shout 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.cmd-btn:hover .cmd-sub {
+    color: #121417;
+    opacity: 0.9;
+}
+
+.cmd-btn:hover .icon-bg,
+.cmd-btn:hover .icon-bg path,
+.cmd-btn:hover .icon-bg g {
+    fill: #000 !important;
+}
+
+.cmd-btn:hover .icon-bg {
+    opacity: 0.2;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(30deg) scale(1.1);
+}
+
+.cmd-btn:active {
+    transform: scale(0.98);
+    background: #f1f2f6;
+    transition: 0.05s;
+}
+
+.cmd-btn:disabled {
+    opacity: 0.4;
+    pointer-events: none;
+    filter: grayscale(1);
+}
+
+.cmd-cancel-hint {
+    position: relative;
+    background: #2d3436;
+    border: 2px solid #57606f;
+    border-radius: 99px;
+    padding: 12px 40px;
+    color: #fff;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 900;
+    font-size: 1rem;
+    letter-spacing: 2px;
+    cursor: pointer;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    transition: 0.2s;
+    animation: cancel-fade-in 0.4s ease-out 0.3s both;
+}
+
+@keyframes cancel-fade-in {
+    0% {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.cmd-cancel-hint:hover {
+    background: #fff;
+    border-color: #fff;
+    color: #2d3436;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(255,255,255,0.3);
+}
+
+.cmd-cancel-hint .key {
+    display: inline-block;
+    padding: 3px 10px;
+    background: #333;
+    border: 1px solid #666;
+    border-radius: 4px;
+    margin-right: 8px;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 900;
+    font-size: 0.85rem;
+    transition: 0.2s;
+}
+
+.cmd-cancel-hint:hover .key {
+    background: #e0e0e0;
+    border-color: #ccc;
+    color: #2d3436;
+}

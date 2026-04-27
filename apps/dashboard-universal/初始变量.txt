@@ -1,0 +1,251 @@
+<VariableInsert>
+{
+  "settings": {
+    "enableAVS": true,
+    "enableCommander": true,
+    "enableEVO": true,
+    "enableBGM": true,
+    "enableSFX": true,
+    "enableClash": true,
+    "enableEnvironment": true
+  },
+    "world_state": {
+      "region": null
+    },
+  "player": {
+      "name": "{{user}}",
+      "trainerProficiency": 0,
+      "proficiency_up": 0,
+      "unlocks": {
+        "enable_bond": true,
+        "enable_styles": false,
+        "enable_insight": true,
+        "enable_mega": true,
+        "enable_z_move": true,
+        "enable_dynamax": true,
+        "enable_tera": true,
+        "enable_proficiency_cap": true
+      },
+      "party": {
+        "slot1": {
+          "slot": 1,
+          "name": null,
+          "nickname": null,
+          "species": null,
+          "gender": null,
+          "lv": null,
+          "quality": null,
+          "nature": null,
+          "ability": null,
+          "shiny": false,
+          "item": null,
+          "mechanic": null,
+          "teraType": null,
+          "isAce": false,
+          "isLead": false,
+          "bonds": 0,
+          "bonds_up": 0,
+          "moves": {
+            "move1": null,
+            "move2": null,
+            "move3": null,
+            "move4": null
+          },
+          "stats_meta": {
+            "ivs": { "hp": null, "atk": null, "def": null, "spa": null, "spd": null, "spe": null },
+            "ev_level": 0,
+            "ev_up": 0
+          },
+          "notes": null
+        },
+        "slot2": {
+          "slot": 2,
+          "name": null,
+          "nickname": null,
+          "species": null,
+          "gender": null,
+          "lv": null,
+          "quality": null,
+          "nature": null,
+          "ability": null,
+          "shiny": false,
+          "item": null,
+          "mechanic": null,
+          "teraType": null,
+          "isAce": false,
+          "isLead": false,
+          "bonds": 0,
+          "bonds_up": 0,
+          "moves": {
+            "move1": null,
+            "move2": null,
+            "move3": null,
+            "move4": null
+          },
+          "stats_meta": {
+            "ivs": { "hp": null, "atk": null, "def": null, "spa": null, "spd": null, "spe": null },
+            "ev_level": 0,
+            "ev_up": 0
+          },
+          "notes": null
+        },
+        "slot3": {
+          "slot": 3,
+          "name": null,
+          "nickname": null,
+          "species": null,
+          "gender": null,
+          "lv": null,
+          "quality": null,
+          "nature": null,
+          "ability": null,
+          "shiny": false,
+          "item": null,
+          "mechanic": null,
+          "teraType": null,
+          "isAce": false,
+          "isLead": false,
+          "bonds": 0,
+          "bonds_up": 0,
+          "moves": {
+            "move1": null,
+            "move2": null,
+            "move3": null,
+            "move4": null
+          },
+          "stats_meta": {
+            "ivs": { "hp": null, "atk": null, "def": null, "spa": null, "spd": null, "spe": null },
+            "ev_level": 0,
+            "ev_up": 0
+          },
+          "notes": null
+        },
+        "slot4": {
+          "slot": 4,
+          "name": null,
+          "nickname": null,
+          "species": null,
+          "gender": null,
+          "lv": null,
+          "quality": null,
+          "nature": null,
+          "ability": null,
+          "shiny": false,
+          "item": null,
+          "mechanic": null,
+          "teraType": null,
+          "isAce": false,
+          "isLead": false,
+          "bonds": 0,
+          "bonds_up": 0,
+          "moves": {
+            "move1": null,
+            "move2": null,
+            "move3": null,
+            "move4": null
+          },
+          "stats_meta": {
+            "ivs": { "hp": null, "atk": null, "def": null, "spa": null, "spd": null, "spe": null },
+            "ev_level": 0,
+            "ev_up": 0
+          },
+          "notes": null
+        },
+        "slot5": {
+          "slot": 5,
+          "name": null,
+          "nickname": null,
+          "species": null,
+          "gender": null,
+          "lv": null,
+          "quality": null,
+          "nature": null,
+          "ability": null,
+          "shiny": false,
+          "item": null,
+          "mechanic": null,
+          "teraType": null,
+          "isAce": false,
+          "isLead": false,
+          "bonds": 0,
+          "bonds_up": 0,
+          "moves": {
+            "move1": null,
+            "move2": null,
+            "move3": null,
+            "move4": null
+          },
+          "stats_meta": {
+            "ivs": { "hp": null, "atk": null, "def": null, "spa": null, "spd": null, "spe": null },
+            "ev_level": 0,
+            "ev_up": 0
+          },
+          "notes": null
+        },
+        "slot6": {
+          "slot": 6,
+          "name": null,
+          "nickname": null,
+          "species": null,
+          "gender": null,
+          "lv": null,
+          "quality": null,
+          "nature": null,
+          "ability": null,
+          "shiny": false,
+          "item": null,
+          "mechanic": null,
+          "teraType": null,
+          "isAce": false,
+          "isLead": false,
+          "bonds": 0,
+          "bonds_up": 0,
+          "moves": {
+            "move1": null,
+            "move2": null,
+            "move3": null,
+            "move4": null
+          },
+          "stats_meta": {
+            "ivs": { "hp": null, "atk": null, "def": null, "spa": null, "spd": null, "spe": null },
+            "ev_level": 0,
+            "ev_up": 0
+          },
+          "notes": null
+        },
+"transfer_buffer": {
+          "slot": 7,
+          "name": null,
+          "nickname": null,
+          "species": null,
+          "gender": null,
+          "lv": null,
+          "quality": null,
+          "nature": null,
+          "ability": null,
+          "shiny": false,
+          "item": null,
+          "mechanic": null,
+          "teraType": null,
+          "isAce": false,
+          "isLead": false,
+          "bonds": 0,
+          "bonds_up": 0,
+          "moves": {
+            "move1": null,
+            "move2": null,
+            "move3": null,
+            "move4": null
+          },
+          "stats_meta": {
+            "ivs": { "hp": null, "atk": null, "def": null, "spa": null, "spd": null, "spe": null },
+            "ev_level": 0,
+            "ev_up": 0
+          },
+          "notes": null
+        }
+      },
+    "box": {}
+  }
+}
+</VariableInsert>

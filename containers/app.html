@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PKM Pink Container</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100%;
+            height: 100%;
+            background: #0a0a1a;
+            overflow: hidden;
+        }
+        #app-frame {
+            width: 100%;
+            height: 100%;
+            border: 0;
+            display: block;
+        }
+        #error-msg {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff6b6b;
+            font-family: monospace;
+            font-size: 14px;
+            text-align: center;
+            display: none;
+        }
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #4bcffa;
+            font-family: monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">Loading app...</div>
+    <div id="error-msg"></div>
+    <iframe id="app-frame" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin" allow="fullscreen" allowfullscreen></iframe>
+
+    <script>
+        (async function() {
+            const params = new URLSearchParams(location.search);
+            const appId = params.get('app');
+            const target = params.get('target');
+            const profile = params.get('profile');
+
+            const frame = document.getElementById('app-frame');
+            const loading = document.getElementById('loading');
+            const errorMsg = document.getElementById('error-msg');
+
+            try {
+                const res = await fetch('../registry/apps.json');
+                if (!res.ok) throw new Error('Failed to load registry');
+                const registry = await res.json();
+
+                let app = null;
+
+                // Support ?app=battle, ?target=dashboard-main, ?profile=main
+                if (appId) {
+                    app = registry.apps?.[appId];
+                } else if (target) {
+                    app = registry.apps?.[target];
+                } else if (profile) {
+                    // Find dashboard app by profile
+                    app = Object.values(registry.apps || {}).find(a => a.profile === profile && a.type === 'dashboard');
+                }
+
+                if (!app) {
+                    throw new Error(`App not found: app=${appId} target=${target} profile=${profile}`);
+                }
+
+                const src = app.entry || app.container;
+                if (!src) {
+                    throw new Error(`No entry or container defined for ${app.id}`);
+                }
+
+                frame.src = src;
+                loading.style.display = 'none';
+
+                // Post-message bridge placeholder for future Tavern integration
+                // TODO: Implement unified postMessage protocol in Phase 2
+                window.addEventListener('message', (event) => {
+                    console.log('[PKM Pink Container] Message received:', event.data);
+                    // Forward to iframe
+                    if (frame.contentWindow) {
+                        frame.contentWindow.postMessage(event.data, '*');
+                    }
+                });
+
+            } catch (e) {
+                loading.style.display = 'none';
+                errorMsg.style.display = 'block';
+                errorMsg.textContent = 'Error: ' + e.message;
+                console.error('[PKM Pink Container]', e);
+            }
+        })();
+    </script>
+</body>
+</html>
