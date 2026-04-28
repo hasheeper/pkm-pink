@@ -1,0 +1,187 @@
+hero:
+  aliases:
+    KAZU: "{{user}}"
+  funds: 12
+  assets: 0
+  debt: 0
+  majorDebt: 395000000
+  cast:
+    RINO:
+      activated: true
+      introduced: true
+      present: true
+      inParty: true
+    SIA:
+      activated: false
+      introduced: false
+      present: false
+      inParty: false
+    POPPY:
+      activated: false
+      introduced: false
+      present: false
+      inParty: false
+    VV:
+      activated: false
+      introduced: false
+      present: false
+      inParty: false
+    TRIXIE:
+      activated: false
+      introduced: false
+      present: false
+      inParty: false
+    COTA:
+      activated: false
+      introduced: false
+      present: false
+      inParty: false
+    EULALIA:
+      activated: false
+      introduced: false
+      present: false
+      inParty: false
+    KAKO:
+      activated: false
+      introduced: false
+      present: false
+      inParty: false
+    KUZUHA:
+      activated: false
+      introduced: false
+      present: false
+      inParty: false
+  roster:
+    KAZU:
+      level: 3
+      mana: 0
+      maxMana: 0
+    RINO:
+      level: 5
+      mana: 140
+      maxMana: 140
+    SIA:
+      level: 5
+      mana: 100
+      maxMana: 100
+    POPPY:
+      level: 5
+      mana: 40
+      maxMana: 40
+    VV:
+      level: 5
+      mana: 120
+      maxMana: 120
+    TRIXIE:
+      level: 5
+      mana: 120
+      maxMana: 120
+    COTA:
+      level: 4
+      mana: 100
+      maxMana: 100
+    EULALIA:
+      level: 5
+      mana: 140
+      maxMana: 140
+    KAKO:
+      level: 5
+      mana: 120
+      maxMana: 120
+    KUZUHA:
+      level: 5
+      mana: 120
+      maxMana: 120
+  relationship:
+    RINO:
+      entanglement: 15
+      exclusive: 25
+    VV:
+      entanglement: 0
+      exclusive: 20
+    POPPY:
+      entanglement: 0
+      exclusive: 10
+    KUZUHA:
+      entanglement: 0
+      exclusive: 5
+    SIA:
+      entanglement: 0
+      exclusive: 5
+    EULALIA:
+      entanglement: 0
+      exclusive: 0
+    COTA:
+      entanglement: 0
+      exclusive: 20
+    KAKO:
+      entanglement: 0
+      exclusive: 20
+    TRIXIE:
+      entanglement: 0
+      exclusive: 30
+world:
+  current_time:
+    day: 1
+    phase: MORNING
+  clockPressure: 0
+  location:
+    layer: THE_EXCHANGE
+    site: 中市短住点
+  act:
+    id: chapter0_exchange
+    seed: PROLOGUE-EXCHANGE
+    nodeIndex: 1
+    route_history:
+      - node1-entry
+    limited:
+      combat: 1
+      rest: 0
+      asset: 0
+      vision: 1
+    reserve:
+      combat: 0
+      rest: 0
+      asset: 0
+      vision: 0
+    reserve_progress:
+      combat: 0
+      rest: 0
+      asset: 0
+      vision: 0
+    income_rate:
+      combat: 0.2
+      rest: 0.2
+      asset: 0.2
+      vision: 0.2
+    income_progress:
+      combat: 0
+      rest: 0
+      asset: 0
+      vision: 0
+    phase_slots:
+      - null
+      - null
+      - null
+      - null
+    phase_index: 0
+    stage: executing
+    phase_advance: 0
+    pickedPacks: {}
+    controlledNodes: {}
+    crisis: 0
+    crisisSignals: []
+    vision:
+      baseSight: 1
+      bonusSight: 0
+      jumpReady: false
+      pendingReplace: null
+    resourceSpent:
+      combat: 0
+      rest: 0
+      asset: 0
+      vision: 0
+    characterEncounter: {}
+    pendingResolutions: []
+    resolutionHistory: []
+    narrativeTension: 0

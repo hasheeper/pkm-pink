@@ -60,16 +60,18 @@
 
     <script>
         (async function() {
-            const hash = location.hash.slice(1);
-            const params = new URLSearchParams(hash);
-            const target = params.get('target') || 'dashboard-main';
+            const queryParams = new URLSearchParams(location.search);
+            const hashParams = new URLSearchParams(location.hash.slice(1));
+            const target = queryParams.get('target') || hashParams.get('target') || 'dashboard-main';
 
             const frame = document.getElementById('tavern-frame');
             const errorMsg = document.getElementById('error-msg');
             const btnFullscreen = document.getElementById('btn-fullscreen');
 
             try {
-                const res = await fetch('../registry/apps.json');
+                const registryUrl = new URL('../registry/apps.json', location.href);
+                const appRootUrl = new URL('../', registryUrl);
+                const res = await fetch(registryUrl);
                 if (!res.ok) throw new Error('Failed to load registry');
                 const registry = await res.json();
 
@@ -84,7 +86,7 @@
                     throw new Error(`No entry defined for ${target}`);
                 }
 
-                frame.src = src;
+                frame.src = new URL(src.replace(/^\.\//, ''), appRootUrl).href;
 
                 // Fullscreen toggle
                 btnFullscreen.addEventListener('click', () => {

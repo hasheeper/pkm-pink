@@ -1,0 +1,144 @@
+<variable_rule>
+ERA 变量指令规则
+调用 <VariableEdit> 标签。该标签用于对 RPG 系统变量进行**增量更新**。
+核心原则：严禁整段覆写`pkm_team_summary`历史数据！仅输出本轮剧情中此 `slot` 发生**变化**或**新增**的键值对。
+
+1. 新增单位
+写入路径：`player.party` 下，寻找为空 (`null`) 的 slot。
+- 情况 A (直接入队): 检查player.party (slot1 - slot6)。若存在 null 空位，写入最早的空槽。
+- 情况 B (缓冲/溢出): 若队伍已满 (Slot1-6全非空)，或者剧情明确描述 “传送至盒子”、“发送给索妮亚博士”：
+- 写入目标: player.party.transfer_buffer。
+- 基础必填:
+  - `name`: 官方英文名 (Species)。
+  - `lv`: 初始等级 (Integer)。
+  - `gender`: 性别 "M" | "F" | "N"。
+  - `quality`: "low" | "medium" | "high" | "perfect" (系统根据此项设定初始IVs)。
+  - `moves`: 初始招式 { "move1": "Name", "move2": ..., "move3": ..., "move4": ... }。
+- 选填参数:
+  - `shiny`: `true`/`false` (默认false)。
+  - `nature`: 性格 (EN) / `ability`: 特性 (EN)。
+- 机制状态 (Mechanic) 配置:
+  - `mechanic`: 战术轴类型。必须同时满足**获得资格**或**持有对应道具**。
+    - 可选值: "mega" | "dynamax" | "zmove" | "tera"。
+    - Mega/Z: 必须在同级写入对应的 `item` (如 "Lucarionite" 或 "Firium Z")。
+    - Tera: 必须在同级写入 `teraType` (如 "Steel")。
+
+2. 成长与变动
+在已有 `slotX` 下操作，仅列出变化项。
+- 数值变化:
+  - `lv`: 若战后升级，写入新等级。
+  - `stats_meta`: 必须使用 `{ "ev_up": X }` (增量整数)。
+- 形态/配置:
+  - `name`: 进化后更新为新名。
+  - `item`: 装备或消耗道具。
+  - `ability`: 若特性改变则写入。
+- 机制更新:
+  - 获得 Mega石/Z晶: `{ "item": "XXX", "mechanic": "mega" }`。
+  - 更改太晶属性: `{ "mechanic": "tera", "teraType": "Fire" }`。
+
+3. 情感与羁绊 (Bond)
+必须使用 `av_up` 对象进行**增量**累加。路径为 `slotX.friendship.av_up`。
+- `trust` (服从), `passion` (战斗激情), `insight` (反应力), `devotion` (根性)。
+
+4. NPC 关系
+写入路径：`world_state.npcs.[npc_id]` (ID全小写)。
+- `love_up`: 增量 (INT)。
+
+5. 世界与时间状态 
+写入路径：`world_state`
+A 坐标定位 (Location)
+- Key: `location.x` (Integer), `location.y` (Integer).
+- **坐标轴向**:
+  - X轴 (东西): 东(East) 为 `+`, 西(West) 为 `-`。
+  - Y轴 (南北): 北(North) 为 `+`, 南(South) 为 `-`。
+- 更新逻辑:
+  1. 徒步/移动: 根据叙事方向进行小幅度数值增减 (通常每格代表一小段路程)。
+  2. 快速旅行: 若乘坐缆车、空运或传送，直接修改为目的地的几段坐标。
+  3. 参考点: 默认为 [1, 1]，没有0轴。正值为东/北，负值为西/南。
+B. 时间控制 (Time)
+- Key: `time.day_advance` (String).
+- 始终使用以下字符串指令让系统自动推演：
+  1. 自然流逝:
+     - `"next_period"`: 下个时段 (例: 下午->傍晚)。 
+     - `"nextday"`: 睡眠后次日 (跳转至次日早晨)。
+  2. 定点跳转:
+     - `"skip_to_[period]"`: 例 `skip_to_night`, `skip_to_noon`。
+     - 若目标时段早于当前时段，系统会自动+1天。
+  3. 量化推进:
+     - `"{number}{unit}"`: 例 `1day`, `3days`, `1week`, `2months`。
+  4. 复合指令: 如果需要跨越天数并定点特定时段，使用 `_` 连接:
+     - 格式: `{count}{unit}_{period}`
+     - 例: `"3days_morning"` (三天后的早晨)。
+     - 例: `"1week_night"` (一周后的夜晚)。
+- Key: `time.period_set` (String).
+- 更新当天的时段变化
+- 可用时段 (period): `dawn`, `morning`, `noon`, `afternoon`, `evening`, `night`, `midnight`.
+
+6. 训练家熟练度
+写入路径：`player`
+- `proficiency_up`: 增量 (INT)。在此次行动中获得的经验积累，提高后续指挥官技能触发率。
+
+示例演示 (Full Example):
+<VariableEdit>
+{
+  "player": {
+    // 指挥水平提升（如：刚刚赢得了一场艰难战斗）
+    "proficiency_up": 10,
+    "party": {
+      // [成长更新: 卢卡从 Lv54->55，努力值提高，习得羁绊，获得Mega装态]
+      "slot1": {
+        "name": "Lucario",
+        "lv": 55,
+        "stats_meta": { "ev_up": 10 }, // 重点：努力值增量
+        "item": "Lucarionite",         // 装备：Mega石
+        "mechanic": "mega",            // 状态：激活 Mega 轴
+        "friendship": { 
+           "av_up": { "trust": 5, "passion": 5, "insight": 2 } 
+        }
+      },
+      // [成长更新: 只有努力值和太晶属性变动]
+      "slot2": {
+        "stats_meta": { "ev_up": 5 },
+        "mechanic": "tera",
+        "teraType": "Flying"
+      },
+      // [新增单位: 满配 闪光 Z招式 皮卡丘]
+      "slot3": {
+        "name": "Pikachu",
+        "lv": 50,
+        "gender": "M",
+        "quality": "perfect",
+        "shiny": true,   // 闪光
+        "nature": "Timid",
+        "moves": { "move1": "Volt Tackle", "move2": "Iron Tail", "move3": "Grass Knot", "move4": "Protect" },
+        "item": "Pikashunium Z", // 道具
+        "mechanic": "zmove",     // 机制
+        "friendship": {"avs": { "trust": 100, "passion": 100, "insight": 100, "devotion": 100 }} // 初始亲密度如果剧情设定很高
+      },
+      // [新增单位: 极巨化(G-Max) 闪焰王牌]
+      "slot4": {
+        "name": "Cinderace",
+        "lv": 60,
+        "gender": "F",
+        "quality": "high",
+        "shiny": false,
+        "moves": { "move1": "Pyro Ball", "move2": "High Jump Kick", "move3": "Bounce", "move4": "Sucker Punch" },
+        "mechanic": "dynamax"
+      }
+    }
+  },
+  "world_state": {
+    "location": {    // 更新坐标定位
+        "x": 2, 
+        "y": 1 
+    },
+    "time": { 
+       "day_advance": "skip_to_night" // 或者复合指令 "2days_evening"
+    },
+    "npcs": {
+      "iono": { "love_up": 3 }
+    }
+  }
+}
+</VariableEdit>
+</variable_rule>

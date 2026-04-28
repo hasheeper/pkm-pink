@@ -682,9 +682,57 @@ function getParentWindow() {
     }
 }
 
+function getPkmBridgePayload(eventData) {
+    if (!eventData || !eventData.type) return null;
+    if (eventData.type === 'PKM_STATE_PUSH') {
+        return eventData.legacy || eventData.data || null;
+    }
+    if (eventData.type === 'PKM_ERA_DATA' || eventData.type === 'PKM_REFRESH') {
+        return eventData.data || null;
+    }
+    return null;
+}
+
+function applyPkmBridgeData(payload, reason = 'message') {
+    if (!payload || !payload.player) return false;
+    db = payload;
+    window.eraData = db;
+    window.pkmBridgeData = payload;
+    console.log('[PKM] ✓ 桥接数据已更新', reason, db.player?.name);
+    return true;
+}
+
+function notifyPkmBridgeReady() {
+    const message = {
+        type: 'PKM_READY',
+        product: 'universal',
+        target: 'dashboard-universal'
+    };
+    try {
+        window.parent?.postMessage(message, '*');
+    } catch (e) {}
+    try {
+        window.top?.postMessage(message, '*');
+    } catch (e) {}
+}
+
 // ========== 监听来自酒馆的 postMessage ==========
 window.addEventListener('message', function(event) {
     if (!event.data || !event.data.type) return;
+
+    const bridgePayload = getPkmBridgePayload(event.data);
+    if (bridgePayload && applyPkmBridgeData(bridgePayload, event.data.type)) {
+        if (event.data.type === 'PKM_REFRESH' || event.data.type === 'PKM_STATE_PUSH') {
+            handleRefreshDebounced(event.data);
+        } else {
+            if (typeof ensureSettingsDefaults === 'function') ensureSettingsDefaults();
+            if (typeof renderDashboard === 'function') renderDashboard();
+            if (typeof renderPartyList === 'function') renderPartyList();
+            if (typeof renderSettings === 'function') renderSettings();
+            if (typeof renderBoxPage === 'function') renderBoxPage();
+        }
+        return;
+    }
     
     if (event.data.type === 'PKM_ERA_DATA') {
         console.log('[PKM] 收到 ERA 数据 (postMessage)');
@@ -743,6 +791,31 @@ function loadEraData() {
         console.log('[PKM] ✓ ERA 数据加载成功', db.player?.name);
         return true;
     } else {
+        console.warn('[PKM] 桥接数据暂未到达，使用空白占位并请求状态推送');
+        notifyPkmBridgeReady();
+        db = {
+            player: {
+                name: 'Trainer',
+                bonds: {},
+                unlocks: {},
+                party: {
+                    slot1: { slot: 1, name: null },
+                    slot2: { slot: 2, name: null },
+                    slot3: { slot: 3, name: null },
+                    slot4: { slot: 4, name: null },
+                    slot5: { slot: 5, name: null },
+                    slot6: { slot: 6, name: null }
+                },
+                box: {}
+            },
+            world_state: {
+                location: { x: 1, y: 1 },
+                time: { period: 'morning' },
+                npcs: {}
+            },
+            settings: {}
+        };
+        return false;
         console.warn('[PKM] ERA 数据为空，使用测试数据');
         db = {
             player: {
@@ -850,6 +923,9 @@ function loadEraData() {
    ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
+    notifyPkmBridgeReady();
+    setTimeout(notifyPkmBridgeReady, 250);
+    setTimeout(notifyPkmBridgeReady, 1000);
 });
 
 function initApp() {
@@ -2331,4 +2407,3 @@ window.handleTileClick = function(tileId) {
         openAppPage(targetPage);
     }
 };
-

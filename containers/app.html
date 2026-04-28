@@ -48,18 +48,21 @@
 
     <script>
         (async function() {
-            const hash = location.hash.slice(1);
-            const params = new URLSearchParams(hash);
-            const appId = params.get('app');
-            const target = params.get('target');
-            const profile = params.get('profile');
+            const queryParams = new URLSearchParams(location.search);
+            const hashParams = new URLSearchParams(location.hash.slice(1));
+            const getParam = (name) => queryParams.get(name) || hashParams.get(name);
+            const appId = getParam('app');
+            const target = getParam('target');
+            const profile = getParam('profile');
 
             const frame = document.getElementById('app-frame');
             const loading = document.getElementById('loading');
             const errorMsg = document.getElementById('error-msg');
 
             try {
-                const res = await fetch('../registry/apps.json');
+                const registryUrl = new URL('../registry/apps.json', location.href);
+                const appRootUrl = new URL('../', registryUrl);
+                const res = await fetch(registryUrl);
                 if (!res.ok) throw new Error('Failed to load registry');
                 const registry = await res.json();
 
@@ -84,7 +87,7 @@
                     throw new Error(`No entry or container defined for ${app.id}`);
                 }
 
-                frame.src = src;
+                frame.src = new URL(src.replace(/^\.\//, ''), appRootUrl).href;
                 loading.style.display = 'none';
 
                 // Post-message bridge placeholder for future Tavern integration

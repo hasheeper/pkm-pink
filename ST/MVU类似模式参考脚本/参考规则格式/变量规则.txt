@@ -1,0 +1,162 @@
+<variable_rule>
+ACE0 MVU 变量规则
+仅输出本轮真实变化；禁止整段覆写。
+
+允许更新的路径
+- `/hero/funds`
+- `/world/current_time/day`
+- `/world/current_time/phase`
+- `/world/location/layer`
+- `/world/location/site`
+- `/world/event_log/-`
+- `/world/activity_log/-`
+- `/hero/cast/<角色名>/introduced`
+- `/hero/cast/<角色名>/present`
+- `/hero/cast/<角色名>/inParty`
+- `/hero/roster/<角色名>/level`
+- `/hero/roster/<角色名>/mana`
+- `/hero/roster/<角色名>/maxMana`
+- `/hero/relationship/<角色名>/entanglement`
+- `/hero/relationship/<角色名>/exclusive`
+
+操作约定
+- `delta`: 仅用于数字增减。适用：`/hero/funds`、`/hero/relationship/*`
+- `replace`: 仅用于直接写结果值。适用：时间、地区、布尔值、level、mana、maxMana
+- `add`: 仅用于数组尾部追加。适用：`/world/event_log/-`、`/world/activity_log/-`
+- 不使用整段对象覆写，不新增未声明路径
+- 关系第二字段统一写 `/exclusive`
+- `reversal / ownership / parasitism / indebtedness / takeover / entrustment / retention / coverup / fixation` 都只是显示名，不是变量路径
+
+字段约束:
+  hero.funds:
+    type: number
+    check:
+      - 仅用 `delta`！
+      - 单位统一为金弗（可带 2 位小数）
+      - 正数=收入，负数=支出
+      - 最多保留 2 位小数
+      - 不重复记账
+      - 无金额变化则不写
+  hero.roster.${角色名}.level:
+    type: number
+    range: 0~5
+    check:
+      - 仅在升级/降级时更新
+  hero.roster.${角色名}.mana:
+    type: number
+    check:
+      - 仅写消耗/恢复后的结果值
+  hero.roster.${角色名}.maxMana:
+    type: number
+    check:
+      - 仅在上限变化时更新
+  world.current_time.day:
+    type: number
+    check:
+      - 仅在明确跨日时更新
+  world.current_time.phase:
+    type: enum
+    allowed: MORNING / NOON / AFTERNOON / NIGHT
+    check:
+      - 仅在明确推进时更新
+  world.location.layer:
+    type: enum
+    allowed: THE_COURT / THE_EXCHANGE / THE_STREET / THE_RUST
+    check:
+      - 仅在明确跨层时更新
+      - 跨层时优先同步更新 `site`
+      - 正文体现环境落差即可
+  world.location.site:
+    type: string
+    check:
+      - 仅在明确换场时更新
+      - 写当前镜头场所
+      - 同层换景通常只改 `site`
+  world.event_log[-]:
+    type: object
+    check:
+      - 可写新增玩家事件，也可写新增世界事件
+      - 普通对话、轻微情绪变化、琐碎动作不写
+      - `summary` 只写一条事件摘要，简洁具体
+      - `source` 仅可写 `player / world`
+      - `priority` 仅可写 `anchor / major / minor / ambient`
+      - `tags` 可选；若写，只写简短稳定标签，例如 `main / exchange / rumor / dlc-price-breach`
+      - `id` 建议留空，由后台补；若写则必须唯一
+      - 同一事件不重复新增
+      - append-only
+      - 第一版不写 `kind / weight / sticky / reactions`
+  world.activity_log[-]:
+    type: object
+    check:
+      - `actor` 用角色大写标识
+      - `kind` 仅可写 `routine / reaction / track`
+      - `priority` 仅可写 `major / minor / dormant`
+      - `summary` 写近期轨迹；`hook` 写近期切入口
+      - 明线：事件相关角色真的动起来时才写
+      - 暗线：时间推进时最多补 0~1 条重要 OFFSTAGE / NOT INTRODUCED 轨迹
+      - 同一事件不重复给同一角色写同类 `reaction`
+      - 同角色同日同时段同 `kind` 视为同一条轨迹
+      - 后台按 `actor + day + phase + kind` 归并
+  hero.cast.${角色名}.introduced:
+    type: boolean
+    check:
+      - 仅在正式认识/入场时设为 true
+  hero.cast.${角色名}.present:
+    type: boolean
+    check:
+      - 仅在当前同场、同镜头、可直接动作/对话(包括远程通话等)时设为 true
+      - 离场、切场、未同行、仅剩远程影响时设为 false
+      - 正文直接出场/发言时同步更新
+  hero.cast.${角色名}.inParty:
+    type: boolean
+    check:
+      - 仅在正式同行/入队时设为 true
+  hero.relationship.${角色名}.entanglement:
+    type: number
+    range: 0~100
+    check:
+      - 仅在可观察变化时更新
+      - 优先用 `delta`
+      - 非纠偏不要用 `replace`
+      - 数值必须与事件强度匹配
+  hero.relationship.${角色名}.exclusive:
+    type: number
+    range: 0~100
+    check:
+      - 仅在专属关系结构变化时更新
+      - 优先用 `delta`
+      - 非纠偏不要用 `replace`
+      - 路径始终写 `exclusive`
+
+输出要求:
+- 末尾输出 `<UpdateVariable>`
+- 无变化则不输出
+- 使用 JSONPatch
+
+参考格式:
+```xml
+<UpdateVariable>
+<Analysis>short summary in English</Analysis>
+<JSONPatch>
+[
+  { "op": "replace/delta/add", "path": "/path", "value": "..." },
+  { "op": "replace/delta/add", "path": "/path", "value": 1 },
+  {
+    "op": "add",
+    "path": "/world/event_log/-",
+    "value": {
+      "id": "",
+      "day": 12,
+      "phase": "NIGHT",
+      "source": "player",
+      "summary": "Kazu 在下街公开了零号异常的部分信息。",
+      "priority": "major",
+      "tags": ["main", "exchange", "rumor"]
+    }
+  }
+  ……………………
+]
+</JSONPatch>
+</UpdateVariable>
+```
+</variable_rule>
