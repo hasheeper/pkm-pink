@@ -732,13 +732,16 @@ window.addEventListener('message', function(event) {
     const bridgePayload = getPkmBridgePayload(event.data);
     if (bridgePayload && applyPkmBridgeData(bridgePayload, event.data.type)) {
         const payloadKey = JSON.stringify({
-            type: event.data.type,
             player: bridgePayload.player?.name,
             slot1: bridgePayload.player?.party?.slot1?.name,
-            boxCount: Object.keys(bridgePayload.player?.box || {}).length
+            party: Object.values(bridgePayload.player?.party || {}).map((pokemon) => pokemon?.name || null),
+            boxCount: Object.keys(bridgePayload.player?.box || {}).length,
+            settings: bridgePayload.settings || bridgePayload.player?.settings || {},
+            world: bridgePayload.world_state || bridgePayload.world || {}
         });
         const now = Date.now();
-        if (payloadKey === lastBridgePayloadKey && now - lastBridgePayloadAt < 500) {
+        if (payloadKey === lastBridgePayloadKey && now - lastBridgePayloadAt < 1500) {
+            console.log('[PKM] 跳过重复桥接刷新', event.data.type);
             return;
         }
         lastBridgePayloadKey = payloadKey;

@@ -25,6 +25,8 @@
   let actionLock = false;
   let dashboardWindow = null;
   const messageTargets = [];
+  const pushDedupState = ROOT.__PKM_MVUZ_PUSH_DEDUP__ || { key: '', at: 0, inFlight: false };
+  ROOT.__PKM_MVUZ_PUSH_DEDUP__ = pushDedupState;
 
   function handleLocalStateChanged() {
     scheduleRefresh('stateChanged');
@@ -162,9 +164,30 @@
   }
 
   async function pushDashboardState(reason = 'refresh') {
+    if (pushDedupState.inFlight) {
+      console.log(`${PLUGIN_NAME} skip dashboard push while another push is in flight`, { reason });
+      return false;
+    }
+    pushDedupState.inFlight = true;
     const state = await loadMvuzState();
-    if (!state) return;
+    if (!state) {
+      pushDedupState.inFlight = false;
+      return false;
+    }
     const legacy = stateToLegacyDashboard(state);
+    const payloadKey = JSON.stringify({
+      player: legacy?.player?.name,
+      party: Object.values(legacy?.player?.party || {}).map((pokemon) => pokemon?.name || null),
+      boxCount: Object.keys(legacy?.player?.box || {}).length,
+      settings: legacy?.settings || legacy?.player?.settings || {},
+      world: legacy?.world_state || legacy?.world || {}
+    });
+    const now = Date.now();
+    if (payloadKey === pushDedupState.key && now - pushDedupState.at < 1500) {
+      pushDedupState.inFlight = false;
+      console.log(`${PLUGIN_NAME} skip duplicate dashboard state`, { reason });
+      return false;
+    }
 
     const pushedState = postToIframe({
       type: 'PKM_STATE_PUSH',
@@ -181,6 +204,12 @@
       player: legacy?.player?.name,
       slot1: legacy?.player?.party?.slot1?.name || null
     });
+    if (pushedState) {
+      pushDedupState.key = payloadKey;
+      pushDedupState.at = now;
+    }
+    pushDedupState.inFlight = false;
+    return pushedState;
   }
 
   function scheduleRefresh(reason = 'refresh') {

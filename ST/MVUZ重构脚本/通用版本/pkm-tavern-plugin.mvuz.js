@@ -456,6 +456,13 @@
     return normalizeMoves(moves).map((move, index) => `move${index + 1}: ${move || '-'}`).join(' | ');
   }
 
+  function formatIvsDisplay(ivs) {
+    const src = isObject(ivs) ? ivs : {};
+    return ['hp', 'atk', 'def', 'spa', 'spd', 'spe']
+      .map((key) => `${key.toUpperCase()}:${src[key] ?? '?'}`)
+      .join('/');
+  }
+
   function buildPlayerPrompt(state) {
     const filledSlots = state.party.slots.filter((pokemon) => pokemon?.name);
     if (!filledSlots.length) return null;
@@ -480,19 +487,29 @@
       const nature = pokemon.nature || '???';
       const ability = pokemon.ability || '???';
       const ev = pokemon.stats_meta?.ev_level ?? 0;
+      const ivs = formatIvsDisplay(pokemon.stats_meta?.ivs);
       const bonds = pokemon.bonds ?? 0;
       return `slot${slot}. ${formatGender(pokemon.gender)} ${name} (Lv.${lv})${lead}
    [Nature: ${nature}] [Ability: ${ability}]
-   [EVs: ${ev}] [Bonds: ${bonds}]
+   [Stats: ${ivs}] [EVs: ${ev}] [Bonds: ${bonds}]
    Moves: ${formatMoves(pokemon.moves)}`;
     }).join('\n\n');
 
     const boxCount = (state.box.boxes || []).reduce((sum, box) => sum + (box.slots?.length || 0), 0);
+    const boxNames = (state.box.boxes || [])
+      .flatMap((box) => box.slots || [])
+      .filter((pokemon) => pokemon?.name)
+      .slice(0, 12)
+      .map((pokemon) => `${pokemon.nickname || pokemon.name}/Lv.${pokemon.lv ?? pokemon.level ?? '??'}`);
+    const boxSection = boxNames.length
+      ? `\nBox: ${boxNames.join(' | ')}${boxCount > boxNames.length ? ` | +${boxCount - boxNames.length} more` : ''}\n`
+      : '';
     return `<pkm_team_summary>
 Player: ${state.player.name} | Proficiency: ${state.player.proficiency} | Unlocks: [${unlockLabels.join('/') || 'none'}] | Party: ${filledSlots.length}/6 | Box: ${boxCount}
 --------------------------------------------------
 ${lines}
 --------------------------------------------------
+${boxSection}
 Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is authoritative.
 </pkm_team_summary>`;
   }
@@ -550,20 +567,185 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     if (!candidate) return null;
     try {
       const parsed = JSON.parse(stripJsonComments(candidate));
-      if (parsed.player || parsed.enemy) return parsed;
-      if (parsed.p1 || parsed.p2) {
-        return {
-          ...parsed,
-          player: parsed.p1 || parsed.player,
-          enemy: parsed.p2 || parsed.enemy,
-          battle_type: parsed.battle_type || 'double'
-        };
-      }
-      return parsed;
+      return normalizeBattleInput(parsed);
     } catch (error) {
       console.error(`${PLUGIN_NAME} failed to parse ${BATTLE_TAG}:`, error);
       return null;
     }
+  }
+
+  function mergeUnlocks(...unlocksList) {
+    const merged = { ...DEFAULT_UNLOCKS };
+    for (const unlocks of unlocksList) {
+      if (!isObject(unlocks)) continue;
+      for (const key of Object.keys(merged)) {
+        if (unlocks[key] === true) merged[key] = true;
+      }
+    }
+    return merged;
+  }
+
+  function detectUnlocksFromParty(party) {
+    const detected = {
+      enable_mega: false,
+      enable_z_move: false,
+      enable_dynamax: false,
+      enable_tera: false
+    };
+    if (!Array.isArray(party)) return detected;
+    for (const pokemon of party) {
+      const mechanic = String(pokemon?.mechanic || '').toLowerCase();
+      if (mechanic === 'mega') detected.enable_mega = true;
+      if (mechanic === 'z_move' || mechanic === 'zmove' || mechanic === 'z') detected.enable_z_move = true;
+      if (mechanic === 'dynamax' || mechanic === 'gmax') detected.enable_dynamax = true;
+      if (mechanic === 'tera') detected.enable_tera = true;
+    }
+    return detected;
+  }
+
+  function isPlayerEntrantName(name) {
+    const text = String(name || '').trim().toLowerCase();
+    if (!text) return false;
+    return ['player', 'user', '{{user}}', '<user>', '玩家', '主角'].some((keyword) => text.includes(keyword));
+  }
+
+  function detectBattleEntrantType(entrant) {
+    const explicit = String(entrant?.type || '').toLowerCase();
+    if (explicit === 'wild' || explicit === 'pokemon') return 'wild';
+    if (explicit === 'player' || isPlayerEntrantName(entrant?.name)) return 'player';
+    if (explicit === 'db_trainer') return 'db_trainer';
+    return explicit || 'generated_trainer';
+  }
+
+  function normalizeBattlePartyEntry(entry, tier) {
+    if (typeof entry === 'string') {
+      return { name: entry.trim(), _needGenerate: true, _tier: tier };
+    }
+    if (!isObject(entry)) return null;
+    const normalized = normalizePokemon(entry, null);
+    if (!normalized?.name) return null;
+    delete normalized.slot;
+    normalized._needGenerate = entry._needGenerate !== false;
+    normalized._tier = entry._tier || tier;
+    return normalized;
+  }
+
+  function processBattleEntrant(entrant, defaultTier = 2) {
+    const src = isObject(entrant) ? entrant : { name: String(entrant || '') };
+    const name = normalizeString(src.name, 'Unknown');
+    const tier = src.tier || defaultTier;
+    const trainerType = detectBattleEntrantType(src);
+    const party = Array.isArray(src.party)
+      ? src.party.map((pokemon) => normalizeBattlePartyEntry(pokemon, tier)).filter(Boolean)
+      : [];
+    const unlocks = mergeUnlocks(src.unlocks, detectUnlocksFromParty(party));
+
+    return {
+      name,
+      party,
+      trainerType,
+      isPlayer: trainerType === 'player' || isPlayerEntrantName(name),
+      tier,
+      trainerProficiency: clampNumber(src.trainerProficiency ?? src.proficiency, 0, 255, 0),
+      unlocks,
+      lines: src.lines || null
+    };
+  }
+
+  function mergeTrainerParties(trainersData) {
+    const allParty = [];
+    const trainerMetadata = [];
+    const names = [];
+
+    trainersData.forEach((trainer) => {
+      names.push(trainer.name);
+      (trainer.party || []).forEach((pokemon) => {
+        allParty.push(isObject(pokemon) ? { ...pokemon, trainer: pokemon.trainer || trainer.name } : pokemon);
+        trainerMetadata.push(trainer.name);
+      });
+    });
+
+    if (allParty.length > MAX_PARTY_SIZE) {
+      const indices = allParty.map((_, index) => index);
+      for (let i = indices.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indices[i], indices[j]] = [indices[j], indices[i]];
+      }
+      const keepIndices = indices.slice(0, MAX_PARTY_SIZE).sort((a, b) => a - b);
+      return {
+        party: keepIndices.map((index) => allParty[index]),
+        trainerMetadata: keepIndices.map((index) => trainerMetadata[index]),
+        names: names.join(' & ')
+      };
+    }
+
+    return { party: allParty, trainerMetadata, names: names.join(' & ') };
+  }
+
+  function normalizeBattleInput(battleData) {
+    if (!isObject(battleData)) return {};
+    if (!battleData.p1 && !battleData.p2) return battleData;
+
+    const normalized = {
+      ...battleData,
+      difficulty: battleData.difficulty || 'normal',
+      battle_type: battleData.battle_type || 'double'
+    };
+    const defaultTier = battleData.tier || 2;
+
+    if (battleData.p1 && !battleData.player) {
+      const p1Entrants = battleData.p1.entrants || battleData.p1.trainers;
+      if (Array.isArray(p1Entrants)) {
+        const trainersData = p1Entrants.map((trainer) => processBattleEntrant(trainer, defaultTier));
+        const merged = mergeTrainerParties(trainersData);
+        normalized.player = {
+          ...battleData.p1,
+          name: merged.names,
+          party: merged.party,
+          _trainerMetadata: merged.trainerMetadata,
+          _trainersData: trainersData,
+          _usesCurrentPlayerParty: trainersData.some((trainer) => trainer.isPlayer),
+          trainerProficiency: Math.max(0, ...trainersData.map((trainer) => trainer.trainerProficiency || 0)),
+          unlocks: battleData.p1.unlocks || mergeUnlocks(...trainersData.map((trainer) => trainer.unlocks))
+        };
+      } else {
+        normalized.player = battleData.p1;
+      }
+    }
+
+    if (battleData.p2 && !battleData.enemy) {
+      const p2Entrants = battleData.p2.entrants || battleData.p2.trainers;
+      if (Array.isArray(p2Entrants)) {
+        const trainersData = p2Entrants.map((trainer) => processBattleEntrant(trainer, defaultTier));
+        const merged = mergeTrainerParties(trainersData);
+        const firstWithLines = trainersData.find((trainer) => trainer.lines);
+        normalized.enemy = {
+          ...battleData.p2,
+          type: trainersData.some((trainer) => trainer.trainerType === 'wild') ? 'wild' : 'trainer',
+          name: merged.names,
+          party: merged.party,
+          _trainerMetadata: merged.trainerMetadata,
+          _trainersData: trainersData,
+          trainerProficiency: Math.max(0, ...trainersData.map((trainer) => trainer.trainerProficiency || 0)),
+          lines: battleData.p2.lines || firstWithLines?.lines || {},
+          unlocks: battleData.p2.unlocks || mergeUnlocks(...trainersData.map((trainer) => trainer.unlocks)),
+          _allDbTrainers: trainersData.every((trainer) => trainer.trainerType === 'db_trainer')
+        };
+      } else {
+        const trainerData = processBattleEntrant(battleData.p2, defaultTier);
+        normalized.enemy = {
+          ...battleData.p2,
+          type: trainerData.trainerType === 'wild' ? 'wild' : 'trainer',
+          name: trainerData.name,
+          party: trainerData.party,
+          trainerProficiency: trainerData.trainerProficiency || 0,
+          lines: battleData.p2.lines || trainerData.lines || {},
+          unlocks: battleData.p2.unlocks || trainerData.unlocks
+        };
+      }
+    }
+
+    return normalized;
   }
 
   function battlePokemonForFrontend(pokemon) {
@@ -572,47 +754,147 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     next.moves = normalizeMoves(next.moves).filter(Boolean);
     delete next['a' + 'vs'];
     delete next['friend' + 'ship'];
+    delete next._needGenerate;
+    delete next._tier;
     return next;
+  }
+
+  function normalizeBattlePartyForFrontend(party, fallbackTier = 2) {
+    if (!Array.isArray(party)) return [];
+    return party
+      .map((pokemon) => battlePokemonForFrontend(normalizeBattlePartyEntry(pokemon, fallbackTier)))
+      .filter(Boolean);
+  }
+
+  function selectCurrentPartyByNames(currentParty, requestedParty) {
+    const names = (Array.isArray(requestedParty) ? requestedParty : [])
+      .map((pokemon) => (typeof pokemon === 'string' ? pokemon : pokemon?.name))
+      .filter(Boolean)
+      .map((name) => String(name).toLowerCase());
+    if (!names.length) return currentParty;
+
+    const selected = [];
+    for (const name of names) {
+      const match = currentParty.find((pokemon) => {
+        const pokemonName = String(pokemon?.name || '').toLowerCase();
+        const species = String(pokemon?.species || '').toLowerCase();
+        return pokemonName === name || species === name || pokemonName.split('-')[0] === name.split('-')[0];
+      });
+      if (match && !selected.includes(match)) selected.push(match);
+    }
+    return selected.length ? selected : currentParty;
+  }
+
+  function trimBattleParty(party) {
+    if (party.length <= MAX_PARTY_SIZE) return party;
+    return party.slice(0, MAX_PARTY_SIZE);
+  }
+
+  function resolvePlayerBattleParty(state, aiPlayer) {
+    const currentParty = state.party.slots
+      .filter((pokemon) => pokemon?.name)
+      .map(battlePokemonForFrontend)
+      .filter(Boolean);
+
+    if (Array.isArray(aiPlayer?._trainersData) && aiPlayer._trainersData.length) {
+      const merged = [];
+      for (const trainer of aiPlayer._trainersData) {
+        if (trainer.isPlayer) {
+          merged.push(...selectCurrentPartyByNames(currentParty, trainer.party));
+        } else {
+          merged.push(...normalizeBattlePartyForFrontend(trainer.party, trainer.tier || 2));
+        }
+      }
+      return trimBattleParty(merged.length ? merged : currentParty);
+    }
+
+    if (Array.isArray(aiPlayer?.party) && aiPlayer.party.length && !isPlayerEntrantName(aiPlayer.name)) {
+      return trimBattleParty(normalizeBattlePartyForFrontend(aiPlayer.party, aiPlayer.tier || 2));
+    }
+
+    return currentParty;
+  }
+
+  function resolveBattleEnvironment(state, battleData) {
+    const aiEnv = isObject(battleData.environment) ? battleData.environment : {};
+    const world = isObject(state.world) ? state.world : {};
+    const location = isObject(world.location) ? world.location : {};
+    const weatherGrid = isObject(world.weatherGrid) ? world.weatherGrid : world.weather_grid;
+
+    let worldWeather = null;
+    let worldSuppression = null;
+    if (isObject(weatherGrid) && typeof location.x === 'number' && typeof location.y === 'number') {
+      const centerX = 26;
+      const centerY = 26;
+      let gx = location.x;
+      if (gx > 0) gx -= 1;
+      gx += centerX;
+      let gy = location.y;
+      if (gy > 0) gy -= 1;
+      gy = centerY - gy - 1;
+      const gridWeather = weatherGrid[`${gx}_${gy}`];
+      if (gridWeather) {
+        worldWeather = gridWeather.weather || null;
+        worldSuppression = gridWeather.suppression || null;
+      }
+    }
+
+    const finalWeather = aiEnv.weather || worldWeather;
+    const finalSuppression = aiEnv.suppression || worldSuppression;
+    if (!finalWeather && !aiEnv.overlay && !finalSuppression) return null;
+
+    return {
+      weather: finalWeather || null,
+      weatherTurns: aiEnv.weatherTurns || 0,
+      ...(aiEnv.overlay ? { overlay: aiEnv.overlay } : {}),
+      ...(finalSuppression ? { suppression: finalSuppression } : {})
+    };
   }
 
   async function buildBattleJson(aiBattleData) {
     const state = await loadState();
-    const aiPlayer = aiBattleData.player || {};
-    const aiEnemy = aiBattleData.enemy || {};
-    const playerParty = state.party.slots.filter((pokemon) => pokemon?.name).map(battlePokemonForFrontend);
-    const enemyPartySource = Array.isArray(aiBattleData.party)
-      ? aiBattleData.party
+    const battleData = normalizeBattleInput(aiBattleData || {});
+    const aiPlayer = battleData.player || {};
+    const aiEnemy = battleData.enemy || {};
+    const playerParty = resolvePlayerBattleParty(state, aiPlayer);
+    const enemyPartySource = Array.isArray(battleData.party)
+      ? battleData.party
       : Array.isArray(aiEnemy.party)
         ? aiEnemy.party
         : [];
 
-    const enemyParty = enemyPartySource
-      .map((pokemon) => battlePokemonForFrontend(normalizePokemon(pokemon, null)))
-      .filter(Boolean);
+    const enemyParty = trimBattleParty(normalizeBattlePartyForFrontend(enemyPartySource, aiEnemy.tier || battleData.tier || 2));
+    const playerUnlocks = mergeUnlocks(
+      state.player.unlocks,
+      aiPlayer.unlocks,
+      detectUnlocksFromParty(playerParty)
+    );
+    const enemyUnlocks = mergeUnlocks(aiEnemy.unlocks, detectUnlocksFromParty(enemyParty));
+    const environment = resolveBattleEnvironment(state, battleData);
 
     return {
-      settings: { ...state.settings, ...(isObject(aiBattleData.settings) ? aiBattleData.settings : {}) },
-      difficulty: aiBattleData.difficulty || aiEnemy.difficulty || 'normal',
+      settings: { ...state.settings, ...(isObject(battleData.settings) ? battleData.settings : {}) },
+      difficulty: battleData.difficulty || aiEnemy.difficulty || 'normal',
       player: {
-        name: aiPlayer.name || state.player.name,
+        name: isPlayerEntrantName(aiPlayer.name) ? state.player.name : (aiPlayer.name || state.player.name),
         trainerProficiency: Math.max(
           clampNumber(aiPlayer.trainerProficiency ?? aiPlayer.proficiency, 0, 255, 0),
           state.player.proficiency
         ),
         party: playerParty,
-        unlocks: { ...DEFAULT_UNLOCKS, ...state.player.unlocks, ...(isObject(aiPlayer.unlocks) ? aiPlayer.unlocks : {}) }
+        unlocks: playerUnlocks
       },
       enemy: {
-        id: aiEnemy.id || aiBattleData.enemy_id || 'generated_enemy',
-        type: aiEnemy.type || aiBattleData.enemy_type || 'generated_trainer',
-        name: aiEnemy.name || aiBattleData.enemy_name || 'Opponent',
+        id: aiEnemy.id || battleData.enemy_id || 'generated_enemy',
+        type: aiEnemy.type || battleData.enemy_type || 'generated_trainer',
+        name: aiEnemy.name || battleData.enemy_name || 'Opponent',
         trainerProficiency: clampNumber(aiEnemy.trainerProficiency, 0, 255, 0),
         lines: aiEnemy.lines || null,
-        unlocks: isObject(aiEnemy.unlocks) ? aiEnemy.unlocks : null
+        unlocks: Object.values(enemyUnlocks).some(Boolean) ? enemyUnlocks : (isObject(aiEnemy.unlocks) ? aiEnemy.unlocks : null)
       },
       party: enemyParty,
-      environment: aiBattleData.environment || null,
-      script: aiBattleData.script || null
+      environment,
+      script: battleData.script || null
     };
   }
 
@@ -725,6 +1007,40 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     getMvuzState: loadState,
     normalizePkmState,
     legacyDashboardShape,
+    async setPlayerParty(mode, input = null) {
+      return patchState((state) => {
+        const source = mode === 'single'
+          ? [{ name: input }]
+          : Array.isArray(input)
+            ? input
+            : [];
+        if (!source.length) return state;
+        state.party.slots = normalizePartySlots(source.slice(0, MAX_PARTY_SIZE));
+        return state;
+      });
+    },
+    async addToParty(pokemon) {
+      return patchState((state) => {
+        const index = state.party.slots.findIndex((slot) => !slot?.name);
+        const normalized = normalizePokemon(pokemon, index >= 0 ? index + 1 : null);
+        if (!normalized?.name) return state;
+        if (index >= 0) {
+          state.party.slots[index] = normalized;
+        } else {
+          state.party.transferBuffer = normalizeTransferBuffer(normalized);
+        }
+        return state;
+      });
+    },
+    async addToReserve(pokemon) {
+      return patchState((state) => {
+        const normalized = normalizeTransferBuffer(pokemon);
+        if (!normalized) return state;
+        if (!state.box.boxes?.length) state.box.boxes = [{ id: 'box_01', name: 'Box 1', slots: [] }];
+        state.box.boxes[0].slots.push(normalized);
+        return state;
+      });
+    },
     async repairPartySlots() {
       const state = await patchState((draft) => {
         draft.party.slots = normalizePartySlots(draft.party.slots);
@@ -776,6 +1092,10 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     ROOT.eventOn('mag_before_message_update', handleBeforeMessageUpdate);
     ROOT.eventOn('character_message_rendered', handleMessageRendered);
     ROOT.eventOn('message_received', (messageId) => setTimeout(() => handleMessageRendered(messageId), 1200));
+    ROOT.eventOn('era:writeDone', (detail) => {
+      const messageId = detail?.message_id ?? (typeof ROOT.getLastMessageId === 'function' ? ROOT.getLastMessageId() : null);
+      setTimeout(() => handleMessageRendered(messageId), 300);
+    });
   }
 
   console.log(`${PLUGIN_NAME} loaded (${VERSION})`);
