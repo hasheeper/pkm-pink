@@ -213,18 +213,11 @@ pkm:
         slots: []
     indexes: {}
   world:
-    location:
-      x: 1
-      y: 1
     time:
       day: 1
       period: morning
       day_advance: null
       period_set: null
-    npcs: {}
-    phenomenon: null
-    weatherGrid: {}
-    pokemonSpawns: {}
   battle:
     lastConfig: null
     lastResult: null

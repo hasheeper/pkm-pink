@@ -1,5 +1,5 @@
 /* ============================================================
-   TRAINER DATABASE (NPC立绘与配置)
+   TRAINER PRESENTATION DATA
    ============================================================ */
 
 /* ============================================================
@@ -791,9 +791,8 @@ function loadBridgeData() {
                 box: {}
             },
             world_state: {
-                location: { x: 1, y: 1 },
+                location: { name: 'Unknown', area: '', description: '' },
                 time: { period: 'morning' },
-                npcs: {}
             },
             settings: {}
         };

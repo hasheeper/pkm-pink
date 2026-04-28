@@ -179,8 +179,7 @@
       player: legacy?.player?.name,
       party: Object.values(legacy?.player?.party || {}).map((pokemon) => pokemon?.name || null),
       boxCount: Object.keys(legacy?.player?.box || {}).length,
-      settings: legacy?.settings || legacy?.player?.settings || {},
-      world: legacy?.world_state || legacy?.world || {}
+      settings: legacy?.settings || legacy?.player?.settings || {}
     });
     const now = Date.now();
     if (payloadKey === pushDedupState.key && now - pushDedupState.at < 1500) {

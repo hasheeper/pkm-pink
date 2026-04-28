@@ -269,7 +269,17 @@
         transferBuffer: normalizeTransferBuffer(transferSource)
       },
       box: normalizeBox(boxSource),
-      world: isObject(src.world) ? clone(src.world, {}) : clone(src.world_state, {}),
+      world: (() => {
+        const ws = isObject(src.world) ? src.world : (isObject(src.world_state) ? src.world_state : {});
+        return {
+          time: {
+            day: clampNumber(ws.time?.day, 1, 99999, 1),
+            period: normalizeString(ws.time?.period, 'morning'),
+            day_advance: ws.time?.day_advance || null,
+            period_set: ws.time?.period_set || null
+          }
+        };
+      })(),
       battle: isObject(src.battle) ? clone(src.battle, {}) : {
         lastConfig: null,
         lastResult: null,
@@ -465,7 +475,6 @@
 
   function buildPlayerPrompt(state) {
     const filledSlots = state.party.slots.filter((pokemon) => pokemon?.name);
-    if (!filledSlots.length) return null;
 
     const unlocks = state.player.unlocks || {};
     const unlockLabels = [];
@@ -477,6 +486,18 @@
     if (unlocks.enable_styles) unlockLabels.push('Style');
     if (unlocks.enable_insight) unlockLabels.push('Insight');
     if (unlocks.enable_proficiency_cap) unlockLabels.push('ProfCap');
+
+    const boxCount = (state.box.boxes || []).reduce((sum, box) => sum + (box.slots?.length || 0), 0);
+
+    if (!filledSlots.length) {
+      return `<pkm_team_summary>
+Player: ${state.player.name} | Proficiency: ${state.player.proficiency} | Unlocks: [${unlockLabels.join('/') || 'none'}] | Party: 0/6 | Box: ${boxCount}
+--------------------------------------------------
+The player currently has no Pokémon in their party.
+--------------------------------------------------
+Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is authoritative.
+</pkm_team_summary>`;
+    }
 
     const lines = state.party.slots.map((pokemon, index) => {
       const slot = index + 1;
@@ -495,7 +516,6 @@
    Moves: ${formatMoves(pokemon.moves)}`;
     }).join('\n\n');
 
-    const boxCount = (state.box.boxes || []).reduce((sum, box) => sum + (box.slots?.length || 0), 0);
     const boxNames = (state.box.boxes || [])
       .flatMap((box) => box.slots || [])
       .filter((pokemon) => pokemon?.name)
@@ -515,10 +535,29 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
   }
 
   async function handleGenerationBefore(detail) {
-    if (detail?.dryRun) return;
-    const state = await loadState();
+    console.log(`${PLUGIN_NAME} handleGenerationBefore fired`, { dryRun: detail?.dryRun });
+    if (detail?.dryRun) {
+      console.log(`${PLUGIN_NAME} dryRun=true, skip injection`);
+      return;
+    }
+    let state;
+    try {
+      state = await loadState();
+    } catch (e) {
+      console.error(`${PLUGIN_NAME} loadState failed in handleGenerationBefore`, e);
+      return;
+    }
+    console.log(`${PLUGIN_NAME} loadState ok, party names:`, state?.party?.slots?.map((p) => p?.name || null));
     const promptContent = buildPlayerPrompt(state);
-    if (!promptContent || typeof ROOT.injectPrompts !== 'function') return;
+    console.log(`${PLUGIN_NAME} buildPlayerPrompt returned length=${promptContent?.length}, type=${typeof promptContent}, injectFn=${typeof ROOT.injectPrompts}`);
+    if (!promptContent) {
+      console.warn(`${PLUGIN_NAME} promptContent is empty, abort injection`);
+      return;
+    }
+    if (typeof ROOT.injectPrompts !== 'function') {
+      console.warn(`${PLUGIN_NAME} ROOT.injectPrompts unavailable, abort injection`);
+      return;
+    }
     try {
       if (typeof ROOT.uninjectPrompts === 'function') ROOT.uninjectPrompts([INJECT_ID]);
     } catch (_) {}
@@ -530,7 +569,7 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
       should_scan: false,
       content: promptContent
     }]);
-    console.log(`${PLUGIN_NAME} player prompt injected`);
+    console.log(`${PLUGIN_NAME} player prompt injected, length=${promptContent.length}`);
   }
 
   function stripJsonComments(jsonStr) {
@@ -816,35 +855,14 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
   }
 
   function resolveBattleEnvironment(state, battleData) {
+    // Universal 版没有地图/天气系统，战斗环境完全由 AI 在 <PKM_BATTLE> 中自配置
     const aiEnv = isObject(battleData.environment) ? battleData.environment : {};
-    const world = isObject(state.world) ? state.world : {};
-    const location = isObject(world.location) ? world.location : {};
-    const weatherGrid = isObject(world.weatherGrid) ? world.weatherGrid : world.weather_grid;
-
-    let worldWeather = null;
-    let worldSuppression = null;
-    if (isObject(weatherGrid) && typeof location.x === 'number' && typeof location.y === 'number') {
-      const centerX = 26;
-      const centerY = 26;
-      let gx = location.x;
-      if (gx > 0) gx -= 1;
-      gx += centerX;
-      let gy = location.y;
-      if (gy > 0) gy -= 1;
-      gy = centerY - gy - 1;
-      const gridWeather = weatherGrid[`${gx}_${gy}`];
-      if (gridWeather) {
-        worldWeather = gridWeather.weather || null;
-        worldSuppression = gridWeather.suppression || null;
-      }
-    }
-
-    const finalWeather = aiEnv.weather || worldWeather;
-    const finalSuppression = aiEnv.suppression || worldSuppression;
+    const finalWeather = aiEnv.weather || null;
+    const finalSuppression = aiEnv.suppression || null;
     if (!finalWeather && !aiEnv.overlay && !finalSuppression) return null;
 
     return {
-      weather: finalWeather || null,
+      weather: finalWeather,
       weatherTurns: aiEnv.weatherTurns || 0,
       ...(aiEnv.overlay ? { overlay: aiEnv.overlay } : {}),
       ...(finalSuppression ? { suppression: finalSuppression } : {})

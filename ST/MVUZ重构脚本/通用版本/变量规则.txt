@@ -25,11 +25,8 @@ PKM PINK Universal MVUZ 变量规则
 - `/pkm/party/slots/<0-5>/bonds`
 - `/pkm/party/transferBuffer`
 - `/pkm/box/boxes/0/slots/-`
-- `/pkm/world/location/x`
-- `/pkm/world/location/y`
 - `/pkm/world/time/day_advance`
 - `/pkm/world/time/period_set`
-- `/pkm/world/npcs/<npc_id>/love_up`
 - `/pkm/settings/enableAVS`
 - `/pkm/settings/enableCommander`
 - `/pkm/settings/enableEVO`
@@ -39,8 +36,8 @@ PKM PINK Universal MVUZ 变量规则
 - `/pkm/settings/enableEnvironment`
 
 操作约定
-- `replace`: 写入最终值；用于名字、等级、道具、机制、设置、位置、时间指令、首发状态。
-- `delta`: 仅用于数字增减；优先用于 `/pkm/player/proficiency`、`/pkm/party/slots/*/stats_meta/ev_level`、`/pkm/party/slots/*/bonds`、`/pkm/world/npcs/*/love_up`。
+- `replace`: 写入最终值；用于名字、等级、道具、机制、设置、地点摘要、时间指令、首发状态。
+- `delta`: 仅用于数字增减；优先用于 `/pkm/player/proficiency`、`/pkm/party/slots/*/stats_meta/ev_level`、`/pkm/party/slots/*/bonds`。
 - `add`: 仅用于数组尾部追加；适用 `/pkm/box/boxes/0/slots/-`。队伍空槽新增通常用 `replace` 写整个槽位对象。
 - 不新增未声明路径，不整段替换 `/pkm`、`/pkm/player`、`/pkm/party`、`/pkm/world`。
 - 无变量变化则不输出 `<UpdateVariable>`。
@@ -81,15 +78,10 @@ PKM PINK Universal MVUZ 变量规则
 - 获得 Mega 石/Z 晶/太晶能力: 写 `item`、`mechanic`、必要时写 `teraType`。
 
 世界状态
-- 位置坐标:
-  - `/pkm/world/location/x`: 东为正，西为负。
-  - `/pkm/world/location/y`: 北为正，南为负。
-  - 徒步小幅增减；快速旅行直接写目的地坐标。
+- Universal 没有坐标系统、没有地图、没有天气、没有 NPC 好感系统。
 - 时间:
   - `/pkm/world/time/day_advance`: `"next_period"`、`"nextday"`、`"skip_to_night"`、`"3days_morning"` 等。
   - `/pkm/world/time/period_set`: `dawn / morning / noon / afternoon / evening / night / midnight`。
-- NPC:
-  - `/pkm/world/npcs/<npc_id>/love_up` 使用小写 npc_id，数值为本轮增量。
 
 训练家熟练度
 - 写 `/pkm/player/proficiency`，使用 `delta`。
@@ -120,10 +112,7 @@ PKM PINK Universal MVUZ 变量规则
   { "op": "replace", "path": "/pkm/party/slots/0/mechanic", "value": "mega" },
   { "op": "replace", "path": "/pkm/party/slots/1/mechanic", "value": "tera" },
   { "op": "replace", "path": "/pkm/party/slots/1/teraType", "value": "Flying" },
-  { "op": "replace", "path": "/pkm/world/location/x", "value": 2 },
-  { "op": "replace", "path": "/pkm/world/location/y", "value": 1 },
-  { "op": "replace", "path": "/pkm/world/time/day_advance", "value": "skip_to_night" },
-  { "op": "delta", "path": "/pkm/world/npcs/iono/love_up", "value": 3 }
+  { "op": "replace", "path": "/pkm/world/time/day_advance", "value": "skip_to_night" }
 ]
 </JSONPatch>
 </UpdateVariable>
