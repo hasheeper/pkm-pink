@@ -175,14 +175,9 @@
       legacy
     });
 
-    const pushedLegacy = postToIframe({
-      type: reason === 'initial' ? 'PKM_ERA_DATA' : 'PKM_REFRESH',
-      data: legacy
-    });
     console.log(`${PLUGIN_NAME} pushed dashboard state`, {
       reason,
       pushedState,
-      pushedLegacy,
       player: legacy?.player?.name,
       slot1: legacy?.player?.party?.slot1?.name || null
     });
@@ -194,13 +189,6 @@
       refreshTimer = null;
       pushDashboardState(reason);
     }, 120);
-  }
-
-  function burstPushDashboardState(reason = 'burst') {
-    pushDashboardState(reason);
-    [100, 250, 500, 1000, 2000, 4000].forEach((delay) => {
-      setTimeout(() => pushDashboardState(reason), delay);
-    });
   }
 
   async function dispatchAction(action, payload = {}) {
@@ -291,7 +279,6 @@
         dashboardWindow = event.source;
       }
       pushDashboardState('initial');
-      setTimeout(() => pushDashboardState('initial'), 250);
       return;
     }
     if (data.type === 'PKM_REQUEST_STATE') {
@@ -484,11 +471,10 @@
 
     ball.on('click', () => {
       overlay.css('display', 'flex');
-      burstPushDashboardState('open');
       if (!iframeInitialized) {
         iframe.on('load', () => {
           iframeInitialized = true;
-          burstPushDashboardState('initial');
+          pushDashboardState('initial');
           try {
             const iframeWindow = iframe[0]?.contentWindow;
             if (iframeWindow) {
@@ -501,7 +487,7 @@
         });
         iframe.attr('src', PKM_URL);
       } else {
-        burstPushDashboardState('open');
+        pushDashboardState('open');
       }
     });
 

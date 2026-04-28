@@ -720,6 +720,9 @@ function notifyPkmBridgeReady() {
 }
 
 // ========== 监听来自酒馆的 postMessage ==========
+let lastBridgePayloadKey = '';
+let lastBridgePayloadAt = 0;
+
 window.addEventListener('message', function(event) {
     if (!event.data || !event.data.type) return;
     if (String(event.data.type).startsWith('PKM_')) {
@@ -728,15 +731,19 @@ window.addEventListener('message', function(event) {
 
     const bridgePayload = getPkmBridgePayload(event.data);
     if (bridgePayload && applyPkmBridgeData(bridgePayload, event.data.type)) {
-        if (event.data.type === 'PKM_REFRESH' || event.data.type === 'PKM_STATE_PUSH') {
-            handleRefreshDebounced(event.data);
-        } else {
-            if (typeof ensureSettingsDefaults === 'function') ensureSettingsDefaults();
-            if (typeof renderDashboard === 'function') renderDashboard();
-            if (typeof renderPartyList === 'function') renderPartyList();
-            if (typeof renderSettings === 'function') renderSettings();
-            if (typeof renderBoxPage === 'function') renderBoxPage();
+        const payloadKey = JSON.stringify({
+            type: event.data.type,
+            player: bridgePayload.player?.name,
+            slot1: bridgePayload.player?.party?.slot1?.name,
+            boxCount: Object.keys(bridgePayload.player?.box || {}).length
+        });
+        const now = Date.now();
+        if (payloadKey === lastBridgePayloadKey && now - lastBridgePayloadAt < 500) {
+            return;
         }
+        lastBridgePayloadKey = payloadKey;
+        lastBridgePayloadAt = now;
+        handleRefreshDebounced(event.data);
         return;
     }
     
