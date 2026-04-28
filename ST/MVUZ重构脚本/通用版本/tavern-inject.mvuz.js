@@ -12,7 +12,7 @@
 
   const ROOT = typeof window !== 'undefined' ? window : globalThis;
   const PLUGIN_NAME = '[PKM Universal Dashboard MVUZ]';
-  const PKM_URL = 'https://hasheeper.github.io/pkm21/';
+  const PKM_URL = 'https://hasheeper.github.io/pkm-pink/apps/dashboard-universal/index.html';
   const PRODUCT = 'universal';
   const VERSION = '0.1.0-mvuz-universal';
   const IFRAME_ID = 'pkm-mvuz-iframe';
@@ -23,6 +23,7 @@
   let iframeInitialized = false;
   let refreshTimer = null;
   let actionLock = false;
+  const messageTargets = [];
 
   function handleLocalStateChanged() {
     scheduleRefresh('stateChanged');
@@ -128,10 +129,15 @@
 
   async function loadMvuzState() {
     if (ROOT.PKMPlugin?.loadState) return ROOT.PKMPlugin.loadState();
-    if (typeof ROOT.getVariables !== 'function') return null;
+    if (typeof ROOT.getVariables !== 'function') {
+      console.warn(`${PLUGIN_NAME} getVariables is unavailable; cannot read stat_data.pkm`);
+      return null;
+    }
     try {
       const vars = await ROOT.getVariables({ type: 'message' });
-      return vars?.stat_data?.pkm || null;
+      const state = vars?.stat_data?.pkm || null;
+      if (!state) console.warn(`${PLUGIN_NAME} stat_data.pkm is empty`);
+      return state;
     } catch (error) {
       console.warn(`${PLUGIN_NAME} failed to read MVUZ state:`, error);
       return null;
@@ -140,7 +146,10 @@
 
   function postToIframe(message) {
     const iframe = ROOT.document?.getElementById(IFRAME_ID);
-    if (!iframe?.contentWindow) return false;
+    if (!iframe?.contentWindow) {
+      console.warn(`${PLUGIN_NAME} iframe is not ready; skip ${message?.type || 'message'}`);
+      return false;
+    }
     try {
       iframe.contentWindow.postMessage(message, '*');
       return true;
@@ -155,7 +164,7 @@
     if (!state) return;
     const legacy = stateToLegacyDashboard(state);
 
-    postToIframe({
+    const pushedState = postToIframe({
       type: 'PKM_STATE_PUSH',
       product: PRODUCT,
       version: VERSION,
@@ -164,9 +173,16 @@
       legacy
     });
 
-    postToIframe({
+    const pushedLegacy = postToIframe({
       type: reason === 'initial' ? 'PKM_ERA_DATA' : 'PKM_REFRESH',
       data: legacy
+    });
+    console.log(`${PLUGIN_NAME} pushed dashboard state`, {
+      reason,
+      pushedState,
+      pushedLegacy,
+      player: legacy?.player?.name,
+      slot1: legacy?.player?.party?.slot1?.name || null
     });
   }
 
@@ -176,6 +192,13 @@
       refreshTimer = null;
       pushDashboardState(reason);
     }, 120);
+  }
+
+  function burstPushDashboardState(reason = 'burst') {
+    pushDashboardState(reason);
+    [100, 250, 500, 1000, 2000, 4000].forEach((delay) => {
+      setTimeout(() => pushDashboardState(reason), delay);
+    });
   }
 
   async function dispatchAction(action, payload = {}) {
@@ -261,7 +284,9 @@
     if (!data || !data.type) return;
 
     if (data.type === 'PKM_READY') {
+      console.log(`${PLUGIN_NAME} received PKM_READY`, data);
       pushDashboardState('initial');
+      setTimeout(() => pushDashboardState('initial'), 250);
       return;
     }
     if (data.type === 'PKM_REQUEST_STATE') {
@@ -332,6 +357,23 @@
     ROOT.eventOn('chat_changed', () => {
       iframeInitialized = false;
       scheduleRefresh('chatChanged');
+    });
+  }
+
+  function bindMessageTargets() {
+    const candidates = [ROOT];
+    try { if (ROOT.parent && ROOT.parent !== ROOT) candidates.push(ROOT.parent); } catch (_) {}
+    try { if (ROOT.top && ROOT.top !== ROOT && ROOT.top !== ROOT.parent) candidates.push(ROOT.top); } catch (_) {}
+
+    candidates.forEach((target) => {
+      if (!target || messageTargets.includes(target)) return;
+      try {
+        target.removeEventListener?.('message', handleWindowMessage);
+        target.addEventListener?.('message', handleWindowMessage);
+        messageTargets.push(target);
+      } catch (error) {
+        console.warn(`${PLUGIN_NAME} failed to bind message target:`, error);
+      }
     });
   }
 
@@ -437,14 +479,11 @@
 
     ball.on('click', () => {
       overlay.css('display', 'flex');
+      burstPushDashboardState('open');
       if (!iframeInitialized) {
-        iframe.attr('src', PKM_URL);
         iframe.on('load', () => {
           iframeInitialized = true;
-          pushDashboardState('initial');
-          setTimeout(() => pushDashboardState('initial'), 250);
-          setTimeout(() => pushDashboardState('initial'), 1000);
-          setTimeout(() => pushDashboardState('initial'), 2500);
+          burstPushDashboardState('initial');
           try {
             const iframeWindow = iframe[0]?.contentWindow;
             if (iframeWindow) {
@@ -454,8 +493,9 @@
             }
           } catch (_) {}
         });
+        iframe.attr('src', PKM_URL);
       } else {
-        pushDashboardState('open');
+        burstPushDashboardState('open');
       }
     });
 
@@ -474,14 +514,17 @@
       ROOT.jQuery?.(document).off('keydown.pkmMvuz');
     } catch (_) {}
     ROOT.removeEventListener?.('message', handleWindowMessage);
+    messageTargets.forEach((target) => {
+      try { target.removeEventListener?.('message', handleWindowMessage); } catch (_) {}
+    });
+    messageTargets.length = 0;
     ROOT.removeEventListener?.('pkm:stateChanged', handleLocalStateChanged);
     ROOT.removeEventListener?.('pagehide', unload);
   }
 
   exposeGlobals();
   bindSillyTavernEvents();
-  ROOT.removeEventListener?.('message', handleWindowMessage);
-  ROOT.addEventListener?.('message', handleWindowMessage);
+  bindMessageTargets();
   ROOT.removeEventListener?.('pagehide', unload);
   ROOT.addEventListener?.('pagehide', unload);
 

@@ -714,11 +714,17 @@ function notifyPkmBridgeReady() {
     try {
         window.top?.postMessage(message, '*');
     } catch (e) {}
+    try {
+        window.opener?.postMessage(message, '*');
+    } catch (e) {}
 }
 
 // ========== 监听来自酒馆的 postMessage ==========
 window.addEventListener('message', function(event) {
     if (!event.data || !event.data.type) return;
+    if (String(event.data.type).startsWith('PKM_')) {
+        console.log('[PKM] 收到桥接消息', event.data.type);
+    }
 
     const bridgePayload = getPkmBridgePayload(event.data);
     if (bridgePayload && applyPkmBridgeData(bridgePayload, event.data.type)) {
@@ -926,6 +932,7 @@ document.addEventListener('DOMContentLoaded', () => {
     notifyPkmBridgeReady();
     setTimeout(notifyPkmBridgeReady, 250);
     setTimeout(notifyPkmBridgeReady, 1000);
+    setTimeout(notifyPkmBridgeReady, 2500);
 });
 
 function initApp() {

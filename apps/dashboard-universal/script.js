@@ -53,10 +53,3 @@ window.toggleLeader = function(event, slotStr) {
         }
     }
 };
-
-// 初始化
-document.addEventListener('DOMContentLoaded', function() {
-    if (typeof initApp === 'function') {
-        initApp();
-    }
-});
