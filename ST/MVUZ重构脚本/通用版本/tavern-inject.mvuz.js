@@ -23,6 +23,7 @@
   let iframeInitialized = false;
   let refreshTimer = null;
   let actionLock = false;
+  let dashboardWindow = null;
   const messageTargets = [];
 
   function handleLocalStateChanged() {
@@ -146,12 +147,13 @@
 
   function postToIframe(message) {
     const iframe = ROOT.document?.getElementById(IFRAME_ID);
-    if (!iframe?.contentWindow) {
+    const targetWindow = iframe?.contentWindow || dashboardWindow;
+    if (!targetWindow) {
       console.warn(`${PLUGIN_NAME} iframe is not ready; skip ${message?.type || 'message'}`);
       return false;
     }
     try {
-      iframe.contentWindow.postMessage(message, '*');
+      targetWindow.postMessage(message, '*');
       return true;
     } catch (error) {
       console.warn(`${PLUGIN_NAME} failed to post message:`, error);
@@ -285,6 +287,9 @@
 
     if (data.type === 'PKM_READY') {
       console.log(`${PLUGIN_NAME} received PKM_READY`, data);
+      if (event?.source && typeof event.source.postMessage === 'function') {
+        dashboardWindow = event.source;
+      }
       pushDashboardState('initial');
       setTimeout(() => pushDashboardState('initial'), 250);
       return;
@@ -487,6 +492,7 @@
           try {
             const iframeWindow = iframe[0]?.contentWindow;
             if (iframeWindow) {
+              dashboardWindow = iframeWindow;
               iframeWindow.pkmSetLeaderCallback = ROOT.pkmSetLeader;
               iframeWindow.pkmUpdateSettingsCallback = ROOT.pkmUpdateSettings;
               iframeWindow.pkmUpdateMoveCallback = ROOT.pkmUpdateMove;
