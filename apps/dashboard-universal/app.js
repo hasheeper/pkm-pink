@@ -277,8 +277,26 @@ async function refreshMovePoolPanel(slotKey) {
     showMovePoolModal(slotKey, species, currentLv, currentMoves, movePool, false);
 }
 
+function postPkmAction(action, payload = {}) {
+    const parentWin = window.parent || window;
+    parentWin.postMessage({
+        type: 'PKM_ACTION',
+        action,
+        payload
+    }, '*');
+}
+
+function buildNarrativeClipboard(title, bodyLines) {
+    return `[System Event: ${title}]
+Variables have already been updated in the current message MVU state (stat_data.pkm) by the dashboard.
+Do not output <UpdateVariable>, <VariableEdit>, <VariableInsert>, <VariableDelete>, <JSONPatch>, or any variable update block.
+
+[Narrative Request]
+${bodyLines.filter(Boolean).join('\n')}`;
+}
+
 /**
- * 保存技能变更到 ERA
+ * 保存技能变更到 MVU 当前楼层变量
  */
 window.saveMoveChanges = async function(slotKey) {
     const changes = pendingMoveChanges[slotKey];
@@ -309,22 +327,16 @@ window.saveMoveChanges = async function(slotKey) {
     const species = pkm?.species || pkm?.name || 'pokemon';
     const displayName = translatePokemonNameApp(species);
     
-    // 生成 VariableEdit XML（只包含变化的技能）
-    const variableEditXml = generateMoveVariableEdit(slotKey, changes, pkm, changedMoves);
-    
     // 生成 AI 演绎提示词（只描述变化的技能）
     const aiPrompt = generateMoveChangeNarrative(slotKey, changes, pkm, changedMoves);
     
-    // 合并内容：VariableEdit + AI提示词
-    const fullContent = `${variableEditXml}\n\n${aiPrompt}`;
-    
     // 复制到剪贴板
     try {
-        await navigator.clipboard.writeText(fullContent);
+        await navigator.clipboard.writeText(aiPrompt);
         console.log('[MOVE_POOL] ✓ 已复制到剪贴板');
     } catch (e) {
         console.warn('[MOVE_POOL] 剪贴板复制失败，尝试降级方案:', e);
-        fallbackCopyToClipboard(fullContent);
+        fallbackCopyToClipboard(aiPrompt);
     }
     
     // 发送到酒馆
@@ -340,41 +352,8 @@ window.saveMoveChanges = async function(slotKey) {
     renderPartyList();
     
     // 显示成功通知（包含复制提示）
-    showMovePoolNotification(`${displayName} 技能已更新！VariableEdit 已复制到剪贴板`, 'success');
+    showMovePoolNotification(`${displayName} 技能已更新！演绎提示已复制到剪贴板`, 'success');
 };
-
-/**
- * 生成 VariableEdit XML 格式（只包含变化的技能）
- */
-function generateMoveVariableEdit(slotKey, moves, pkm, changedMoves) {
-    // 只输出变化的技能
-    const changedKeys = Object.keys(changedMoves || {});
-    
-    if (changedKeys.length === 0) {
-        return `<VariableEdit>\n// 无技能变化\n</VariableEdit>`;
-    }
-    
-    // 只包含变化的技能槽
-    const movesObj = {};
-    for (const key of changedKeys) {
-        movesObj[key] = moves[key] || null;
-    }
-    
-    // 构建嵌套结构
-    const editPayload = {
-        player: {
-            party: {
-                [slotKey]: {
-                    moves: movesObj
-                }
-            }
-        }
-    };
-    
-    return `<VariableEdit>
-${JSON.stringify(editPayload, null, 2)}
-</VariableEdit>`;
-}
 
 /**
  * 生成 AI 演绎提示词（只描述变化的技能）
@@ -387,7 +366,9 @@ function generateMoveChangeNarrative(slotKey, moves, pkm, changedMoves) {
     const changedKeys = Object.keys(changedMoves || {});
     
     if (changedKeys.length === 0) {
-        return `[System Narrative Hint]\n${displayName} 的技能配置未发生变化。`;
+        return buildNarrativeClipboard('Move configuration unchanged', [
+            `${displayName} 的技能配置未发生变化。请只做一句轻描写，不要更新变量。`
+        ]);
     }
     
     // 构建变化描述
@@ -400,9 +381,11 @@ function generateMoveChangeNarrative(slotKey, moves, pkm, changedMoves) {
     
     const changeListStr = changeDescriptions.join('、');
     
-    return `[System Event]
-> 目标: ${displayName} (Lv.${lv})
-> 技能已重组: ${changeListStr}`;
+    return buildNarrativeClipboard('Move configuration updated', [
+        `目标: ${displayName} (Lv.${lv})`,
+        `技能已重组: ${changeListStr}`,
+        `请简短描写 ${displayName} 调整技能、训练家确认配置的场景。`
+    ]);
 }
 
 /**
@@ -423,28 +406,11 @@ function fallbackCopyToClipboard(text) {
 }
 
 /**
- * 发送技能变更到酒馆
+ * 发送技能变更到酒馆 MVU action
  */
 function sendMoveChangeToTavern(slotKey, moves) {
-    const pkm = db?.player?.party?.[slotKey];
-    const displayName = pkm ? translatePokemonNameApp(pkm.species || pkm.name) : 'Pokemon';
-    
-    // 构建技能列表文本
-    const moveList = ['move1', 'move2', 'move3', 'move4']
-        .map(k => moves[k] ? translateMoveName(moves[k].replace(/-/g, ' ')) : null)
-        .filter(Boolean)
-        .join(' | ');
-    
-    // 通过 postMessage 发送 VariableEdit
-    const parentWindow = window.parent || window;
-    
-    // 发送 ERA 变量更新
-    parentWindow.postMessage({
-        type: 'PKM_UPDATE_MOVES',
-        slotKey: slotKey,
-        moves: moves
-    }, '*');
-    
+    const slot = Number(String(slotKey).replace('slot', '')) || 1;
+    postPkmAction('party.updateMoves', { slot, moves });
     console.log('[MOVE_POOL] 技能变更已发送:', slotKey, moves);
 }
 
@@ -658,10 +624,10 @@ const ZoneOrder = ['N', 'B', 'S', 'A', 'Z'];
 
 
 /* ============================================================
-   ERA DATA BRIDGE - 从酒馆 ERA 系统读取数据
+   MVU STATE BRIDGE - 从酒馆当前楼层 stat_data.pkm 读取数据
    ============================================================ */
 
-// 数据容器（初始为空，由 ERA 填充）
+// 数据容器（初始为空，由 MVU bridge 填充）
 let db = null;
 const DefaultSettings = {
     enableAVS: true,
@@ -669,7 +635,7 @@ const DefaultSettings = {
     enableEVO: true,
     enableBGM: true,
     enableSFX: true,
-    enableClash: true,
+    enableClash: false,
     enableEnvironment: true
 };
 
@@ -751,11 +717,11 @@ window.addEventListener('message', function(event) {
     }
     
     if (event.data.type === 'PKM_ERA_DATA') {
-        console.log('[PKM] 收到 ERA 数据 (postMessage)');
+        console.log('[PKM] 收到 legacy 桥接数据 (postMessage)');
         if (event.data.data && event.data.data.player) {
             db = event.data.data;
             window.eraData = db;
-            console.log('[PKM] ✓ ERA 数据已更新', db.player?.name);
+            console.log('[PKM] ✓ legacy 桥接数据已更新', db.player?.name);
             
             // 刷新界面
             if (typeof renderDashboard === 'function') renderDashboard();
@@ -797,14 +763,14 @@ function handleRefreshDebounced(eventData) {
     }, 100);
 }
 
-// 加载 ERA 数据到 db（从父窗口注入的 window.eraData 获取）
-function loadEraData() {
-    console.log('[PKM] 正在加载 ERA 数据...');
+// 加载 MVU 桥接数据到 db（从父窗口推送的 window.pkmBridgeData/window.eraData 获取）
+function loadBridgeData() {
+    console.log('[PKM] 正在加载 MVU 桥接数据...');
     
-    // 父窗口会在 iframe 加载前注入 window.eraData
-    if (window.eraData && window.eraData.player) {
-        db = window.eraData;
-        console.log('[PKM] ✓ ERA 数据加载成功', db.player?.name);
+    const bridgeData = window.pkmBridgeData || window.eraData;
+    if (bridgeData && bridgeData.player) {
+        db = bridgeData;
+        console.log('[PKM] ✓ MVU 桥接数据加载成功', db.player?.name);
         return true;
     } else {
         console.warn('[PKM] 桥接数据暂未到达，使用空白占位并请求状态推送');
@@ -832,105 +798,6 @@ function loadEraData() {
             settings: {}
         };
         return false;
-        console.warn('[PKM] ERA 数据为空，使用测试数据');
-        db = {
-            player: {
-                name: 'Trainer',
-                bonds: {},
-                unlocks: {},
-                party: {
-                    slot1: {
-                        slot: 1,
-                        name: 'Charizard',
-                        species: 'charizard',
-                        nickname: null,
-                        lv: 55,
-                        gender: 'M',
-                        nature: 'Adamant',
-                        ability: 'Blaze',
-                        item: 'charcoal',
-                        shiny: false,
-                        isLead: true,
-                        moves: {
-                            move1: 'Flamethrower',
-                            move2: 'Air Slash',
-                            move3: 'Dragon Claw',
-                            move4: 'Roost'
-                        },
-                        friendship: {
-                            avs: { trust: 180, passion: 120, insight: 90, devotion: 50 }
-                        },
-                        stats_meta: {
-                            ivs: { hp: 31, atk: 28, def: 25, spa: 31, spd: 20, spe: 31 },
-                            ev_level: 252
-                        }
-                    },
-                    slot2: {
-                        slot: 2,
-                        name: 'Pikachu',
-                        species: 'pikachu',
-                        nickname: null,
-                        lv: 42,
-                        gender: 'F',
-                        nature: 'Timid',
-                        ability: 'Static',
-                        item: 'light-ball',
-                        shiny: true,
-                        isLead: false,
-                        moves: {
-                            move1: 'Thunderbolt',
-                            move2: 'Quick Attack',
-                            move3: null,
-                            move4: null
-                        },
-                        friendship: {
-                            avs: { trust: 255, passion: 200, insight: 150, devotion: 100 }
-                        },
-                        stats_meta: {
-                            ivs: { hp: 20, atk: 15, def: 18, spa: 31, spd: 25, spe: 31 },
-                            ev_level: 180
-                        }
-                    },
-                    slot3: {
-                        slot: 3,
-                        name: 'Garchomp',
-                        species: 'garchomp',
-                        nickname: null,
-                        lv: 60,
-                        gender: 'M',
-                        nature: 'Jolly',
-                        ability: 'Rough Skin',
-                        item: null,
-                        shiny: false,
-                        isLead: false,
-                        moves: {
-                            move1: 'Earthquake',
-                            move2: 'Dragon Claw',
-                            move3: 'Stone Edge',
-                            move4: 'Swords Dance'
-                        },
-                        friendship: {
-                            avs: { trust: 100, passion: 80, insight: 60, devotion: 30 }
-                        },
-                        stats_meta: {
-                            ivs: { hp: 31, atk: 31, def: 28, spa: 10, spd: 22, spe: 31 },
-                            ev_level: 300
-                        }
-                    },
-                    slot4: { slot: 4, name: null },
-                    slot5: { slot: 5, name: null },
-                    slot6: { slot: 6, name: null }
-                },
-                box: {}
-            },
-            world_state: {
-                location: { x: 0, y: 0 },
-                time: { period: 'morning', derived: { dayOfYear: 15 } },
-                npcs: {}
-            },
-            settings: {}
-        };
-        return false;
     }
 }
 
@@ -946,8 +813,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initApp() {
-    // 先加载 ERA 数据
-    loadEraData();
+    // 先加载 MVU bridge 数据
+    loadBridgeData();
     ensureSettingsDefaults();
 
     // 初始化悬浮状态栏
@@ -1168,18 +1035,7 @@ window.toggleGlobalSetting = function (key) {
     console.log('[PKM CONFIG] Setting Changed:', key, db.settings[key]);
     renderSettings();
 
-    // 调用父窗口注入到 iframe window 的回调函数（类似 toggleLeader）
-    if (window.pkmUpdateSettingsCallback) {
-        console.log('[PKM CONFIG] 调用 pkmUpdateSettingsCallback');
-        window.pkmUpdateSettingsCallback(db.settings);
-    } else {
-        // 降级：使用 postMessage
-        const parentWin = window.parent || window;
-        parentWin.postMessage({
-            type: 'PKM_UPDATE_SETTINGS',
-            data: db.settings
-        }, '*');
-    }
+    postPkmAction('settings.update', { [key]: db.settings[key] });
 };
 
 // ========== Leader 切换函数 ==========
@@ -1244,7 +1100,7 @@ function createCardHTML(pkm, slotIdStr) {
     const theme = getThemeColors(speciesName);
     const itemUrl = getItemIconUrl(pkm.item);
     const itemUrlPS = getItemIconUrlPS(pkm.item);
-    // 读取 bonds 数据 (ERA 格式)
+    // 读取 MVU bonds 数据
     const bondsValue = pkm.bonds || 0;
     const maxCheck = (val) => val >= 255 ? 'maxed' : '';
     
@@ -1603,8 +1459,7 @@ async function renderBoxPage() {
     // 盒子容器
     html += `<div class="box-storage-area"><div class="box-storage-matrix">`;
   
-    // [对象模式] 将 box 对象转为带 Key 的数组
-    // 不再初始化 Mock 数据，完全依赖 ERA 系统
+    // [对象模式] 将 MVU bridge 的 box 对象转为带 Key 的数组
     const boxEntries = Object.entries(db.player.box || {});
     // boxEntries 结构: [ ["key1", {data}], ["key2", {data}] ]
   
@@ -1624,7 +1479,7 @@ async function renderBoxPage() {
     boxPage.innerHTML = html;
 }
 
-// initMockBox 已删除 - 完全依赖 ERA 系统数据
+// initMockBox 已删除 - 完全依赖 MVU bridge 数据
 
 /* --- 2. 渲染组件 (HTML Generators) --- */
 
@@ -1917,15 +1772,11 @@ function createEmptySlot(slotNum) {
         teraType: null,
         isAce: false,
         isLead: false,
-        friendship: {
-            avs: { trust: 0, passion: 0, insight: 0, devotion: 0 },
-            av_up: { trust: 0, passion: 0, insight: 0, devotion: 0 }
-        },
+        bonds: 0,
         moves: { move1: null, move2: null, move3: null, move4: null },
         stats_meta: {
             ivs: { hp: null, atk: null, def: null, spa: null, spd: null, spe: null },
-            ev_level: 0,
-            ev_up: 0
+            ev_level: 0
         },
         notes: null
     };
@@ -1968,6 +1819,7 @@ window.confirmBoxTransfer = function() {
     const zoneName = ZoneDB[(db.world_state.location || 'Z')]?.label || "未知区域";
 
     let actionLog = "";
+    let mvuzPayload = null;
 
     // ========== [批量存入模式] 队伍 -> 空白盒子 ==========
     if (hasEmptyBox && filledPartyInfos.length > 0) {
@@ -1996,23 +1848,14 @@ window.confirmBoxTransfer = function() {
         });
 
         actionLog = `
-[系统指令：粉红网络连接协议 - 批量存入成功]
-> 操作：传输通道 [${zoneName}] 已建立。
-> 上行 (Upload): ${uploadList.join(', ')} >>> 云端服务器存储。
-> 变量已更新，无需重复发送。
-> 已清空 ${filledPartyInfos.length} 个队伍槽位。
-
-<VariableInsert>
-${JSON.stringify({ player: { box: boxInserts } }, null, 2)}
-</VariableInsert>
-
-<VariableEdit>
-${JSON.stringify({ player: { party: partyEdits } }, null, 2)}
-</VariableEdit>
-
-[演绎要求]
-${uploadList.join('、')} 已被传送至索妮亚研究所的云端存储系统。请简短描写多道传输光束同时闪烁、宝可梦们化为数据流消失的画面，以及 ${playerName} 的反应。
+${buildNarrativeClipboard('Pink network batch store completed', [
+`操作：传输通道 [${zoneName}] 已建立。`,
+`上行 Upload: ${uploadList.join(', ')} >>> 云端服务器存储。`,
+`已清空 ${filledPartyInfos.length} 个队伍槽位。`,
+`${uploadList.join('、')} 已被传送至索妮亚研究所的云端存储系统。请简短描写多道传输光束同时闪烁、宝可梦们化为数据流消失的画面，以及 ${playerName} 的反应。`
+])}
 `.trim();
+        mvuzPayload = { partyEdits, boxInserts };
     }
     // ========== [批量取出模式] 盒子 -> 队伍空槽 ==========
     else if (hasBoxPkm && emptyPartyInfos.length === pIdxs.length) {
@@ -2036,23 +1879,14 @@ ${uploadList.join('、')} 已被传送至索妮亚研究所的云端存储系统
         });
 
         actionLog = `
-[系统指令：粉红网络连接协议 - 批量取出成功]
-> 操作：传输通道 [${zoneName}] 已建立。
-> 下行 (Download): ${downloadList.join(', ')} <<< 云端服务器。
-> 变量已更新，无需重复发送。
-> 已加入 ${bKeys.length} 个队伍槽位。
-
-<VariableEdit>
-${JSON.stringify({ player: { party: partyEdits } }, null, 2)}
-</VariableEdit>
-
-<VariableDelete>
-${JSON.stringify({ player: { box: boxDeletes } }, null, 2)}
-</VariableDelete>
-
-[演绎要求]
-${downloadList.join('、')} 已从云端传送回来！请简短描写多道传输光束同时闪烁、宝可梦们从数据流中具现化的画面，以及它们对 ${playerName} 的反应。
+${buildNarrativeClipboard('Pink network batch retrieve completed', [
+`操作：传输通道 [${zoneName}] 已建立。`,
+`下行 Download: ${downloadList.join(', ')} <<< 云端服务器。`,
+`已加入 ${bKeys.length} 个队伍槽位。`,
+`${downloadList.join('、')} 已从云端传送回来！请简短描写多道传输光束同时闪烁、宝可梦们从数据流中具现化的画面，以及它们对 ${playerName} 的反应。`
+])}
 `.trim();
+        mvuzPayload = { partyEdits, boxDeletes };
     }
     // ========== [批量交换模式] 队伍 <-> 盒子 ==========
     else if (hasBoxPkm && filledPartyInfos.length > 0) {
@@ -2097,33 +1931,18 @@ ${downloadList.join('、')} 已从云端传送回来！请简短描写多道传�
             else boxEditsFinal[k] = v;
         });
 
-        let variableBlocks = `<VariableEdit>
-${JSON.stringify({ player: { party: partyEdits, box: boxEditsFinal } }, null, 2)}
-</VariableEdit>`;
-
-        if (Object.keys(boxDeletes).length > 0) {
-            variableBlocks += `
-
-<VariableDelete>
-${JSON.stringify({ player: { box: boxDeletes } }, null, 2)}
-</VariableDelete>`;
-        }
-
         const opDesc = uploadList.length > 0 
             ? `> 上行 (Upload): ${uploadList.join(', ')} >>> 云端服务器。\n> 下行 (Download): ${downloadList.join(', ')} <<< 云端服务器。`
             : `> 下行 (Download): ${downloadList.join(', ')} <<< 云端服务器。`;
 
         actionLog = `
-[系统指令：粉红网络连接协议 - 批量传输成功]
-> 操作：传输通道 [${zoneName}] 已建立。
-> 变量已更新，无需重复发送。
-${opDesc}
-
-${variableBlocks}
-
-[演绎要求]
-${uploadList.length > 0 ? `${uploadList.join('、')} 与 ${downloadList.join('、')} 完成了交换传输！` : `${downloadList.join('、')} 已从云端传送回来！`}请简短描写多道光束交错的画面，宝可梦们出现后对 ${playerName} 的反应，以及 ${playerName} 与新伙伴们的互动。
+${buildNarrativeClipboard('Pink network batch transfer completed', [
+`操作：传输通道 [${zoneName}] 已建立。`,
+opDesc.replace(/^> /gm, ''),
+`${uploadList.length > 0 ? `${uploadList.join('、')} 与 ${downloadList.join('、')} 完成了交换传输！` : `${downloadList.join('、')} 已从云端传送回来！`}请简短描写多道光束交错的画面，宝可梦们出现后对 ${playerName} 的反应，以及 ${playerName} 与新伙伴们的互动。`
+])}
 `.trim();
+        mvuzPayload = { partyEdits, boxEdits: boxEditsFinal, boxDeletes };
     }
     else {
         alert("无效的操作组合。");
@@ -2131,15 +1950,40 @@ ${uploadList.length > 0 ? `${uploadList.join('、')} 与 ${downloadList.join('�
     }
 
     console.log("[BOX] 生成的指令:\n" + actionLog);
+    if (mvuzPayload) {
+        postPkmAction('box.applyLegacyMutation', mvuzPayload);
+        applyBoxMutationLocally(mvuzPayload);
+    }
     copyToClipboard(actionLog);
     resetBoxSelection(); 
 };
 
 /* --- Helpers --- */
 
+function applyBoxMutationLocally(payload) {
+    if (!db.player.box) db.player.box = {};
+    if (!db.player.party) db.player.party = {};
+
+    Object.entries(payload.partyEdits || {}).forEach(([slotKey, pokemon]) => {
+        db.player.party[slotKey] = JSON.parse(JSON.stringify(pokemon));
+    });
+
+    Object.entries(payload.boxInserts || {}).forEach(([key, pokemon]) => {
+        db.player.box[key] = JSON.parse(JSON.stringify(pokemon));
+    });
+
+    Object.entries(payload.boxEdits || {}).forEach(([key, pokemon]) => {
+        db.player.box[key] = JSON.parse(JSON.stringify(pokemon));
+    });
+
+    Object.keys(payload.boxDeletes || {}).forEach((key) => {
+        delete db.player.box[key];
+    });
+}
+
 function normalizeToPartyFormat(simpleObj, slotNum) {
     // 把盒子里的简单数据扩充成队伍数据
-    // 保留完整数据，包括 friendship/AVS
+    // 保留完整数据，包括 bonds、moves、stats_meta 等
     return {
         slot: slotNum,
         ...simpleObj
@@ -2148,7 +1992,7 @@ function normalizeToPartyFormat(simpleObj, slotNum) {
 
 function normalizeToBoxFormat(partyObj) {
     // 把队伍数据剥离成精简数据放入盒子
-    // 保留完整数据，包括 friendship/AVS、moves、stats_meta 等
+    // 保留完整数据，包括 bonds、moves、stats_meta 等
     const clone = JSON.parse(JSON.stringify(partyObj));
     // 清理不需要的字段
     delete clone.slot;      // box 中不需要 slot 字段

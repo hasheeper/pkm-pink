@@ -973,6 +973,13 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
           state.party.slots[slot].moves = moves;
           return state;
         });
+      case 'party.updateMoves':
+        return patchState((state) => {
+          const slot = clampNumber(payload.slot, 1, MAX_PARTY_SIZE, 1) - 1;
+          if (!state.party.slots[slot]) return state;
+          state.party.slots[slot].moves = normalizeMoves(payload.moves);
+          return state;
+        });
       case 'box.depositTransferBuffer':
         return patchState((state) => {
           const pokemon = normalizeTransferBuffer(state.party.transferBuffer);
@@ -980,6 +987,50 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
           if (!state.box.boxes?.length) state.box.boxes = [{ id: 'box_01', name: 'Box 1', slots: [] }];
           state.box.boxes[0].slots.push(pokemon);
           state.party.transferBuffer = null;
+          return state;
+        });
+      case 'box.applyLegacyMutation':
+        return patchState((state) => {
+          const box = state.box.boxes?.[0] || { id: 'box_01', name: 'Box 1', slots: [] };
+          state.box.boxes = [box, ...(state.box.boxes || []).slice(1)];
+          box.slots = Array.isArray(box.slots) ? box.slots : [];
+
+          const partyEdits = isObject(payload.partyEdits) ? payload.partyEdits : {};
+          Object.entries(partyEdits).forEach(([slotKey, pokemon]) => {
+            const match = String(slotKey).match(/^slot(\d+)$/);
+            if (!match) return;
+            const slotNumber = clampNumber(match[1], 1, MAX_PARTY_SIZE, 1);
+            state.party.slots[slotNumber - 1] = normalizePokemon(pokemon, slotNumber);
+          });
+
+          const boxInserts = isObject(payload.boxInserts) ? payload.boxInserts : {};
+          Object.keys(boxInserts).sort().forEach((key) => {
+            const pokemon = normalizeTransferBuffer(boxInserts[key]);
+            if (pokemon) box.slots.push(pokemon);
+          });
+
+          const boxEdits = isObject(payload.boxEdits) ? payload.boxEdits : {};
+          Object.entries(boxEdits).forEach(([key, pokemon]) => {
+            const match = String(key).match(/^storage_(\d+)$/);
+            if (!match) return;
+            const index = Number(match[1]) - 1;
+            const normalized = normalizeTransferBuffer(pokemon);
+            if (normalized && index >= 0) box.slots[index] = normalized;
+          });
+
+          const boxDeletes = isObject(payload.boxDeletes) ? payload.boxDeletes : {};
+          Object.keys(boxDeletes)
+            .map((key) => {
+              const match = String(key).match(/^storage_(\d+)$/);
+              return match ? Number(match[1]) - 1 : -1;
+            })
+            .filter((index) => index >= 0)
+            .sort((a, b) => b - a)
+            .forEach((index) => {
+              if (index < box.slots.length) box.slots.splice(index, 1);
+            });
+
+          state.party.slots = normalizePartySlots(state.party.slots);
           return state;
         });
       case 'state.replace':
