@@ -1,6 +1,6 @@
-# PKM ST Bridge
+# ST Bridge
 
-Stable SillyTavern entry for PKM Pink scripts.
+Stable SillyTavern entry for project packs.
 
 ## Links
 
@@ -26,4 +26,4 @@ https://hasheeper.github.io/pkm-pink/apps/st-bridge/bridge.js?pack=pkm-universal
 ## Contract
 
 `bridge.js` owns loading, ordering, cache busting, logging, pack selection, and shared MVU IO helpers.
-Pack scripts own PKM business behavior.
+Pack scripts own project business behavior.

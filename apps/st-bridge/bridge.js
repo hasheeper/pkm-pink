@@ -1,13 +1,12 @@
 /**
- * PKM Pink stable SillyTavern bridge.
+ * Stable SillyTavern bridge.
  *
  * ST only needs to load this file. The bridge then loads the selected pack
  * from manifest.json in a deterministic order.
  *
  * Usage:
  *   bridge.js
- *   bridge.js?pack=pkm-universal
- *   bridge.js?pack=pkm-main
+ *   bridge.js?pack=<manifest-pack-id>
  */
 (async function () {
   'use strict';
@@ -16,12 +15,16 @@
   const BRIDGE_NAME = '[ST Bridge]';
   const VERSION = '0.1.0';
   const DEFAULT_MANIFEST = './manifest.json';
-  const DEFAULT_BRIDGE_URL = 'https://hasheeper.github.io/pkm-pink/apps/st-bridge/bridge.js';
+  const FALLBACK_BRIDGE_URL = 'https://hasheeper.github.io/pkm-pink/apps/st-bridge/bridge.js';
 
   function isUsableBridgeUrl(value) {
     if (!value || typeof value !== 'string') return false;
     if (!/^https?:\/\//i.test(value)) return false;
-    return value.includes('/apps/st-bridge/bridge.js');
+    try {
+      return new URL(value).pathname.endsWith('/bridge.js');
+    } catch (_) {
+      return false;
+    }
   }
 
   function getCurrentScriptUrl() {
@@ -30,7 +33,7 @@
     } catch (_) {}
     try {
       const scripts = Array.from(document.getElementsByTagName('script'));
-      const matched = scripts.reverse().find((script) => String(script.src || '').includes('/apps/st-bridge/bridge.js'));
+      const matched = scripts.reverse().find((script) => isUsableBridgeUrl(script.src));
       if (isUsableBridgeUrl(matched?.src)) return matched.src;
     } catch (_) {}
     try {
@@ -44,7 +47,7 @@
     try {
       if (isUsableBridgeUrl(ROOT.ST_BRIDGE_URL)) return ROOT.ST_BRIDGE_URL;
     } catch (_) {}
-    return DEFAULT_BRIDGE_URL;
+    return FALLBACK_BRIDGE_URL;
   }
 
   function makeBridgeUrl() {
@@ -52,7 +55,7 @@
     try {
       return new URL(rawUrl);
     } catch (_) {
-      return new URL(DEFAULT_BRIDGE_URL);
+      return new URL(FALLBACK_BRIDGE_URL);
     }
   }
 
@@ -144,13 +147,23 @@
     return data;
   }
 
-  async function readState(rootKey = 'stat_data', stateKey = 'pkm', options = {}) {
+  async function readState(rootKey = 'stat_data', stateKey = null, options = {}) {
     const vars = await readVariables(options);
+    if (!stateKey) return isObject(vars?.[rootKey]) ? vars[rootKey] : null;
     return isObject(vars?.[rootKey]?.[stateKey]) ? vars[rootKey][stateKey] : null;
   }
 
-  async function writeState(rootKey = 'stat_data', stateKey = 'pkm', state, options = {}) {
+  async function writeState(rootKey = 'stat_data', stateKey = null, state, options = {}) {
     const vars = await readVariables(options);
+    if (!stateKey) {
+      await writeVariables({ [rootKey]: state }, options);
+      try {
+        ROOT.dispatchEvent?.(new CustomEvent('st-bridge:state-written', {
+          detail: { rootKey, stateKey: null, state }
+        }));
+      } catch (_) {}
+      return state;
+    }
     const root = isObject(vars?.[rootKey]) ? vars[rootKey] : {};
     const nextRoot = { ...root, [stateKey]: state };
     await writeVariables({ [rootKey]: nextRoot }, options);
@@ -162,7 +175,7 @@
     return state;
   }
 
-  async function patchState(rootKey = 'stat_data', stateKey = 'pkm', patcher, options = {}) {
+  async function patchState(rootKey = 'stat_data', stateKey = null, patcher, options = {}) {
     const current = await readState(rootKey, stateKey, options);
     const draft = clone(current, {});
     const result = await patcher(draft, current);
