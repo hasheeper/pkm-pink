@@ -5939,7 +5939,7 @@ body {
 .battle-layout-portrait .container-player {
     top: 40px;
     bottom: auto;
-    left: -20px;
+    left: 4px;
     right: auto;
     align-items: flex-start;
 }
@@ -6014,7 +6014,9 @@ body {
 }
 
 .battle-layout-portrait .p-name {
-    max-width: 185px;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: none;
     font-size: 1.65rem;
     font-weight: 900;
     color: #1e293b;
@@ -6075,7 +6077,7 @@ body {
 }
 
 .battle-layout-portrait .container-player .party-track {
-    margin-left: 20px;
+    margin-left: 34px;
     margin-top: 8px;
     justify-content: flex-start;
 }
@@ -6131,8 +6133,8 @@ body {
 }
 
 .battle-layout-portrait .trainer-hud {
-    top: 118px;
-    right: 28px;
+    top: 20px;
+    right: 5px;
     left: auto;
 }
 
@@ -6295,6 +6297,7 @@ body {
     grid-template-rows: 1fr 1fr;
     gap: 14px;
     padding: 24px 52px 24px 34px;
+    overflow: visible;
 }
 
 .battle-layout-portrait .moves-menu.hidden {
@@ -6312,6 +6315,9 @@ body {
 
 .battle-layout-portrait .back-btn-pill {
     transform: skewX(12deg);
+    top: 8px;
+    left: 8px;
+    z-index: 200;
 }
 
 .battle-layout-portrait .overlay-modal.modern-layer {
@@ -6324,6 +6330,162 @@ body {
     width: 100%;
     max-width: none;
     border-radius: 28px;
+}
+
+.battle-layout-portrait .cutin-overlay {
+    justify-content: flex-end;
+    align-items: flex-start;
+    padding-top: 0;
+    padding-right: 20px;
+}
+
+.battle-layout-portrait .compact-bar {
+    margin-top: 14px;
+    min-width: 350px;
+    max-width: 520px;
+    height: 86px;
+}
+
+.battle-layout-portrait .compact-content {
+    transform: scale(1.08);
+    transform-origin: right center;
+}
+
+.battle-layout-portrait #commander-overlay {
+    overflow: visible;
+}
+
+.battle-layout-portrait .commander-container {
+    transform: scale(1.28);
+    transform-origin: center center;
+}
+
+.battle-layout-portrait .switch-container-modern {
+    padding: 36px 42px 42px;
+    font-size: 1.08rem;
+}
+
+.battle-layout-portrait .switch-header-modern h2 {
+    font-size: 2.7rem;
+}
+
+.battle-layout-portrait .switch-header-subtitle {
+    font-size: 1.15rem;
+}
+
+.battle-layout-portrait .party-grid-modern {
+    gap: 16px;
+}
+
+.battle-layout-portrait .party-card-modern {
+    min-height: 108px;
+    padding: 16px 24px;
+    gap: 22px;
+    border-radius: 24px;
+}
+
+.battle-layout-portrait .card-icon-modern {
+    width: 82px;
+    height: 82px;
+}
+
+.battle-layout-portrait .card-name {
+    font-size: 1.55rem;
+}
+
+.battle-layout-portrait .card-lv {
+    font-size: 1.05rem;
+}
+
+.battle-layout-portrait .card-hp-nums {
+    font-size: 0.95rem;
+}
+
+.battle-layout-portrait .modern-hp-track {
+    height: 10px;
+}
+
+.battle-layout-portrait .ball-menu-card {
+    width: 480px;
+    padding: 30px 38px;
+    border-radius: 24px;
+}
+
+.battle-layout-portrait .ball-header {
+    font-size: 1.55rem;
+}
+
+.battle-layout-portrait .ball-option {
+    min-height: 68px;
+    padding: 18px 22px;
+    font-size: 1.18rem;
+    border-radius: 14px;
+}
+
+.battle-layout-portrait .close-ball-menu {
+    font-size: 1.05rem;
+    padding: 12px 0;
+}
+
+.battle-layout-portrait .insight-warning {
+    top: 18px;
+    min-width: 420px;
+    max-width: 640px;
+    padding: 14px 28px;
+}
+
+.battle-layout-portrait .clash-option-modal {
+    padding: 48px 42px;
+    box-sizing: border-box;
+}
+
+.battle-layout-portrait .clash-card-core {
+    width: 610px;
+    max-width: 100%;
+}
+
+.battle-layout-portrait .clash-header-bar {
+    padding: 16px 0;
+}
+
+.battle-layout-portrait .header-title {
+    font-size: 1.45rem;
+}
+
+.battle-layout-portrait .clash-body-grid {
+    padding: 42px 44px 50px;
+}
+
+.battle-layout-portrait .p1-side .unit-main-name,
+.battle-layout-portrait .p2-side .unit-main-name {
+    font-size: 2.35rem;
+}
+
+.battle-layout-portrait .unit-badge {
+    font-size: 1rem;
+    padding: 8px 16px;
+}
+
+.battle-layout-portrait .vs-text {
+    font-size: 3.6rem;
+}
+
+.battle-layout-portrait .clash-action-deck {
+    height: 90px;
+}
+
+.battle-layout-portrait .btn-msg {
+    font-size: 1.8rem;
+}
+
+.battle-layout-portrait .btn-sub-msg {
+    font-size: 0.95rem;
+}
+
+.battle-layout-portrait .action-btn.z-move-btn .z-badge-icon,
+.battle-layout-portrait .action-btn.max-move-btn .z-badge-icon {
+    top: 10px;
+    right: 16px;
 }
 
 .battle-layout-portrait .result-screen {
