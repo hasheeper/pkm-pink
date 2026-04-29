@@ -12,7 +12,7 @@
  *      - party.slots[].bonds
  *      - transfer_buffer -> party.transferBuffer
  *      - slot1-slot6 -> party.slots
- *   4. Registers with MVU-zod, following the ACEZERO schema pattern.
+ *   4. Registers with MVU-zod.
  *
  * Storage:
  *   message variables -> stat_data.pkm

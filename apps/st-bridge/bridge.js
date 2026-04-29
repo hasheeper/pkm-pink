@@ -1,5 +1,5 @@
 /**
- * PKM Pink / AceZero stable SillyTavern bridge.
+ * PKM Pink stable SillyTavern bridge.
  *
  * ST only needs to load this file. The bridge then loads the selected pack
  * from manifest.json in a deterministic order.
@@ -8,7 +8,6 @@
  *   bridge.js
  *   bridge.js?pack=pkm-universal
  *   bridge.js?pack=pkm-main
- *   bridge.js?pack=acezero
  */
 (async function () {
   'use strict';
@@ -111,6 +110,65 @@
     }
   }
 
+  function clone(value, fallback = null) {
+    if (value === undefined || value === null) return fallback;
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  function isObject(value) {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+  }
+
+  async function readVariables(options = {}) {
+    const type = options.type || 'message';
+    if (typeof ROOT.getVariables !== 'function') return {};
+    try {
+      const vars = await ROOT.getVariables({ type });
+      return isObject(vars) ? vars : {};
+    } catch (error) {
+      console.warn(`${BRIDGE_NAME} readVariables failed:`, error);
+      return {};
+    }
+  }
+
+  async function writeVariables(data, options = {}) {
+    const type = options.type || 'message';
+    if (typeof ROOT.insertOrAssignVariables !== 'function') {
+      throw new Error('insertOrAssignVariables is unavailable');
+    }
+    await ROOT.insertOrAssignVariables(data, { type });
+    return data;
+  }
+
+  async function readState(rootKey = 'stat_data', stateKey = 'pkm', options = {}) {
+    const vars = await readVariables(options);
+    return isObject(vars?.[rootKey]?.[stateKey]) ? vars[rootKey][stateKey] : null;
+  }
+
+  async function writeState(rootKey = 'stat_data', stateKey = 'pkm', state, options = {}) {
+    const vars = await readVariables(options);
+    const root = isObject(vars?.[rootKey]) ? vars[rootKey] : {};
+    const nextRoot = { ...root, [stateKey]: state };
+    await writeVariables({ [rootKey]: nextRoot }, options);
+    try {
+      ROOT.dispatchEvent?.(new CustomEvent('st-bridge:state-written', {
+        detail: { rootKey, stateKey, state }
+      }));
+    } catch (_) {}
+    return state;
+  }
+
+  async function patchState(rootKey = 'stat_data', stateKey = 'pkm', patcher, options = {}) {
+    const current = await readState(rootKey, stateKey, options);
+    const draft = clone(current, {});
+    const result = await patcher(draft, current);
+    return writeState(rootKey, stateKey, result || draft, options);
+  }
+
   function getLoadedRegistry() {
     if (!ROOT.__ST_BRIDGE_LOADED__ || typeof ROOT.__ST_BRIDGE_LOADED__ !== 'object') {
       ROOT.__ST_BRIDGE_LOADED__ = {};
@@ -160,9 +218,41 @@
   }
 
   function exposeApi(state) {
+    const existing = isObject(ROOT.STBridge) ? ROOT.STBridge : {};
+    const actionHandlers = existing.actionHandlers || {};
+
     ROOT.STBridge = {
+      ...existing,
       version: VERSION,
       state,
+      utils: {
+        clone,
+        isObject,
+        resolveUrl,
+        withCache
+      },
+      mvu: {
+        readVariables,
+        writeVariables,
+        readState,
+        writeState,
+        patchState
+      },
+      actionHandlers,
+      registerActions(namespace, handlers) {
+        if (!namespace || !isObject(handlers)) return;
+        actionHandlers[namespace] = {
+          ...(actionHandlers[namespace] || {}),
+          ...handlers
+        };
+      },
+      async dispatch(namespace, action, payload = {}) {
+        const handler = actionHandlers?.[namespace]?.[action];
+        if (typeof handler !== 'function') {
+          throw new Error(`No STBridge action handler for ${namespace}.${action}`);
+        }
+        return handler(payload);
+      },
       reload() {
         const next = new URL(bridgeUrl.href);
         next.searchParams.set('force', '1');

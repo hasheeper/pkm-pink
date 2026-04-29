@@ -43,22 +43,6 @@
           "url": "./packs/pkm-main/tavern-inject.mvuz.js"
         }
       ]
-    },
-    "acezero": {
-      "label": "AceZero MVU",
-      "product": "acezero",
-      "scripts": [
-        {
-          "id": "acezero-schema",
-          "type": "module",
-          "url": "./packs/acezero/acezero-schema.js"
-        },
-        {
-          "id": "acezero-plugin",
-          "type": "script",
-          "url": "./packs/acezero/acezero-tavern-plugin.js"
-        }
-      ]
     }
   }
 }

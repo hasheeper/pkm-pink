@@ -229,6 +229,10 @@
   }
 
   async function readStatData() {
+    if (ROOT.STBridge?.mvu?.readVariables) {
+      const vars = await ROOT.STBridge.mvu.readVariables({ type: 'message' });
+      return isObject(vars?.[STAT_KEY]) ? vars[STAT_KEY] : {};
+    }
     if (typeof ROOT.getVariables !== 'function') return {};
     try {
       const vars = await ROOT.getVariables({ type: 'message' });
@@ -240,12 +244,16 @@
   }
 
   async function writeDirectState(nextState) {
-    if (typeof ROOT.insertOrAssignVariables !== 'function') {
-      throw new Error('insertOrAssignVariables is unavailable');
-    }
     const statData = await readStatData();
     const normalized = ensureDirectState(nextState);
-    await ROOT.insertOrAssignVariables({ [STAT_KEY]: { ...statData, [PKM_KEY]: normalized } }, { type: 'message' });
+    if (ROOT.STBridge?.mvu?.writeState) {
+      await ROOT.STBridge.mvu.writeState(STAT_KEY, PKM_KEY, normalized, { type: 'message' });
+    } else {
+      if (typeof ROOT.insertOrAssignVariables !== 'function') {
+        throw new Error('insertOrAssignVariables is unavailable');
+      }
+      await ROOT.insertOrAssignVariables({ [STAT_KEY]: { ...statData, [PKM_KEY]: normalized } }, { type: 'message' });
+    }
     try {
       ROOT.dispatchEvent?.(new CustomEvent('pkm:stateChanged', { detail: { product: PRODUCT, state: normalized } }));
     } catch (_) {}

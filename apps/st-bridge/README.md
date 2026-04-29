@@ -1,6 +1,6 @@
-# ST Bridge
+# PKM ST Bridge
 
-Stable SillyTavern entry for PKM Pink and AceZero scripts.
+Stable SillyTavern entry for PKM Pink scripts.
 
 ## Links
 
@@ -15,7 +15,6 @@ Explicit packs:
 ```text
 https://hasheeper.github.io/pkm-pink/apps/st-bridge/bridge.js?pack=pkm-universal
 https://hasheeper.github.io/pkm-pink/apps/st-bridge/bridge.js?pack=pkm-main
-https://hasheeper.github.io/pkm-pink/apps/st-bridge/bridge.js?pack=acezero
 ```
 
 Force refresh during development:
@@ -26,5 +25,5 @@ https://hasheeper.github.io/pkm-pink/apps/st-bridge/bridge.js?pack=pkm-universal
 
 ## Contract
 
-`bridge.js` owns loading, ordering, cache busting, logging, and pack selection.
-Pack scripts own business behavior.
+`bridge.js` owns loading, ordering, cache busting, logging, pack selection, and shared MVU IO helpers.
+Pack scripts own PKM business behavior.
