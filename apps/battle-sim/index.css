@@ -116,13 +116,13 @@ body {
 }
 
 .ui-scale {
-    width: 1100px !important;
+    width: 1280px !important;
     height: 720px !important;
     flex-shrink: 0;
     position: relative;
     z-index: 10;
     margin: 0;
-    border-radius: 32px;
+    border-radius: 0;
     overflow: hidden;
     box-shadow: none;
     transform-origin: center center;
@@ -5898,7 +5898,7 @@ body {
 .battle-layout-portrait .ui-scale {
     width: 720px !important;
     height: 1100px !important;
-    border-radius: 36px;
+    border-radius: 0;
     background:
         radial-gradient(circle at center 30%, rgba(30, 40, 60, 0.15), transparent 58%),
         #e5e9f0;

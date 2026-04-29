@@ -1,4 +1,3 @@
-
 ```html
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -14,6 +13,7 @@
       height: 100%;
       overflow: hidden;
       background: transparent;
+      border-radius: 16px;
     }
     #app-frame {
       width: 100%;
@@ -22,6 +22,7 @@
       border: 0;
       display: block;
       background: transparent;
+      border-radius: 16px;
     }
 
     #frame-toolbar {
@@ -31,30 +32,46 @@
       z-index: 2147483647;
       display: flex;
       gap: 8px;
-      pointer-events: auto;
+      pointer-events: none; /* 让空白处不遮盖下方的操作 */
     }
 
+    /* 纯图标高级特效毛玻璃按钮 */
     .tool-btn {
+      pointer-events: auto;
       appearance: none;
-      border: 1px solid rgba(0, 0, 0, 0.18);
-      background: rgba(255, 255, 255, 0.92);
-      color: #2B2B2B;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(25, 25, 25, 0.7);
+      color: #ffffff;
       border-radius: 10px;
-      padding: 8px 10px;
-      font-size: 12px;
-      font-weight: 700;
-      line-height: 1;
+      padding: 8px; /* 纯图标，改为方形内边距 */
       cursor: pointer;
       user-select: none;
-      backdrop-filter: blur(6px);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .tool-btn:hover {
+      background: rgba(40, 40, 40, 0.85);
+      border-color: rgba(255, 255, 255, 0.4);
+      transform: translateY(-2px);
     }
 
     .tool-btn:active {
-      transform: translateY(1px);
+      transform: translateY(0);
     }
 
     .tool-btn[hidden] {
-      display: none;
+      display: none !important;
+    }
+
+    .tool-icon {
+      width: 16px; /* 去除文字后，图标稍微放大点更好看 */
+      height: 16px;
     }
 
     html.pseudo-fullscreen,
@@ -65,20 +82,29 @@
       height: 100vh;
       height: 100dvh;
       background: #000;
+      border-radius: 0 !important;
+      z-index: 999999;
     }
 
     html.pseudo-fullscreen #app-frame {
       width: 100vw;
       height: 100vh;
       height: 100dvh;
+      border-radius: 0;
     }
   </style>
 </head>
 <body>
   <div id="frame-toolbar">
-    <button id="btn-enter" class="tool-btn" type="button">放大</button>
-    <button id="btn-exit" class="tool-btn" type="button" hidden>退出</button>
+    <!-- 去掉中文，保留 title 提示 -->
+    <button id="btn-enter" class="tool-btn" type="button" title="放大">
+      <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+    </button>
+    <button id="btn-exit" class="tool-btn" type="button" hidden title="退出">
+      <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path></svg>
+    </button>
   </div>
+  
   <script id="pkm-json" type="application/json">$1</script>
 
   <iframe
@@ -101,14 +127,30 @@
 
       function resizeHostFrame() {
         if (!hostFrame) return;
-        const width = Math.min(window.innerWidth || 9999, 1280);
-        const height = Math.min(window.innerHeight || screen.height || 900, 860);
+        
+        const width = Math.min(window.innerWidth || 9999, 1100);
+        
+        let height;
+        if (width < 600) {
+            height = width * (1100 / 720); 
+        } else {
+            height = width * (720 / 1100); 
+        }
+
         hostFrame.style.width = width + 'px';
         hostFrame.style.maxWidth = '100%';
         hostFrame.style.height = height + 'px';
-        hostFrame.style.minHeight = '540px';
-        hostFrame.style.border = 'none';
+        
+        // 核心：无实体边框，绝对防止无限缩小死循环
+        hostFrame.style.border = 'none'; 
+        
+        // 利用不会产生物理位移的阴影模拟边框效果与圆角
+        hostFrame.style.boxShadow = '0 0 0 1px rgba(128, 128, 128, 0.2), 0 6px 20px rgba(0, 0, 0, 0.15)';
+        hostFrame.style.borderRadius = '16px';
+        hostFrame.style.margin = '10px auto';
+        hostFrame.style.display = 'block';
       }
+
       resizeHostFrame();
       window.addEventListener('resize', resizeHostFrame);
 
@@ -208,6 +250,4 @@
   </script>
 </body>
 </html>
-
-
 ```

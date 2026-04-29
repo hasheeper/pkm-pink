@@ -37,8 +37,8 @@ function getDefaultBattleData() {
             "enableSFX": true,
             "enableClash": false,
             "enableEnvironment": false,
-            "enableBattlePerformanceMode": true,
-            "enableBattlePortraitMode": true
+            "enableBattlePerformanceMode": false,
+            "enableBattlePortraitMode": false
         },
         "player": {
             "name": "Revival Blessing Tester",
