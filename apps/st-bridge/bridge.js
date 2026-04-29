@@ -17,24 +17,47 @@
   const BRIDGE_NAME = '[ST Bridge]';
   const VERSION = '0.1.0';
   const DEFAULT_MANIFEST = './manifest.json';
+  const DEFAULT_BRIDGE_URL = 'https://hasheeper.github.io/pkm-pink/apps/st-bridge/bridge.js';
+
+  function isUsableBridgeUrl(value) {
+    if (!value || typeof value !== 'string') return false;
+    if (!/^https?:\/\//i.test(value)) return false;
+    return value.includes('/apps/st-bridge/bridge.js');
+  }
 
   function getCurrentScriptUrl() {
     try {
-      if (document.currentScript?.src) return document.currentScript.src;
+      if (isUsableBridgeUrl(document.currentScript?.src)) return document.currentScript.src;
     } catch (_) {}
     try {
       const scripts = Array.from(document.getElementsByTagName('script'));
       const matched = scripts.reverse().find((script) => String(script.src || '').includes('/apps/st-bridge/bridge.js'));
-      if (matched?.src) return matched.src;
+      if (isUsableBridgeUrl(matched?.src)) return matched.src;
     } catch (_) {}
     try {
-      return location.href;
+      const resources = performance.getEntriesByType?.('resource') || [];
+      const matched = resources
+        .map((entry) => entry.name)
+        .reverse()
+        .find((name) => isUsableBridgeUrl(name));
+      if (matched) return matched;
+    } catch (_) {}
+    try {
+      if (isUsableBridgeUrl(ROOT.ST_BRIDGE_URL)) return ROOT.ST_BRIDGE_URL;
+    } catch (_) {}
+    return DEFAULT_BRIDGE_URL;
+  }
+
+  function makeBridgeUrl() {
+    const rawUrl = getCurrentScriptUrl();
+    try {
+      return new URL(rawUrl);
     } catch (_) {
-      return 'https://hasheeper.github.io/pkm-pink/apps/st-bridge/bridge.js';
+      return new URL(DEFAULT_BRIDGE_URL);
     }
   }
 
-  const bridgeUrl = new URL(getCurrentScriptUrl(), ROOT.location?.href || undefined);
+  const bridgeUrl = makeBridgeUrl();
   const bridgeRoot = new URL('.', bridgeUrl);
   const params = bridgeUrl.searchParams;
   const cacheBust = params.get('v') || params.get('cache') || '';
