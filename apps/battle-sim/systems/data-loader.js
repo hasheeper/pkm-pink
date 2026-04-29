@@ -37,7 +37,8 @@ function getDefaultBattleData() {
             "enableSFX": true,
             "enableClash": false,
             "enableEnvironment": false,
-            "enableBattlePerformanceMode": false
+            "enableBattlePerformanceMode": false,
+            "enableBattlePortraitMode": false
         },
         "player": {
             "name": "Revival Blessing Tester",
@@ -150,7 +151,8 @@ const DEFAULT_BATTLE_SETTINGS = {
     enableSFX: true,
     enableClash: false,
     enableEnvironment: true,
-    enableBattlePerformanceMode: false
+    enableBattlePerformanceMode: false,
+    enableBattlePortraitMode: false
 };
 
 function parseBattleSettings(settings = {}) {
@@ -158,6 +160,9 @@ function parseBattleSettings(settings = {}) {
     const performanceEnabled = source.enableBattlePerformanceMode === true
         || source.performanceMode === true
         || source.enablePerformanceMode === true;
+    const portraitEnabled = source.enableBattlePortraitMode === true
+        || source.portraitMode === true
+        || source.enablePortraitMode === true;
 
     return {
         ...DEFAULT_BATTLE_SETTINGS,
@@ -168,7 +173,8 @@ function parseBattleSettings(settings = {}) {
         enableSFX: source.enableSFX !== false,
         enableClash: source.enableClash === true,
         enableEnvironment: source.enableEnvironment !== false,
-        enableBattlePerformanceMode: performanceEnabled
+        enableBattlePerformanceMode: performanceEnabled,
+        enableBattlePortraitMode: portraitEnabled
     };
 }
 
@@ -198,7 +204,13 @@ function applyBattleSettings(settings = {}) {
         const body = document.body;
         root?.classList.toggle('battle-perf-mode', perf.enabled);
         body?.classList.toggle('battle-perf-mode', perf.enabled);
+        root?.classList.toggle('battle-layout-portrait', parsed.enableBattlePortraitMode);
+        body?.classList.toggle('battle-layout-portrait', parsed.enableBattlePortraitMode);
+        if (typeof window.updateUIScale === 'function') window.updateUIScale();
         window.dispatchEvent?.(new CustomEvent('battle-performance-change', { detail: perf }));
+        window.dispatchEvent?.(new CustomEvent('battle-layout-change', {
+            detail: { portrait: parsed.enableBattlePortraitMode }
+        }));
     }
     console.log('[SETTINGS] 全局系统开关:', parsed);
     return parsed;

@@ -24,7 +24,8 @@
       enableSFX: true,
       enableClash: false,
       enableEnvironment: true,
-      enableBattlePerformanceMode: false
+      enableBattlePerformanceMode: false,
+      enableBattlePortraitMode: false
     },
     main: {
       enableAVS: true,
@@ -34,7 +35,8 @@
       enableSFX: true,
       enableClash: false,
       enableBattleEnvironment: true,
-      enableBattlePerformanceMode: false
+      enableBattlePerformanceMode: false,
+      enableBattlePortraitMode: false
     }
   };
 

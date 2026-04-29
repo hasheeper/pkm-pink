@@ -14,11 +14,17 @@
 // ============================================
 
 /**
- * 固定画布等比缩放 (基准 1280x720)
+ * 固定画布等比缩放。横屏使用现有基准，竖屏布局使用 720x1100。
  */
 function updateUIScale() {
-    const baseW = 1280;
-    const baseH = 720;
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    const isPortrait = Boolean(
+        window.GAME_SETTINGS?.enableBattlePortraitMode
+        || document.body?.classList.contains('battle-layout-portrait')
+        || document.documentElement?.classList.contains('battle-layout-portrait')
+    );
+    const baseW = isPortrait ? 720 : 1280;
+    const baseH = isPortrait ? 1100 : 720;
     const pad = 0;
     const vw = Math.max(0, window.innerWidth - pad * 2);
     const vh = Math.max(0, window.innerHeight - pad * 2);

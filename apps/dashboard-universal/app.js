@@ -637,7 +637,8 @@ const DefaultSettings = {
     enableSFX: true,
     enableClash: false,
     enableEnvironment: true,
-    enableBattlePerformanceMode: false
+    enableBattlePerformanceMode: false,
+    enableBattlePortraitMode: false
 };
 
 // 获取父窗口的事件系统（iframe 内部需要通过 parent 访问）
@@ -989,6 +990,12 @@ const SettingsManifest = [
         label: 'PERF. MODE',
         desc: 'Disable heavy VFX, filters, shadows and weather particles.',
         color: '#95a5a6'
+    },
+    {
+        key: 'enableBattlePortraitMode',
+        label: 'PORTRAIT UI',
+        desc: 'Use the vertical 720x1100 battle layout.',
+        color: '#4fabff'
     }
 ];
 

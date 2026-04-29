@@ -1296,7 +1296,8 @@ const DefaultSettings = {
     enableSFX: true,
     enableClash: true,
     enableEnvironment: true,
-    enableBattlePerformanceMode: false
+    enableBattlePerformanceMode: false,
+    enableBattlePortraitMode: false
 };
 
 let statusClockTimer = null;
@@ -1772,6 +1773,12 @@ const SettingsManifest = [
         label: 'PERF. MODE',
         desc: 'Disable heavy VFX, filters, shadows and weather particles.',
         color: '#95a5a6'
+    },
+    {
+        key: 'enableBattlePortraitMode',
+        label: 'PORTRAIT UI',
+        desc: 'Use the vertical 720x1100 battle layout.',
+        color: '#4fabff'
     }
 ];
 
