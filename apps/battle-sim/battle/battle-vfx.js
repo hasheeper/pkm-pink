@@ -150,7 +150,15 @@ function triggerRangedVFX(type, targetSpriteId, effectiveness, isCritical) {
 // ============================================
 
 function triggerContactVFX(type, attackerSpriteId, effectiveness, isCritical) {
-    if (isPerformanceMode()) return;
+    if (isPerformanceMode()) {
+        // 性能模式跳过动画，但保留接触命中音效
+        setTimeout(() => {
+            if (typeof window.playHitSFX === 'function') {
+                window.playHitSFX(effectiveness, isCritical);
+            }
+        }, 350);
+        return { isContact: true, skipped: true };
+    }
     const atkEls = _getElements(attackerSpriteId);
     if (!atkEls) return;
     const { sprite: atkSprite, wrapper: atkWrap } = atkEls;
@@ -166,8 +174,8 @@ function triggerContactVFX(type, attackerSpriteId, effectiveness, isCritical) {
     let dx = (defRect.left + defRect.width / 2) - (atkRect.left + atkRect.width / 2);
     let dy = (defRect.top + defRect.height / 2) - (atkRect.top + atkRect.height / 2);
 
-    const gapX = 100;
-    const gapY = 0;
+    const gapX = 240;
+    const gapY = -25;
     let startScale, endScale;
 
     const isPlayer = attackerSpriteId === 'player-sprite';
@@ -175,7 +183,7 @@ function triggerContactVFX(type, attackerSpriteId, effectiveness, isCritical) {
         dx -= gapX; dy -= gapY;
         startScale = 1.4; endScale = 0.7;
     } else {
-        dx += gapX; dy += gapY - 40; // 【微调】敌方终点向上偏移 40px
+        dx += gapX; dy += gapY - 40;
         startScale = 1.0; endScale = 1.2;
     }
 
@@ -407,7 +415,6 @@ function triggerStatusVFX(statusType, targetSpriteId) {
  * @param {object} result - 伤害计算结果 { effectiveness, isCrit }
  */
 function playAttackVFX(attackerSpriteId, defenderSpriteId, move, result) {
-    if (isPerformanceMode()) return { isContact: false, skipped: true };
     const moveType = (move.type || 'Normal').toLowerCase();
     const effectiveness = result.effectiveness || 1;
     const isCrit = result.isCrit || false;
@@ -423,6 +430,14 @@ function playAttackVFX(attackerSpriteId, defenderSpriteId, move, result) {
     // 物理技默认接触，特殊技默认非接触（除非 flags 明确标注）
     const cat = (move.cat || '').toLowerCase();
     const shouldContact = !isPivotMove && (isContact || (cat === 'phys' && !fullMoveData.flags));
+
+    if (isPerformanceMode()) {
+        // 性能模式跳过动画，但接触类招式仍需播放音效
+        if (shouldContact) {
+            triggerContactVFX(moveType, attackerSpriteId, effectiveness, isCrit);
+        }
+        return { isContact: shouldContact, skipped: true };
+    }
 
     if (shouldContact) {
         triggerContactVFX(moveType, attackerSpriteId, effectiveness, isCrit);

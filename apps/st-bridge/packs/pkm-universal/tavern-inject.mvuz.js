@@ -26,7 +26,7 @@
   let refreshTimer = null;
   let actionLock = false;
   let dashboardWindow = null;
-  const messageTargets = [];
+  const messageTargets =[];
   const pushDedupState = ROOT.__PKM_MVUZ_PUSH_DEDUP__ || { key: '', at: 0, inFlight: false };
   ROOT.__PKM_MVUZ_PUSH_DEDUP__ = pushDedupState;
 
@@ -319,38 +319,139 @@
   function injectUi($) {
     $(`#${BALL_ID}, #${OVERLAY_ID}, #${STYLE_ID}`).remove();
 
+    // 统合载入 面板关闭按钮 + 科幻极简悬浮球的 CSS 样式
     const style = `
       <style id="${STYLE_ID}">
+        /* 全局悬浮球呼吸动画 */
         @keyframes pkm-mvuz-float {
           0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-6px); }
+          50% { transform: translateY(-8px); }
         }
-        #${BALL_ID}:hover { transform: scale(1.08); }
+        /* 悬浮球伪元素光环旋转 */
+        @keyframes pkm-mvuz-spin {
+          100% { transform: rotate(360deg); }
+        }
+
+        /* ---------------- 科幻悬浮球基础设置 ---------------- */
+        #${BALL_ID} {
+          position: fixed;
+          top: 80px;
+          right: 20px;
+          width: 52px;
+          height: 52px;
+          border-radius: 50%;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 2147483645; /* 确保在面板 Overlay 层之下 */
+          
+          /* 蓝白透明光泽玻璃质感 */
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(0, 140, 255, 0.1) 100%);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          border: 1px solid rgba(255, 255, 255, 0.25);
+          box-shadow: 
+            0 8px 20px rgba(0, 0, 0, 0.4), 
+            0 0 15px rgba(0, 150, 255, 0.15), 
+            inset 0 0 12px rgba(255, 255, 255, 0.3);
+
+          transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+          animation: pkm-mvuz-float 3s ease-in-out infinite;
+        }
+
+        /* 科技感呼吸环外圈 */
+        #${BALL_ID}::before {
+          content: '';
+          position: absolute;
+          inset: -2px;
+          border-radius: 50%;
+          border: 1px solid transparent;
+          background: linear-gradient(180deg, rgba(0, 212, 255, 0), rgba(0, 212, 255, 0.5)) border-box;
+          -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+          -webkit-mask-composite: destination-out;
+          mask-composite: exclude;
+          opacity: 0.6;
+          animation: pkm-mvuz-spin 4s linear infinite;
+        }
+
+        /* 悬停时的光照响应 */
+        #${BALL_ID}:hover {
+          transform: scale(1.1);
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.25) 0%, rgba(0, 140, 255, 0.3) 100%);
+          border-color: rgba(255, 255, 255, 0.6);
+          box-shadow: 
+            0 10px 25px rgba(0, 0, 0, 0.5), 
+            0 0 25px rgba(0, 180, 255, 0.4), 
+            inset 0 0 15px rgba(255, 255, 255, 0.6);
+        }
+        #${BALL_ID}:hover::before {
+          opacity: 1;
+          animation: pkm-mvuz-spin 1.5s linear infinite;
+        }
+
+        /* 悬浮球 SVG 核心动态配置 */
+        #${BALL_ID} svg {
+          width: 24px;
+          height: 24px;
+          color: #e0f2ff;
+          filter: drop-shadow(0 0 4px rgba(0, 180, 255, 0.8));
+          transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.3s ease, filter 0.3s ease;
+          z-index: 1;
+        }
+        #${BALL_ID}:hover svg {
+          color: #ffffff;
+          transform: rotate(90deg) scale(1.1);
+          filter: drop-shadow(0 0 8px rgba(0, 212, 255, 1));
+        }
+
+        /* ---------------- 面板右上角关闭按钮 ---------------- */
+        .pkm-mvuz-close-btn {
+          position: absolute;
+          top: 12px;
+          right: 12px;
+          appearance: none;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          background: rgba(25, 25, 25, 0.7);
+          color: #ffffff;
+          border-radius: 10px;
+          padding: 8px;
+          cursor: pointer;
+          user-select: none;
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          transition: all 0.2s ease;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          z-index: 2;
+        }
+        .pkm-mvuz-close-btn:hover {
+          background: rgba(40, 40, 40, 0.85);
+          border-color: rgba(255, 255, 255, 0.4);
+          transform: translateY(-2px);
+        }
+        .pkm-mvuz-close-btn:active {
+          transform: translateY(0);
+        }
       </style>
     `;
     $('head').append(style);
 
+    // 注入科幻极简版的悬浮球（去除了以前厚重的内联圆角样式，统一交给CSS）
     const ball = $('<div>')
       .attr('id', BALL_ID)
       .attr('title', 'PKM Dashboard')
-      .css({
-        position: 'fixed',
-        top: '80px',
-        right: '20px',
-        width: '50px',
-        height: '50px',
-        borderRadius: '50%',
-        zIndex: 2147483647,
-        cursor: 'pointer',
-        background: 'linear-gradient(135deg, #ffd54a 0%, #f28b25 100%)',
-        boxShadow: '0 4px 15px rgba(242, 139, 37, 0.45)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        animation: 'pkm-mvuz-float 3s ease-in-out infinite',
-        transition: 'transform 0.2s ease'
-      })
-      .html('<svg width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#242424" stroke-width="2" fill="none"/><line x1="2" y1="12" x2="22" y2="12" stroke="#242424" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="#242424"/></svg>');
+      .html(`
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M2 12h7" />
+          <path d="M15 12h7" />
+          <circle cx="12" cy="12" r="3" />
+          <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+        </svg>
+      `);
 
     const overlay = $('<div>')
       .attr('id', OVERLAY_ID)
@@ -366,7 +467,7 @@
         alignItems: 'center',
         justifyContent: 'center',
         padding: '4px',
-        zIndex: 2147483646,
+        zIndex: 2147483647, /* 全局最顶层，压住悬浮球 */
         overflow: 'hidden'
       });
 
@@ -382,23 +483,9 @@
 
     const closeBtn = $('<button>')
       .attr('type', 'button')
-      .attr('title', 'Close')
-      .css({
-        position: 'absolute',
-        top: '10px',
-        right: '10px',
-        width: '34px',
-        height: '34px',
-        borderRadius: '50%',
-        border: 'none',
-        background: 'rgba(0,0,0,0.55)',
-        color: '#fff',
-        fontSize: '22px',
-        lineHeight: '34px',
-        cursor: 'pointer',
-        zIndex: 2
-      })
-      .text('x');
+      .attr('title', '关闭面板')
+      .addClass('pkm-mvuz-close-btn')
+      .html('<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>');
 
     const iframe = $('<iframe>')
       .attr('id', IFRAME_ID)

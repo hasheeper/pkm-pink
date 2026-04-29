@@ -32,10 +32,10 @@
       z-index: 2147483647;
       display: flex;
       gap: 8px;
-      pointer-events: none; /* 让空白处不遮盖下方的操作 */
+      pointer-events: none; 
     }
 
-    /* 纯图标高级特效毛玻璃按钮 */
+    /* 纯图标毛玻璃按钮 */
     .tool-btn {
       pointer-events: auto;
       appearance: none;
@@ -46,7 +46,7 @@
       background: rgba(25, 25, 25, 0.7);
       color: #ffffff;
       border-radius: 10px;
-      padding: 8px; /* 纯图标，改为方形内边距 */
+      padding: 8px; 
       cursor: pointer;
       user-select: none;
       backdrop-filter: blur(8px);
@@ -70,7 +70,7 @@
     }
 
     .tool-icon {
-      width: 16px; /* 去除文字后，图标稍微放大点更好看 */
+      width: 16px; 
       height: 16px;
     }
 
@@ -96,7 +96,6 @@
 </head>
 <body>
   <div id="frame-toolbar">
-    <!-- 去掉中文，保留 title 提示 -->
     <button id="btn-enter" class="tool-btn" type="button" title="放大">
       <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
     </button>
@@ -125,26 +124,41 @@
       const frame = document.getElementById('app-frame');
       const hostFrame = window.frameElement;
 
+      // 从注入 JSON 读取竖屏模式设置
+      function isPortraitMode() {
+        try {
+          const dataNode = document.getElementById('pkm-json');
+          if (!dataNode) return false;
+          const raw = (dataNode.textContent || dataNode.innerText || '').trim();
+          if (!raw) return false;
+          const json = JSON.parse(raw);
+          return !!(json.settings?.enableBattlePortraitMode
+            || json.settings?.portraitMode
+            || json.settings?.enablePortraitMode);
+        } catch (e) {
+          return false;
+        }
+      }
+
       function resizeHostFrame() {
         if (!hostFrame) return;
-        
-        const width = Math.min(window.innerWidth || 9999, 1100);
-        
-        let height;
-        if (width < 600) {
-            height = width * (1100 / 720); 
-        } else {
-            height = width * (720 / 1100); 
+        const portrait = isPortraitMode();
+
+        // 横屏基准 1100x720，竖屏基准 720x1100
+        const maxW = portrait ? 720 : 1100;
+        const ratio = portrait ? (1100 / 720) : (720 / 1100);
+
+        hostFrame.style.width = '100%';
+        hostFrame.style.maxWidth = maxW + 'px';
+
+        let realWidth = hostFrame.getBoundingClientRect().width || hostFrame.offsetWidth;
+        if (!realWidth || realWidth === 0) {
+          realWidth = hostFrame.parentElement ? hostFrame.parentElement.clientWidth : (window.innerWidth || maxW);
+          realWidth = Math.min(realWidth, maxW);
         }
 
-        hostFrame.style.width = width + 'px';
-        hostFrame.style.maxWidth = '100%';
-        hostFrame.style.height = height + 'px';
-        
-        // 核心：无实体边框，绝对防止无限缩小死循环
-        hostFrame.style.border = 'none'; 
-        
-        // 利用不会产生物理位移的阴影模拟边框效果与圆角
+        hostFrame.style.height = Math.round(realWidth * ratio) + 'px';
+        hostFrame.style.border = 'none';
         hostFrame.style.boxShadow = '0 0 0 1px rgba(128, 128, 128, 0.2), 0 6px 20px rgba(0, 0, 0, 0.15)';
         hostFrame.style.borderRadius = '16px';
         hostFrame.style.margin = '10px auto';
