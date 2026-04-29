@@ -10,17 +10,17 @@
         {
           "id": "pkm-universal-schema",
           "type": "module",
-          "url": "../../ST/MVUZ重构脚本/通用版本/pkm-universal-schema.js"
+          "url": "./packs/pkm-universal/pkm-universal-schema.js"
         },
         {
           "id": "pkm-universal-plugin",
           "type": "script",
-          "url": "../../ST/MVUZ重构脚本/通用版本/pkm-tavern-plugin.mvuz.js"
+          "url": "./packs/pkm-universal/pkm-tavern-plugin.mvuz.js"
         },
         {
           "id": "pkm-universal-dashboard",
           "type": "script",
-          "url": "../../ST/MVUZ重构脚本/通用版本/tavern-inject.mvuz.js"
+          "url": "./packs/pkm-universal/tavern-inject.mvuz.js"
         }
       ]
     },
@@ -35,12 +35,12 @@
         {
           "id": "pkm-main-plugin",
           "type": "script",
-          "url": "../../ST/MVUZ重构脚本/pkm-tavern-plugin.mvuz.js"
+          "url": "./packs/pkm-main/pkm-tavern-plugin.mvuz.js"
         },
         {
           "id": "pkm-main-dashboard",
           "type": "script",
-          "url": "../../ST/MVUZ重构脚本/tavern-inject.mvuz.js"
+          "url": "./packs/pkm-main/tavern-inject.mvuz.js"
         }
       ]
     },
@@ -51,12 +51,12 @@
         {
           "id": "acezero-schema",
           "type": "module",
-          "url": "../../ST/MVU类似模式参考脚本/acezero-schema.js"
+          "url": "./packs/acezero/acezero-schema.js"
         },
         {
           "id": "acezero-plugin",
           "type": "script",
-          "url": "../../ST/MVU类似模式参考脚本/acezero-tavern-plugin.js"
+          "url": "./packs/acezero/acezero-tavern-plugin.js"
         }
       ]
     }
