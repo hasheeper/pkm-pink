@@ -1,0 +1,64 @@
+{
+  "version": "0.1.0",
+  "defaultPack": "pkm-universal",
+  "activePack": "pkm-universal",
+  "packs": {
+    "pkm-universal": {
+      "label": "PKM Pink Universal MVUZ",
+      "product": "universal",
+      "scripts": [
+        {
+          "id": "pkm-universal-schema",
+          "type": "module",
+          "url": "../../ST/MVUZ重构脚本/通用版本/pkm-universal-schema.js"
+        },
+        {
+          "id": "pkm-universal-plugin",
+          "type": "script",
+          "url": "../../ST/MVUZ重构脚本/通用版本/pkm-tavern-plugin.mvuz.js"
+        },
+        {
+          "id": "pkm-universal-dashboard",
+          "type": "script",
+          "url": "../../ST/MVUZ重构脚本/通用版本/tavern-inject.mvuz.js"
+        }
+      ]
+    },
+    "pkm-main": {
+      "label": "PKM Pink Main MVUZ",
+      "product": "main",
+      "globals": {
+        "PKM_MVUZ_PRODUCT": "main",
+        "PKM_MVUZ_DASHBOARD_URL": "https://hasheeper.github.io/pkm-pink/containers/app.html?app=dashboard-main"
+      },
+      "scripts": [
+        {
+          "id": "pkm-main-plugin",
+          "type": "script",
+          "url": "../../ST/MVUZ重构脚本/pkm-tavern-plugin.mvuz.js"
+        },
+        {
+          "id": "pkm-main-dashboard",
+          "type": "script",
+          "url": "../../ST/MVUZ重构脚本/tavern-inject.mvuz.js"
+        }
+      ]
+    },
+    "acezero": {
+      "label": "AceZero MVU",
+      "product": "acezero",
+      "scripts": [
+        {
+          "id": "acezero-schema",
+          "type": "module",
+          "url": "../../ST/MVU类似模式参考脚本/acezero-schema.js"
+        },
+        {
+          "id": "acezero-plugin",
+          "type": "script",
+          "url": "../../ST/MVU类似模式参考脚本/acezero-tavern-plugin.js"
+        }
+      ]
+    }
+  }
+}

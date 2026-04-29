@@ -19,6 +19,30 @@
   const OVERLAY_ID = 'pkm-mvuz-overlay';
   const BALL_ID = 'pkm-mvuz-ball';
   const STYLE_ID = 'pkm-mvuz-style';
+  const STAT_KEY = 'stat_data';
+  const PKM_KEY = 'pkm';
+  const MAX_PARTY_SIZE = 6;
+
+  const DEFAULT_SETTINGS = {
+    enableAVS: true,
+    enableCommander: true,
+    enableEVO: true,
+    enableBGM: true,
+    enableSFX: true,
+    enableClash: false,
+    enableEnvironment: true
+  };
+
+  const DEFAULT_UNLOCKS = {
+    enable_bond: false,
+    enable_styles: false,
+    enable_insight: false,
+    enable_mega: false,
+    enable_z_move: false,
+    enable_dynamax: false,
+    enable_tera: false,
+    enable_proficiency_cap: false
+  };
 
   let iframeInitialized = false;
   let refreshTimer = null;
@@ -78,6 +102,63 @@
       },
       notes: null
     };
+  }
+
+  function makeDefaultPkmState() {
+    return {
+      meta: {
+        schemaVersion: 1,
+        product: PRODUCT,
+        updatedAt: new Date().toISOString(),
+        version: VERSION
+      },
+      player: {
+        name: 'Yota',
+        proficiency: 0,
+        unlocks: { ...DEFAULT_UNLOCKS }
+      },
+      party: {
+        slots: Array.from({ length: MAX_PARTY_SIZE }, (_, index) => createEmptySlot(index + 1)),
+        transferBuffer: null
+      },
+      box: {
+        boxes: [{ id: 'box_01', name: 'Box 1', slots: [] }]
+      },
+      world: {},
+      settings: { ...DEFAULT_SETTINGS }
+    };
+  }
+
+  function ensureDirectState(state) {
+    const next = clone(state, makeDefaultPkmState()) || makeDefaultPkmState();
+    next.player = isObject(next.player) ? next.player : {};
+    next.player.unlocks = { ...DEFAULT_UNLOCKS, ...(isObject(next.player.unlocks) ? next.player.unlocks : {}) };
+    next.settings = { ...DEFAULT_SETTINGS, ...(isObject(next.settings) ? next.settings : {}) };
+    next.party = isObject(next.party) ? next.party : {};
+    const slots = Array.isArray(next.party.slots) ? next.party.slots : [];
+    next.party.slots = Array.from({ length: MAX_PARTY_SIZE }, (_, index) => ({
+      ...createEmptySlot(index + 1),
+      ...(isObject(slots[index]) ? slots[index] : {})
+    }));
+    next.box = isObject(next.box) ? next.box : { boxes: [{ id: 'box_01', name: 'Box 1', slots: [] }] };
+    next.meta = {
+      ...(isObject(next.meta) ? next.meta : {}),
+      schemaVersion: 1,
+      product: PRODUCT,
+      updatedAt: new Date().toISOString(),
+      version: VERSION
+    };
+    return next;
+  }
+
+  function normalizeDirectPokemon(pokemon, slot = null) {
+    if (!isObject(pokemon)) return null;
+    const next = clone(pokemon, {});
+    if (!next.name && !next.species) return null;
+    next.name = next.name || next.nickname || next.species;
+    next.species = next.species || next.name;
+    if (slot !== null) next.slot = slot;
+    return next;
   }
 
   function stateToLegacyDashboard(state) {
@@ -144,6 +225,150 @@
     } catch (error) {
       console.warn(`${PLUGIN_NAME} failed to read MVUZ state:`, error);
       return null;
+    }
+  }
+
+  async function readStatData() {
+    if (typeof ROOT.getVariables !== 'function') return {};
+    try {
+      const vars = await ROOT.getVariables({ type: 'message' });
+      return isObject(vars?.[STAT_KEY]) ? vars[STAT_KEY] : {};
+    } catch (error) {
+      console.warn(`${PLUGIN_NAME} direct MVUZ read failed:`, error);
+      return {};
+    }
+  }
+
+  async function writeDirectState(nextState) {
+    if (typeof ROOT.insertOrAssignVariables !== 'function') {
+      throw new Error('insertOrAssignVariables is unavailable');
+    }
+    const statData = await readStatData();
+    const normalized = ensureDirectState(nextState);
+    await ROOT.insertOrAssignVariables({ [STAT_KEY]: { ...statData, [PKM_KEY]: normalized } }, { type: 'message' });
+    try {
+      ROOT.dispatchEvent?.(new CustomEvent('pkm:stateChanged', { detail: { product: PRODUCT, state: normalized } }));
+    } catch (_) {}
+    return normalized;
+  }
+
+  async function patchDirectState(patcher) {
+    const statData = await readStatData();
+    const current = ensureDirectState(statData?.[PKM_KEY]);
+    const draft = clone(current, current);
+    const result = await patcher(draft);
+    return writeDirectState(result || draft);
+  }
+
+  async function dispatchDirectAction(action, payload = {}) {
+    switch (action) {
+      case 'greeting.configure':
+        return patchDirectState((state) => {
+          if (isObject(payload.unlocks)) {
+            Object.keys(DEFAULT_UNLOCKS).forEach((key) => {
+              if (key in payload.unlocks) state.player.unlocks[key] = Boolean(payload.unlocks[key]);
+            });
+          }
+          if (isObject(payload.settings)) {
+            Object.keys(DEFAULT_SETTINGS).forEach((key) => {
+              if (key in payload.settings) state.settings[key] = Boolean(payload.settings[key]);
+            });
+          }
+          return state;
+        });
+      case 'settings.update':
+        return patchDirectState((state) => {
+          if (isObject(payload)) {
+            Object.keys(DEFAULT_SETTINGS).forEach((key) => {
+              if (key in payload) state.settings[key] = Boolean(payload[key]);
+            });
+          }
+          return state;
+        });
+      case 'party.setLead':
+        return patchDirectState((state) => {
+          const slot = Math.max(1, Math.min(MAX_PARTY_SIZE, Number(payload.slot ?? payload.targetSlot) || 1));
+          state.party.slots.forEach((pokemon, index) => {
+            pokemon.isLead = Boolean(pokemon.name) && index + 1 === slot;
+          });
+          return state;
+        });
+      case 'party.updateMove':
+      case 'party.updateMoves':
+        return patchDirectState((state) => {
+          const slot = Math.max(1, Math.min(MAX_PARTY_SIZE, Number(payload.slot) || 1)) - 1;
+          const pokemon = state.party.slots[slot];
+          if (!pokemon) return state;
+          const moves = Array.isArray(pokemon.moves)
+            ? pokemon.moves.slice(0, 4)
+            : [pokemon.moves?.move1, pokemon.moves?.move2, pokemon.moves?.move3, pokemon.moves?.move4];
+          while (moves.length < 4) moves.push(null);
+          if (action === 'party.updateMoves') {
+            pokemon.moves = Array.isArray(payload.moves) ? payload.moves.slice(0, 4) : moves;
+          } else {
+            const moveIndex = Math.max(1, Math.min(4, Number(payload.moveIndex ?? payload.index) || 1)) - 1;
+            moves[moveIndex] = payload.move || null;
+            pokemon.moves = moves;
+          }
+          return state;
+        });
+      case 'box.depositTransferBuffer':
+        return patchDirectState((state) => {
+          const pokemon = normalizeDirectPokemon(state.party.transferBuffer);
+          if (!pokemon) return state;
+          if (!Array.isArray(state.box.boxes)) state.box.boxes = [{ id: 'box_01', name: 'Box 1', slots: [] }];
+          if (!state.box.boxes[0]) state.box.boxes[0] = { id: 'box_01', name: 'Box 1', slots: [] };
+          if (!Array.isArray(state.box.boxes[0].slots)) state.box.boxes[0].slots = [];
+          state.box.boxes[0].slots.push(pokemon);
+          state.party.transferBuffer = null;
+          return state;
+        });
+      case 'box.applyLegacyMutation':
+        return patchDirectState((state) => {
+          if (!Array.isArray(state.box.boxes)) state.box.boxes = [{ id: 'box_01', name: 'Box 1', slots: [] }];
+          const box = state.box.boxes[0] || { id: 'box_01', name: 'Box 1', slots: [] };
+          state.box.boxes[0] = box;
+          if (!Array.isArray(box.slots)) box.slots = [];
+
+          const partyEdits = isObject(payload.partyEdits) ? payload.partyEdits : {};
+          Object.entries(partyEdits).forEach(([slotKey, pokemon]) => {
+            const match = String(slotKey).match(/^slot(\d+)$/);
+            if (!match) return;
+            const slotNumber = Math.max(1, Math.min(MAX_PARTY_SIZE, Number(match[1]) || 1));
+            state.party.slots[slotNumber - 1] = normalizeDirectPokemon(pokemon, slotNumber) || createEmptySlot(slotNumber);
+          });
+
+          const boxInserts = isObject(payload.boxInserts) ? payload.boxInserts : {};
+          Object.keys(boxInserts).sort().forEach((key) => {
+            const pokemon = normalizeDirectPokemon(boxInserts[key]);
+            if (pokemon) box.slots.push(pokemon);
+          });
+
+          const boxEdits = isObject(payload.boxEdits) ? payload.boxEdits : {};
+          Object.entries(boxEdits).forEach(([key, pokemon]) => {
+            const match = String(key).match(/^storage_(\d+)$/);
+            if (!match) return;
+            const index = Number(match[1]) - 1;
+            if (index < 0) return;
+            const normalized = normalizeDirectPokemon(pokemon);
+            if (normalized) box.slots[index] = normalized;
+          });
+
+          const boxDeletes = isObject(payload.boxDeletes) ? payload.boxDeletes : {};
+          Object.keys(boxDeletes)
+            .map((key) => {
+              const match = String(key).match(/^storage_(\d+)$/);
+              return match ? Number(match[1]) - 1 : -1;
+            })
+            .filter((index) => index >= 0)
+            .sort((a, b) => b - a)
+            .forEach((index) => {
+              if (index < box.slots.length) box.slots.splice(index, 1);
+            });
+          return state;
+        });
+      default:
+        throw new Error(`Unknown direct PKM action: ${action}`);
     }
   }
 
@@ -223,11 +448,13 @@
     if (actionLock) return null;
     actionLock = true;
     try {
-      if (!ROOT.PKMPlugin?.dispatchAction) {
-        console.warn(`${PLUGIN_NAME} PKMPlugin.dispatchAction is unavailable`);
-        return null;
+      const hasPluginAction = typeof ROOT.PKMPlugin?.dispatchAction === 'function';
+      if (!hasPluginAction) {
+        console.log(`${PLUGIN_NAME} PKMPlugin.dispatchAction unavailable; using direct MVU write for ${action}`);
       }
-      const state = await ROOT.PKMPlugin.dispatchAction(action, payload);
+      const state = hasPluginAction
+        ? await ROOT.PKMPlugin.dispatchAction(action, payload)
+        : await dispatchDirectAction(action, payload);
       await pushDashboardState(`action:${action}`);
       return state;
     } catch (error) {
