@@ -78,7 +78,6 @@ PKM PINK Universal MVUZ 变量规则
 - 获得 Mega 石/Z 晶/太晶能力: 写 `item`、`mechanic`、必要时写 `teraType`。
 
 世界状态
-- Universal 没有坐标系统、没有地图、没有天气、没有 NPC 好感系统。
 - 时间:
   - `/pkm/world/time/day_advance`: `"next_period"`、`"nextday"`、`"skip_to_night"`、`"3days_morning"` 等。
   - `/pkm/world/time/period_set`: `dawn / morning / noon / afternoon / evening / night / midnight`。

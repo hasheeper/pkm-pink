@@ -969,6 +969,20 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
 
   async function dispatchAction(action, payload = {}) {
     switch (action) {
+      case 'greeting.configure':
+        return patchState((state) => {
+          if (isObject(payload.unlocks)) {
+            Object.keys(DEFAULT_UNLOCKS).forEach((key) => {
+              if (key in payload.unlocks) state.player.unlocks[key] = Boolean(payload.unlocks[key]);
+            });
+          }
+          if (isObject(payload.settings)) {
+            Object.keys(DEFAULT_SETTINGS).forEach((key) => {
+              if (key in payload.settings) state.settings[key] = Boolean(payload.settings[key]);
+            });
+          }
+          return state;
+        });
       case 'party.setLead':
         return patchState((state) => {
           const slot = clampNumber(payload.slot ?? payload.targetSlot, 1, MAX_PARTY_SIZE, 1);

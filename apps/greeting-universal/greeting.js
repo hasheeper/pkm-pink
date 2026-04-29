@@ -158,6 +158,66 @@ const DEFAULT_WORLD_SETTINGS = {
     enableEnvironment: true
 };
 
+const SETTING_MECHANIC_MAP = {
+    enable_clash: 'enableClash',
+    enable_environment: 'enableEnvironment'
+};
+
+function normalizeGreetingSettings(settings) {
+    return {
+        ...DEFAULT_WORLD_SETTINGS,
+        ...(settings || {})
+    };
+}
+
+async function injectMvuzGreetingConfig(payload) {
+    const message = {
+        type: 'PKM_ACTION',
+        action: 'greeting.configure',
+        payload,
+        source: 'greeting-universal'
+    };
+    let sent = false;
+
+    try {
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage(message, '*');
+            sent = true;
+        }
+    } catch (err) {
+        console.warn('[Greeting] parent MVU injection failed:', err);
+    }
+
+    try {
+        if (window.top && window.top !== window && window.top !== window.parent) {
+            window.top.postMessage(message, '*');
+            sent = true;
+        }
+    } catch (err) {
+        console.warn('[Greeting] top MVU injection failed:', err);
+    }
+
+    try {
+        if (window.opener && !window.opener.closed) {
+            window.opener.postMessage(message, '*');
+            sent = true;
+        }
+    } catch (err) {
+        console.warn('[Greeting] opener MVU injection failed:', err);
+    }
+
+    try {
+        if (window.PKMPlugin?.dispatchAction) {
+            await window.PKMPlugin.dispatchAction('greeting.configure', payload);
+            sent = true;
+        }
+    } catch (err) {
+        console.warn('[Greeting] direct MVU injection failed:', err);
+    }
+
+    return sent;
+}
+
 const BASE_UNLOCK_STATE = MECHANICS_DICT.reduce((acc, mech) => {
     acc[mech.key] = false;
     return acc;
@@ -189,6 +249,19 @@ function applyGenUnlocks(target, genId) {
     const keys = GEN_UNLOCK_MAP[genId];
     if (!keys) return;
     keys.forEach(key => { target[key] = true; });
+}
+
+function applyMechanicsToMvuz(mechanicsList, unlocksTarget, settingsTarget) {
+    mechanicsList.forEach(key => {
+        const settingKey = SETTING_MECHANIC_MAP[key];
+        if (settingKey) {
+            settingsTarget[settingKey] = true;
+            return;
+        }
+        if (key in BASE_UNLOCK_STATE) {
+            unlocksTarget[key] = true;
+        }
+    });
 }
 
 /**
@@ -761,7 +834,7 @@ const Launcher = {
         this.closeEditor();
     },
 
-    createWorld() {
+    async createWorld() {
         const idx = State.selectedGenIndex;
         if (idx === -1) return alert('请选择一个 Option！');
 
@@ -774,10 +847,7 @@ const Launcher = {
         let finalMechanics = {};
         const finalSettings = { enableSFX: true, enableBGM: true };
       
-        let playerObj = {
-            party: {},
-            box: {}
-        };
+        const narrativeTeam = {};
 
         /* === 逻辑分支 A: M8 模式 === */
         if (isM8) {
@@ -804,7 +874,7 @@ const Launcher = {
                 const slotKey = `slot${i}`;
                 if (i === 1) finalStarter = cfg.species;
 
-                playerObj.party[slotKey] = {
+                narrativeTeam[slotKey] = {
                     name: cfg.nickname || cfg.species,
                     species: cfg.species,
                     level: parseInt(cfg.level, 10) || (i === 1 ? 80 : 70),
@@ -821,7 +891,7 @@ const Launcher = {
                 };
             }
 
-            if (!playerObj.party.slot1) return alert("逻辑错误：Slot 01 为空！");
+            if (!narrativeTeam.slot1) return alert("逻辑错误：Slot 01 为空！");
 
             finalSettings.enableM8mode = true;
             finalSettings.enableSFX = true;
@@ -864,12 +934,10 @@ const Launcher = {
 
             if (!isCustom) {
                 if (!finalStarter) return alert('请选择初始宝可梦！');
-                mechanicsList.forEach(key => finalMechanics[key] = true);
                 applyGenUnlocks(finalMechanics, data.id);
                 applyAnimeUnlocks(finalMechanics, State.animeMode);
                 animeModeActive = !!State.animeMode;
                 finalSettings.animeMode = State.animeMode;
-                playerObj.party.slot1 = { name: finalStarter, species: finalStarter, lv: 5 };
             } else {
                 const regInput = document.getElementById('cust-region');
                 const startInput = document.getElementById('cust-starter');
@@ -891,30 +959,22 @@ const Launcher = {
                     finalMechanics['enable_bond'] = true;
                 }
                 animeModeActive = !!State.customAnimeMode;
-                playerObj.party.slot1 = { name: finalStarter, species: finalStarter, lv: 5 };
             }
 
             applySettingsMode(finalSettings, animeModeActive);
+            applyMechanicsToMvuz(mechanicsList, finalMechanics, finalSettings);
         }
 
-        const newDB = {
-            player: {
-                name: 'Challenger',
-                unlocks: finalMechanics,
-                world_state: {
-                    region: finalRegion
-                }
-            },
-            settings: finalSettings
-        };
-
-        const jsonStr = JSON.stringify(newDB, null, 2);
+        const injected = await injectMvuzGreetingConfig({
+            unlocks: finalMechanics,
+            settings: normalizeGreetingSettings(finalSettings)
+        });
 
         let teamDescription = '';
         if (isM8) {
             const teamList = [];
-            Object.keys(playerObj.party).forEach(key => {
-                const mon = playerObj.party[key];
+            Object.keys(narrativeTeam).forEach(key => {
+                const mon = narrativeTeam[key];
                 const ivStr = `${mon.stats.ivs.hp}/${mon.stats.ivs.atk}/${mon.stats.ivs.def}/${mon.stats.ivs.spa}/${mon.stats.ivs.spd}/${mon.stats.ivs.spe}`;
                 teamList.push(`- ${mon.name} (${mon.species}) Lv.${mon.level} ${mon.gender} | Nature: ${mon.nature} | Ability: ${mon.ability} | Item: ${mon.item || 'None'} | IVs: ${ivStr} | EVs: ${mon.stats.ev_total} | Bonds: ${mon.bonds}`);
             });
@@ -929,7 +989,7 @@ const Launcher = {
         let guideText = "";
         if (isM8) {
             const tiers = ["Zero", "Rookie Class", "Ultra Class", "Masters Eight"];
-            guideText = `当前开局模式：${tiers[State.m8RankTier]} (PVP Career Layout)。\n玩家已登记 ${Object.keys(playerObj.party).length} 只核心宝可梦。首发王牌为 ${finalStarter}。\n根据 'animeMode=${State.animeMode}'，请${State.animeMode ? '注重角色羁绊表现与技能喊话' : '注重数值硬核计算与战术'}。`;
+            guideText = `当前开局模式：${tiers[State.m8RankTier]} (PVP Career Layout)。\n玩家叙事设定包含 ${Object.keys(narrativeTeam).length} 只核心宝可梦。首发王牌为 ${finalStarter}。\n根据 'animeMode=${State.animeMode}'，请${State.animeMode ? '注重角色羁绊表现与技能喊话' : '注重数值硬核计算与战术'}。`;
         } else {
             guideText = isCustom ? 
             `这里是自建世界区域${finalRegion}。请描述主角获得了${finalStarter || '自定义搭档'}的场景。` : '请沿用官方开局剧本。';
@@ -940,17 +1000,17 @@ const Launcher = {
 // Mode: ${logicType}
 // Region: ${finalRegion}
 // Starter: ${finalStarter ? finalStarter.toUpperCase() : 'UNKNOWN'}
-// Modules: ${Object.keys(finalMechanics).length} Active
-
-<VariableInsert>
-${jsonStr}
-</VariableInsert>
+// Modules: ${Object.values(finalMechanics).filter(Boolean).length} Active
 ${teamDescription}
 
 [引导]
-${guideText}`.trim();
+${guideText}
 
-        copyToClipboard(msg);
+[MVU]
+机制与设置已经由 greeting 页面写入当前楼层 stat_data.pkm。
+请只演绎开局叙事，不要输出变量更新块，不要写入初始宝可梦变量。`.trim();
+
+        copyToClipboard(msg, injected);
     }
 };
 
@@ -983,14 +1043,16 @@ if (typeof Launcher !== 'undefined') {
     };
 }
 
-function copyToClipboard(text) {
+function copyToClipboard(text, injected = false) {
     const el = document.createElement('textarea');
     el.value = text;
     document.body.appendChild(el);
     el.select();
     document.execCommand('copy');
     document.body.removeChild(el);
-    alert('初始数据已生成并复制！(模拟发送给AI)');
+    alert(injected
+        ? '叙事提示已复制；机制与设置已发送到 MVU 当前楼层。'
+        : '叙事提示已复制；未检测到 ST 父窗口，机制设置未直接注入。');
 }
 
 // 启动
