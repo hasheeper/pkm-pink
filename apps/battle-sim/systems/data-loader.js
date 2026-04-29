@@ -177,12 +177,14 @@ function buildPerformanceConfig(settings = {}) {
     return {
         enabled,
         disableScreenFilters: enabled,
-        disableBlur: enabled,
-        disableShadows: enabled,
-        disableDecorativeAnimations: enabled,
+        disableBlur: false,
+        disableShadows: false,
+        disableDecorativeAnimations: false,
         disableBattleVFX: enabled,
         disableWeatherParticles: enabled,
-        reduceSpriteFilters: enabled
+        reduceSpriteFilters: enabled,
+        preserveUIAnimations: true,
+        keepAudio: true
     };
 }
 

@@ -5816,21 +5816,11 @@ body {
 /* ========================================================== END PP SYSTEM ========================================================== */
 
 /* ==========================================================
-   Performance Mode - mobile/low-power rendering path
+   Performance Mode - battle VFX only
+   ==========================================================
+   Keep UI transitions, button feedback and audio intact. The
+   performance switch only removes expensive battle visuals.
    ========================================================== */
-
-.battle-perf-mode *,
-.battle-perf-mode *::before,
-.battle-perf-mode *::after {
-    animation: none !important;
-    transition: none !important;
-    filter: none !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    box-shadow: none !important;
-    text-shadow: none !important;
-    mix-blend-mode: normal !important;
-}
 
 .battle-perf-mode .screen-filters,
 .battle-perf-mode #weather-canvas,
@@ -5839,24 +5829,58 @@ body {
 .battle-perf-mode .vfx-ring,
 .battle-perf-mode .vfx-icon,
 .battle-perf-mode .vfx-status-icon,
-.battle-perf-mode .stat-particle-container,
+.battle-perf-mode .vfx-text-popup,
+.battle-perf-mode .vfx-arrow,
+.battle-perf-mode .vfx-plus,
+.battle-perf-mode .stat-particle-container {
+    display: none !important;
+}
+
+.battle-perf-mode .p-sprite.dash-attack,
+.battle-perf-mode .p-sprite.dodge-anim,
+.battle-perf-mode .p-sprite.shake-hit-anim,
+.battle-perf-mode .stage.shake-hit-anim,
+.battle-perf-mode .clash-shake,
+.battle-perf-mode .dynamax-burst,
+.battle-perf-mode .dynamax-shrink,
+.battle-perf-mode .evolving,
+.battle-perf-mode .bio-evolving,
+.battle-perf-mode .tera-crystallizing {
+    animation: none !important;
+    transition: none !important;
+}
+
+.battle-perf-mode .bg-gradient.bg-rain,
+.battle-perf-mode .bg-gradient.bg-heavyrain,
+.battle-perf-mode .bg-gradient.bg-sand,
+.battle-perf-mode .bg-gradient.bg-snow,
+.battle-perf-mode .bg-gradient.bg-hail,
+.battle-perf-mode .bg-gradient.bg-harshsun,
+.battle-perf-mode .bg-gradient.bg-sun,
+.battle-perf-mode .bg-gradient.bg-deltastream,
+.battle-perf-mode .bg-gradient.bg-smog,
+.battle-perf-mode .bg-gradient.bg-ashfall,
+.battle-perf-mode .bg-gradient.bg-fog,
+.battle-perf-mode .bg-gradient.bg-gale,
+.battle-perf-mode .bg-gradient.bg-ambrosia,
+.battle-perf-mode .bg-gradient.bg-distortion,
+.battle-perf-mode .bg-gradient.bg-chronalrift {
+    animation: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+.battle-perf-mode .p-sprite.state-dynamax,
+.battle-perf-mode .p-sprite.state-terastal,
+.battle-perf-mode .p-sprite.bond-resonance,
+.battle-perf-mode .p-sprite.mega-player,
+.battle-perf-mode .p-sprite.mega-enemy,
+.battle-perf-mode .p-sprite.unofficial-mega,
 .battle-perf-mode .bubble-glow-ring,
 .battle-perf-mode .pulse-ring,
 .battle-perf-mode .tera-crown,
 .battle-perf-mode .tera-crown-connector {
-    display: none !important;
-}
-
-.battle-perf-mode .ui-root,
-.battle-perf-mode .ui-scale,
-.battle-perf-mode .bg-gradient,
-.battle-perf-mode .overlay-screen,
-.battle-perf-mode .result-screen,
-.battle-perf-mode .cmd-layer,
-.battle-perf-mode .glass-panel,
-.battle-perf-mode .trainer-panel {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
+    animation: none !important;
     filter: none !important;
 }
 
