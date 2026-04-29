@@ -24,9 +24,10 @@ import { registerMvuSchema } from 'https://testingcf.jsdelivr.net/gh/StageDog/ta
 
 const PRODUCT = 'universal';
 const VERSION = '0.1.0-mvuz-universal';
+const CORE = globalThis.PKMPackCore || null;
 const MAX_PARTY_SIZE = 6;
 
-const DEFAULT_SETTINGS = {
+const DEFAULT_SETTINGS = CORE?.getDefaultSettings?.(PRODUCT) || {
   enableAVS: true,
   enableCommander: true,
   enableEVO: true,
@@ -36,7 +37,7 @@ const DEFAULT_SETTINGS = {
   enableEnvironment: true
 };
 
-const DEFAULT_UNLOCKS = {
+const DEFAULT_UNLOCKS = CORE?.getDefaultUnlocks?.() || {
   enable_bond: false,
   enable_styles: false,
   enable_insight: false,
@@ -71,6 +72,7 @@ function normalizeString(value, fallback = '') {
 }
 
 function makeEmptySlot(slot) {
+  if (CORE?.createEmptySlot) return CORE.createEmptySlot(slot);
   return {
     slot,
     name: null,
@@ -98,6 +100,7 @@ function makeEmptySlot(slot) {
 }
 
 function normalizeMoves(value) {
+  if (CORE?.normalizeMovesArray) return CORE.normalizeMovesArray(value);
   if (Array.isArray(value)) {
     return Array.from({ length: 4 }, (_, index) => value[index] || null);
   }
@@ -108,6 +111,7 @@ function normalizeMoves(value) {
 }
 
 function normalizeIvs(value) {
+  if (CORE?.normalizeIvs) return CORE.normalizeIvs(value);
   const src = isObject(value) ? value : {};
   return {
     hp: src.hp === null || src.hp === undefined ? null : clampNumber(src.hp, 0, 31, null),

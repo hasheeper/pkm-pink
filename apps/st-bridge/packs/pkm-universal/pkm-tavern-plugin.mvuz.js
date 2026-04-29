@@ -12,6 +12,7 @@
   'use strict';
 
   const ROOT = typeof window !== 'undefined' ? window : globalThis;
+  const CORE = ROOT.PKMPackCore || null;
   const PLUGIN_NAME = '[PKM Universal MVUZ]';
   const PRODUCT = 'universal';
   const VERSION = '0.1.0-mvuz-universal';
@@ -25,7 +26,7 @@
   let isProcessingMessage = false;
   let lastHandledMarker = null;
 
-  const DEFAULT_SETTINGS = {
+  const DEFAULT_SETTINGS = CORE?.getDefaultSettings?.(PRODUCT) || {
     enableAVS: true,
     enableCommander: true,
     enableEVO: true,
@@ -35,7 +36,7 @@
     enableEnvironment: true
   };
 
-  const DEFAULT_UNLOCKS = {
+  const DEFAULT_UNLOCKS = CORE?.getDefaultUnlocks?.() || {
     enable_bond: false,
     enable_styles: false,
     enable_insight: false,
@@ -105,6 +106,7 @@
   }
 
   function normalizeMoves(moves) {
+    if (CORE?.normalizeMovesArray) return CORE.normalizeMovesArray(moves);
     if (Array.isArray(moves)) {
       return Array.from({ length: 4 }, (_, i) => moves[i] || null);
     }
@@ -115,6 +117,7 @@
   }
 
   function normalizeIvs(ivs) {
+    if (CORE?.normalizeIvs) return CORE.normalizeIvs(ivs);
     const src = isObject(ivs) ? ivs : {};
     const next = {};
     for (const key of ['hp', 'atk', 'def', 'spa', 'spd', 'spe']) {
@@ -326,6 +329,9 @@
   }
 
   async function readStatData() {
+    if (CORE?.mvu?.readStatData) {
+      return CORE.mvu.readStatData(STAT_KEY, { type: 'message' });
+    }
     if (typeof ROOT.getVariables !== 'function') return {};
     try {
       const vars = await ROOT.getVariables({ type: 'message' });
@@ -337,6 +343,10 @@
   }
 
   async function writeStatData(nextStatData) {
+    if (CORE?.mvu?.writeStatData) {
+      await CORE.mvu.writeStatData(nextStatData, STAT_KEY, { type: 'message' });
+      return nextStatData;
+    }
     if (typeof ROOT.insertOrAssignVariables !== 'function') {
       throw new Error('insertOrAssignVariables is unavailable');
     }
@@ -414,6 +424,10 @@
   }
 
   function legacyDashboardShape(state) {
+    if (CORE?.legacyDashboardShape) {
+      return CORE.legacyDashboardShape(state, { emptySlot: createEmptySlot });
+    }
+
     const toLegacyPokemon = (pokemon, fallback = {}) => {
       const next = clone(pokemon, fallback);
       const moves = normalizeMoves(next.moves);

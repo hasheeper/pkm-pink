@@ -8,6 +8,11 @@
       "product": "universal",
       "scripts": [
         {
+          "id": "pkm-core",
+          "type": "script",
+          "url": "./packs/pkm-core.js"
+        },
+        {
           "id": "pkm-universal-schema",
           "type": "module",
           "url": "./packs/pkm-universal/pkm-universal-schema.js"
@@ -32,6 +37,11 @@
         "PKM_MVUZ_DASHBOARD_URL": "https://hasheeper.github.io/pkm-pink/containers/app.html?app=dashboard-main"
       },
       "scripts": [
+        {
+          "id": "pkm-core",
+          "type": "script",
+          "url": "./packs/pkm-core.js"
+        },
         {
           "id": "pkm-main-plugin",
           "type": "script",

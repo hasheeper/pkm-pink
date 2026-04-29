@@ -11,6 +11,7 @@
   'use strict';
 
   const ROOT = typeof window !== 'undefined' ? window : globalThis;
+  const CORE = ROOT.PKMPackCore || null;
   const PLUGIN_NAME = '[PKM Universal Dashboard MVUZ]';
   const PKM_URL = 'https://hasheeper.github.io/pkm-pink/apps/dashboard-universal/index.html';
   const PRODUCT = 'universal';
@@ -23,7 +24,7 @@
   const PKM_KEY = 'pkm';
   const MAX_PARTY_SIZE = 6;
 
-  const DEFAULT_SETTINGS = {
+  const DEFAULT_SETTINGS = CORE?.getDefaultSettings?.(PRODUCT) || {
     enableAVS: true,
     enableCommander: true,
     enableEVO: true,
@@ -33,7 +34,7 @@
     enableEnvironment: true
   };
 
-  const DEFAULT_UNLOCKS = {
+  const DEFAULT_UNLOCKS = CORE?.getDefaultUnlocks?.() || {
     enable_bond: false,
     enable_styles: false,
     enable_insight: false,
@@ -78,6 +79,7 @@
   }
 
   function createEmptySlot(slot) {
+    if (CORE?.createEmptySlot) return CORE.createEmptySlot(slot, { moves: 'object' });
     return {
       slot,
       name: null,
@@ -162,6 +164,10 @@
   }
 
   function stateToLegacyDashboard(state) {
+    if (CORE?.legacyDashboardShape) {
+      return CORE.legacyDashboardShape(state, { emptySlot: createEmptySlot });
+    }
+
     if (ROOT.PKMPlugin?.legacyDashboardShape) {
       return ROOT.PKMPlugin.legacyDashboardShape(state);
     }
@@ -229,6 +235,9 @@
   }
 
   async function readStatData() {
+    if (CORE?.mvu?.readStatData) {
+      return CORE.mvu.readStatData(STAT_KEY, { type: 'message' });
+    }
     if (ROOT.STBridge?.mvu?.readVariables) {
       const vars = await ROOT.STBridge.mvu.readVariables({ type: 'message' });
       return isObject(vars?.[STAT_KEY]) ? vars[STAT_KEY] : {};
@@ -246,7 +255,9 @@
   async function writeDirectState(nextState) {
     const statData = await readStatData();
     const normalized = ensureDirectState(nextState);
-    if (ROOT.STBridge?.mvu?.writeState) {
+    if (CORE?.mvu?.writeState) {
+      await CORE.mvu.writeState(STAT_KEY, PKM_KEY, normalized, { type: 'message' });
+    } else if (ROOT.STBridge?.mvu?.writeState) {
       await ROOT.STBridge.mvu.writeState(STAT_KEY, PKM_KEY, normalized, { type: 'message' });
     } else {
       if (typeof ROOT.insertOrAssignVariables !== 'function') {

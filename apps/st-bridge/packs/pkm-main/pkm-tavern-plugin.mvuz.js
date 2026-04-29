@@ -8,6 +8,7 @@
 (async function () {
   'use strict';
 
+  const CORE = window.PKMPackCore || null;
   const PLUGIN_NAME = '[PKM-MVUZ]';
   const STATE_ROOT = 'stat_data';
   const STATE_KEY = 'pkm';
@@ -21,7 +22,7 @@
   };
 
   const PERIODS = ['dawn', 'morning', 'noon', 'afternoon', 'evening', 'night', 'midnight'];
-  const DEFAULT_SETTINGS = {
+  const DEFAULT_SETTINGS = CORE?.getDefaultSettings?.('main') || {
     enableAVS: true,
     enableCommander: true,
     enableEVO: true,
@@ -139,6 +140,7 @@
   }
 
   function normalizeMoves(moves) {
+    if (CORE?.normalizeMovesObject) return CORE.normalizeMovesObject(moves);
     if (Array.isArray(moves)) {
       return {
         move1: moves[0] || null,

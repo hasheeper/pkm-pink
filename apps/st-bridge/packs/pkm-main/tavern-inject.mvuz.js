@@ -7,6 +7,7 @@
 (function () {
   'use strict';
 
+  const CORE = window.PKMPackCore || null;
   const HOST_NAME = '[PKM-MVUZ-HOST]';
   const DASHBOARD_URL = window.PKM_MVUZ_DASHBOARD_URL || 'https://hasheeper.github.io/pkm-pink/containers/app.html?app=dashboard-main';
   const PRODUCT = window.PKM_MVUZ_PRODUCT || 'main';
@@ -194,6 +195,8 @@
   }
 
   function mvuzToLegacyDashboardSnapshot(state) {
+    if (CORE?.legacyDashboardShape) return CORE.legacyDashboardShape(state);
+
     const party = {};
     (state.party?.slots || []).forEach((pokemon, index) => {
       party[`slot${index + 1}`] = pokemon;
