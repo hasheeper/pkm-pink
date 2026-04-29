@@ -23,7 +23,7 @@ function updateUIScale() {
         || document.body?.classList.contains('battle-layout-portrait')
         || document.documentElement?.classList.contains('battle-layout-portrait')
     );
-    const baseW = isPortrait ? 720 : 1280;
+    const baseW = isPortrait ? 720 : 1100;
     const baseH = isPortrait ? 1100 : 720;
     const pad = 0;
     const vw = Math.max(0, window.innerWidth - pad * 2);
