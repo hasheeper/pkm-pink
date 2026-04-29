@@ -26,27 +26,10 @@ const PRODUCT = 'universal';
 const VERSION = '0.1.0-mvuz-universal';
 const CORE = globalThis.PKMPackCore || null;
 const MAX_PARTY_SIZE = 6;
+if (!CORE) throw new Error('[PKM-Universal-Schema] requires PKMPackCore. Load pkm-core.js before this module.');
 
-const DEFAULT_SETTINGS = CORE?.getDefaultSettings?.(PRODUCT) || {
-  enableAVS: true,
-  enableCommander: true,
-  enableEVO: true,
-  enableBGM: true,
-  enableSFX: true,
-  enableClash: false,
-  enableEnvironment: true
-};
-
-const DEFAULT_UNLOCKS = CORE?.getDefaultUnlocks?.() || {
-  enable_bond: false,
-  enable_styles: false,
-  enable_insight: false,
-  enable_mega: false,
-  enable_z_move: false,
-  enable_dynamax: false,
-  enable_tera: false,
-  enable_proficiency_cap: false
-};
+const DEFAULT_SETTINGS = CORE.getDefaultSettings(PRODUCT);
+const DEFAULT_UNLOCKS = CORE.getDefaultUnlocks();
 
 function isObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -72,55 +55,15 @@ function normalizeString(value, fallback = '') {
 }
 
 function makeEmptySlot(slot) {
-  if (CORE?.createEmptySlot) return CORE.createEmptySlot(slot);
-  return {
-    slot,
-    name: null,
-    nickname: null,
-    species: null,
-    gender: null,
-    lv: null,
-    quality: null,
-    nature: null,
-    ability: null,
-    shiny: false,
-    item: null,
-    mechanic: null,
-    teraType: null,
-    isAce: false,
-    isLead: false,
-    bonds: 0,
-    moves: [null, null, null, null],
-    stats_meta: {
-      ivs: { hp: null, atk: null, def: null, spa: null, spd: null, spe: null },
-      ev_level: 0
-    },
-    notes: null
-  };
+  return CORE.createEmptySlot(slot);
 }
 
 function normalizeMoves(value) {
-  if (CORE?.normalizeMovesArray) return CORE.normalizeMovesArray(value);
-  if (Array.isArray(value)) {
-    return Array.from({ length: 4 }, (_, index) => value[index] || null);
-  }
-  if (isObject(value)) {
-    return [value.move1, value.move2, value.move3, value.move4].map((move) => move || null);
-  }
-  return [null, null, null, null];
+  return CORE.normalizeMovesArray(value);
 }
 
 function normalizeIvs(value) {
-  if (CORE?.normalizeIvs) return CORE.normalizeIvs(value);
-  const src = isObject(value) ? value : {};
-  return {
-    hp: src.hp === null || src.hp === undefined ? null : clampNumber(src.hp, 0, 31, null),
-    atk: src.atk === null || src.atk === undefined ? null : clampNumber(src.atk, 0, 31, null),
-    def: src.def === null || src.def === undefined ? null : clampNumber(src.def, 0, 31, null),
-    spa: src.spa === null || src.spa === undefined ? null : clampNumber(src.spa, 0, 31, null),
-    spd: src.spd === null || src.spd === undefined ? null : clampNumber(src.spd, 0, 31, null),
-    spe: src.spe === null || src.spe === undefined ? null : clampNumber(src.spe, 0, 31, null)
-  };
+  return CORE.normalizeIvs(value);
 }
 
 function isValidIvs(value) {

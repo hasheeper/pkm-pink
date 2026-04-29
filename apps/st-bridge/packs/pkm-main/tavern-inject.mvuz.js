@@ -9,6 +9,7 @@
 
   const CORE = window.PKMPackCore || null;
   const HOST_NAME = '[PKM-MVUZ-HOST]';
+  if (!CORE) throw new Error(`${HOST_NAME} requires PKMPackCore. Load pkm-core.js before this script.`);
   const DASHBOARD_URL = window.PKM_MVUZ_DASHBOARD_URL || 'https://hasheeper.github.io/pkm-pink/containers/app.html?app=dashboard-main';
   const PRODUCT = window.PKM_MVUZ_PRODUCT || 'main';
   const IDS = {
@@ -195,29 +196,7 @@
   }
 
   function mvuzToLegacyDashboardSnapshot(state) {
-    if (CORE?.legacyDashboardShape) return CORE.legacyDashboardShape(state);
-
-    const party = {};
-    (state.party?.slots || []).forEach((pokemon, index) => {
-      party[`slot${index + 1}`] = pokemon;
-    });
-    party.transfer_buffer = state.party?.transferBuffer || null;
-
-    const box = {};
-    const firstBox = state.box?.boxes?.[0]?.slots || [];
-    firstBox.forEach((pokemon, index) => {
-      box[`storage_${String(index + 1).padStart(2, '0')}`] = pokemon;
-    });
-
-    return {
-      player: {
-        ...state.player,
-        party,
-        box
-      },
-      world_state: state.world,
-      settings: state.settings
-    };
+    return CORE.legacyDashboardShape(state);
   }
 
   async function dispatchAction(action, payload) {

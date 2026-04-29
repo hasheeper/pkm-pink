@@ -22,30 +22,13 @@
   const BATTLE_TAG = 'PKM_BATTLE';
   const FRONTEND_TAG = 'PKM_FRONTEND';
   const MAX_PARTY_SIZE = 6;
+  if (!CORE?.mvu) throw new Error(`${PLUGIN_NAME} requires PKMPackCore. Load pkm-core.js before this script.`);
 
   let isProcessingMessage = false;
   let lastHandledMarker = null;
 
-  const DEFAULT_SETTINGS = CORE?.getDefaultSettings?.(PRODUCT) || {
-    enableAVS: true,
-    enableCommander: true,
-    enableEVO: true,
-    enableBGM: true,
-    enableSFX: true,
-    enableClash: false,
-    enableEnvironment: true
-  };
-
-  const DEFAULT_UNLOCKS = CORE?.getDefaultUnlocks?.() || {
-    enable_bond: false,
-    enable_styles: false,
-    enable_insight: false,
-    enable_mega: false,
-    enable_z_move: false,
-    enable_dynamax: false,
-    enable_tera: false,
-    enable_proficiency_cap: false
-  };
+  const DEFAULT_SETTINGS = CORE.getDefaultSettings(PRODUCT);
+  const DEFAULT_UNLOCKS = CORE.getDefaultUnlocks();
 
   function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -75,30 +58,7 @@
   }
 
   function createEmptySlot(slot) {
-    return {
-      slot,
-      name: null,
-      nickname: null,
-      species: null,
-      gender: null,
-      lv: null,
-      quality: null,
-      nature: null,
-      ability: null,
-      shiny: false,
-      item: null,
-      mechanic: null,
-      teraType: null,
-      isAce: false,
-      isLead: false,
-      bonds: 0,
-      moves: [null, null, null, null],
-      stats_meta: {
-        ivs: { hp: null, atk: null, def: null, spa: null, spd: null, spe: null },
-        ev_level: 0
-      },
-      notes: null
-    };
+    return CORE.createEmptySlot(slot);
   }
 
   function isEmptyPokemon(pokemon) {
@@ -106,24 +66,11 @@
   }
 
   function normalizeMoves(moves) {
-    if (CORE?.normalizeMovesArray) return CORE.normalizeMovesArray(moves);
-    if (Array.isArray(moves)) {
-      return Array.from({ length: 4 }, (_, i) => moves[i] || null);
-    }
-    if (isObject(moves)) {
-      return [moves.move1, moves.move2, moves.move3, moves.move4].map((move) => move || null);
-    }
-    return [null, null, null, null];
+    return CORE.normalizeMovesArray(moves);
   }
 
   function normalizeIvs(ivs) {
-    if (CORE?.normalizeIvs) return CORE.normalizeIvs(ivs);
-    const src = isObject(ivs) ? ivs : {};
-    const next = {};
-    for (const key of ['hp', 'atk', 'def', 'spa', 'spd', 'spe']) {
-      next[key] = src[key] === null || src[key] === undefined ? null : clampNumber(src[key], 0, 31, null);
-    }
-    return next;
+    return CORE.normalizeIvs(ivs);
   }
 
   function normalizeStatsMeta(statsMeta, pokemon) {
@@ -162,24 +109,6 @@
     return next;
   }
 
-  function extractLegacyPartySlots(party) {
-    if (!party) return [];
-    if (Array.isArray(party)) return party.slice(0, MAX_PARTY_SIZE);
-    if (!isObject(party)) return [];
-    const slots = [];
-    for (let i = 1; i <= MAX_PARTY_SIZE; i += 1) {
-      const value = party[`slot${i}`];
-      slots.push(isObject(value) ? value : createEmptySlot(i));
-    }
-    if (slots.some((slot) => slot.name)) return slots;
-
-    const numeric = Object.keys(party)
-      .filter((key) => /^\d+$/.test(key))
-      .sort((a, b) => Number(a) - Number(b))
-      .map((key) => party[key]);
-    return numeric.slice(0, MAX_PARTY_SIZE);
-  }
-
   function normalizePartySlots(slots) {
     const rawSlots = Array.isArray(slots) ? slots : [];
     const next = Array.from({ length: MAX_PARTY_SIZE }, (_, index) => {
@@ -197,33 +126,6 @@
     return next;
   }
 
-  function normalizeBox(rawBox) {
-    if (rawBox?.boxes && Array.isArray(rawBox.boxes)) {
-      return {
-        boxes: rawBox.boxes.map((box, index) => ({
-          id: normalizeString(box.id, `box_${String(index + 1).padStart(2, '0')}`),
-          name: normalizeString(box.name, `Box ${index + 1}`),
-          slots: Array.isArray(box.slots) ? box.slots.filter(Boolean).map((p) => normalizePokemon(p, null)) : []
-        })),
-        indexes: isObject(rawBox.indexes) ? clone(rawBox.indexes, {}) : {}
-      };
-    }
-
-    const slots = [];
-    if (isObject(rawBox)) {
-      Object.keys(rawBox)
-        .filter((key) => key.startsWith('storage_'))
-        .sort()
-        .forEach((key) => {
-          if (isObject(rawBox[key]) && rawBox[key].name) slots.push(normalizePokemon(rawBox[key], null));
-        });
-    }
-    return {
-      boxes: [{ id: 'box_01', name: 'Box 1', slots }],
-      indexes: {}
-    };
-  }
-
   function normalizeTransferBuffer(value) {
     if (!isObject(value) || !value.name) return null;
     const normalized = normalizePokemon(value, null);
@@ -234,123 +136,17 @@
 
   function normalizePkmState(input) {
     if (ROOT.PKMUniversalSchemaRuntime?.normalizePkmState) {
-      try {
-        return ROOT.PKMUniversalSchemaRuntime.normalizePkmState(input);
-      } catch (error) {
-        console.warn(`${PLUGIN_NAME} schema runtime normalization failed, fallback local normalizer used:`, error);
-      }
+      return ROOT.PKMUniversalSchemaRuntime.normalizePkmState(input);
     }
-
-    const src = isObject(input) ? clone(input, {}) : {};
-    const player = isObject(src.player) ? src.player : {};
-    const party = isObject(src.party) ? src.party : {};
-    const legacyParty = isObject(player.party) ? player.party : {};
-
-    const slots = normalizePartySlots(
-      Array.isArray(party.slots) ? party.slots : extractLegacyPartySlots(legacyParty)
-    );
-
-    const boxSource = src.box || player.box || {};
-    const transferSource = party.transferBuffer || party.transfer_buffer || legacyParty.transfer_buffer;
-
-    const next = {
-      meta: {
-        schemaVersion: 1,
-        product: PRODUCT,
-        migratedFrom: src.meta?.migratedFrom || null,
-        updatedAt: new Date().toISOString(),
-        version: VERSION
-      },
-      player: {
-        name: normalizeString(player.name, '{{user}}'),
-        proficiency: clampNumber(player.proficiency ?? player.trainerProficiency, 0, 255, 0),
-        unlocks: { ...DEFAULT_UNLOCKS, ...(isObject(player.unlocks) ? player.unlocks : {}) },
-        bonds: isObject(player.bonds) ? clone(player.bonds, {}) : {}
-      },
-      party: {
-        slots,
-        transferBuffer: normalizeTransferBuffer(transferSource)
-      },
-      box: normalizeBox(boxSource),
-      world: (() => {
-        const ws = isObject(src.world) ? src.world : (isObject(src.world_state) ? src.world_state : {});
-        return {
-          time: {
-            day: clampNumber(ws.time?.day, 1, 99999, 1),
-            period: normalizeString(ws.time?.period, 'morning'),
-            day_advance: ws.time?.day_advance || null,
-            period_set: ws.time?.period_set || null
-          }
-        };
-      })(),
-      battle: isObject(src.battle) ? clone(src.battle, {}) : {
-        lastConfig: null,
-        lastResult: null,
-        pendingNarrative: null
-      },
-      settings: { ...DEFAULT_SETTINGS, ...(isObject(src.settings) ? src.settings : player.settings || {}) },
-      runtime: {
-        migration: isObject(src.runtime?.migration) ? clone(src.runtime.migration, {}) : {},
-        flags: isObject(src.runtime?.flags) ? clone(src.runtime.flags, {}) : {},
-        caches: isObject(src.runtime?.caches) ? clone(src.runtime.caches, {}) : {}
-      }
-    };
-
-    return normalizePkmStateNoDeltas(next);
-  }
-
-  function normalizePkmStateNoDeltas(state) {
-    const next = clone(state, {});
-    next.party.slots = normalizePartySlots(next.party.slots);
-    next.settings = { ...DEFAULT_SETTINGS, ...(isObject(next.settings) ? next.settings : {}) };
-    next.player.unlocks = { ...DEFAULT_UNLOCKS, ...(isObject(next.player.unlocks) ? next.player.unlocks : {}) };
-    next.player.proficiency = clampNumber(next.player.proficiency ?? next.player.trainerProficiency, 0, 255, 0);
-    delete next.player.trainerProficiency;
-    delete next.player['proficiency' + '_up'];
-    next.party.slots = next.party.slots.map((pokemon) => {
-      if (!pokemon?.name) return pokemon;
-      const slot = clone(pokemon, pokemon);
-      slot.bonds = clampNumber(slot.bonds, 0, 255, 0);
-      delete slot['bonds' + '_up'];
-      if (slot.stats_meta) {
-        slot.stats_meta.ev_level = clampNumber(slot.stats_meta.ev_level, 0, 252, 0);
-        delete slot.stats_meta['ev' + '_up'];
-      }
-      return slot;
-    });
-    next.meta = {
-      ...(isObject(next.meta) ? next.meta : {}),
-      schemaVersion: 1,
-      product: PRODUCT,
-      updatedAt: new Date().toISOString(),
-      version: VERSION
-    };
-    return next;
+    throw new Error('PKMUniversalSchemaRuntime.normalizePkmState is unavailable');
   }
 
   async function readStatData() {
-    if (CORE?.mvu?.readStatData) {
-      return CORE.mvu.readStatData(STAT_KEY, { type: 'message' });
-    }
-    if (typeof ROOT.getVariables !== 'function') return {};
-    try {
-      const vars = await ROOT.getVariables({ type: 'message' });
-      return isObject(vars?.[STAT_KEY]) ? vars[STAT_KEY] : {};
-    } catch (error) {
-      console.warn(`${PLUGIN_NAME} MVU state read failed:`, error);
-      return {};
-    }
+    return CORE.mvu.readStatData(STAT_KEY, { type: 'message' });
   }
 
   async function writeStatData(nextStatData) {
-    if (CORE?.mvu?.writeStatData) {
-      await CORE.mvu.writeStatData(nextStatData, STAT_KEY, { type: 'message' });
-      return nextStatData;
-    }
-    if (typeof ROOT.insertOrAssignVariables !== 'function') {
-      throw new Error('insertOrAssignVariables is unavailable');
-    }
-    await ROOT.insertOrAssignVariables({ [STAT_KEY]: nextStatData }, { type: 'message' });
+    await CORE.mvu.writeStatData(nextStatData, STAT_KEY, { type: 'message' });
     return nextStatData;
   }
 
@@ -424,50 +220,7 @@
   }
 
   function legacyDashboardShape(state) {
-    if (CORE?.legacyDashboardShape) {
-      return CORE.legacyDashboardShape(state, { emptySlot: createEmptySlot });
-    }
-
-    const toLegacyPokemon = (pokemon, fallback = {}) => {
-      const next = clone(pokemon, fallback);
-      const moves = normalizeMoves(next.moves);
-      next.moves = {
-        move1: moves[0] || null,
-        move2: moves[1] || null,
-        move3: moves[2] || null,
-        move4: moves[3] || null
-      };
-      return next;
-    };
-
-    const party = {};
-    state.party.slots.forEach((pokemon, index) => {
-      party[`slot${index + 1}`] = toLegacyPokemon(pokemon, createEmptySlot(index + 1));
-    });
-    party.transfer_buffer = toLegacyPokemon(state.party.transferBuffer || createEmptySlot(7), createEmptySlot(7));
-
-    const box = {};
-    let boxIndex = 1;
-    for (const boxEntry of state.box.boxes || []) {
-      for (const pokemon of boxEntry.slots || []) {
-        box[`storage_${String(boxIndex).padStart(2, '0')}`] = toLegacyPokemon(pokemon, {});
-        boxIndex += 1;
-      }
-    }
-
-    return {
-      player: {
-        ...clone(state.player, {}),
-        settings: clone(state.settings, {}),
-        party,
-        box
-      },
-      party,
-      box,
-      settings: clone(state.settings, {}),
-      world_state: clone(state.world, {}),
-      world: clone(state.world, {})
-    };
+    return CORE.legacyDashboardShape(state, { emptySlot: createEmptySlot });
   }
 
   function formatGender(gender) {

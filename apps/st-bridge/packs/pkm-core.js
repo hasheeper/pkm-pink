@@ -182,30 +182,6 @@
     };
   }
 
-  function getPath(object, path, fallback) {
-    if (!path) return object == null ? fallback : object;
-    const parts = String(path).split('.').filter(Boolean);
-    let cursor = object;
-    for (const part of parts) {
-      if (!isObject(cursor) || !(part in cursor)) return fallback;
-      cursor = cursor[part];
-    }
-    return cursor == null ? fallback : cursor;
-  }
-
-  function setPath(object, path, value) {
-    const parts = String(path || '').split('.').filter(Boolean);
-    if (!parts.length) return value;
-    let cursor = object;
-    for (let i = 0; i < parts.length - 1; i += 1) {
-      const part = parts[i];
-      if (!isObject(cursor[part])) cursor[part] = {};
-      cursor = cursor[part];
-    }
-    cursor[parts[parts.length - 1]] = value;
-    return object;
-  }
-
   async function readVariables(options = {}) {
     if (ROOT.STBridge?.mvu?.readVariables) {
       return ROOT.STBridge.mvu.readVariables(options);
@@ -268,36 +244,6 @@
     return state;
   }
 
-  function createStateStore(config = {}) {
-    const rootKey = config.rootKey || DEFAULT_STATE_ROOT;
-    const stateKey = config.stateKey || DEFAULT_STATE_KEY;
-    const normalize = typeof config.normalize === 'function' ? config.normalize : (state) => state;
-    const onWrite = typeof config.onWrite === 'function' ? config.onWrite : null;
-    const options = config.options || { type: 'message' };
-
-    async function load(defaultFactory = null) {
-      const existing = await readState(rootKey, stateKey, options);
-      if (existing) return normalize(existing);
-      return typeof defaultFactory === 'function' ? normalize(await defaultFactory()) : null;
-    }
-
-    async function save(state) {
-      const normalized = normalize(state);
-      await writeState(rootKey, stateKey, normalized, options);
-      if (onWrite) await onWrite(normalized);
-      return normalized;
-    }
-
-    async function patch(patcher, defaultFactory = null) {
-      const current = await load(defaultFactory);
-      const draft = clone(current, {});
-      const result = await patcher(draft, current);
-      return save(result === undefined ? draft : result);
-    }
-
-    return { load, save, patch, readStatData: () => readStatData(rootKey, options) };
-  }
-
   ROOT.PKMPackCore = {
     version: '0.1.0',
     constants: {
@@ -318,16 +264,13 @@
     normalizeIvs,
     createEmptySlot,
     legacyDashboardShape,
-    getPath,
-    setPath,
     mvu: {
       readVariables,
       writeVariables,
       readStatData,
       writeStatData,
       readState,
-      writeState,
-      createStateStore
+      writeState
     }
   };
 })();

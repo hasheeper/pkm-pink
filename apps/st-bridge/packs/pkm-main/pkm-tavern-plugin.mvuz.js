@@ -14,6 +14,7 @@
   const STATE_KEY = 'pkm';
   const SCHEMA_VERSION = 1;
   const DEFAULT_PRODUCT = 'main';
+  if (!CORE?.mvu) throw new Error(`${PLUGIN_NAME} requires PKMPackCore. Load pkm-core.js before this script.`);
   const DEFAULT_INJECT_IDS = {
     party: 'pkm_mvuz_party_state',
     time: 'pkm_mvuz_time_state',
@@ -22,15 +23,7 @@
   };
 
   const PERIODS = ['dawn', 'morning', 'noon', 'afternoon', 'evening', 'night', 'midnight'];
-  const DEFAULT_SETTINGS = CORE?.getDefaultSettings?.('main') || {
-    enableAVS: true,
-    enableCommander: true,
-    enableEVO: true,
-    enableBGM: true,
-    enableSFX: true,
-    enableClash: false,
-    enableBattleEnvironment: true
-  };
+  const DEFAULT_SETTINGS = CORE.getDefaultSettings('main');
 
   const runtime = {
     initialized: false,
@@ -65,30 +58,6 @@
 
   function normalizeString(value, fallback = '') {
     return typeof value === 'string' ? value.trim() : fallback;
-  }
-
-  function getPath(object, path, fallback) {
-    if (!path) return object == null ? fallback : object;
-    const parts = String(path).split('.').filter(Boolean);
-    let cursor = object;
-    for (const part of parts) {
-      if (!cursor || typeof cursor !== 'object' || !(part in cursor)) return fallback;
-      cursor = cursor[part];
-    }
-    return cursor == null ? fallback : cursor;
-  }
-
-  function setPath(object, path, value) {
-    const parts = String(path || '').split('.').filter(Boolean);
-    if (!parts.length) return value;
-    let cursor = object;
-    for (let i = 0; i < parts.length - 1; i += 1) {
-      const part = parts[i];
-      if (!cursor[part] || typeof cursor[part] !== 'object') cursor[part] = {};
-      cursor = cursor[part];
-    }
-    cursor[parts[parts.length - 1]] = value;
-    return object;
   }
 
   function makeDefaultPkmState(product = DEFAULT_PRODUCT) {
@@ -140,22 +109,7 @@
   }
 
   function normalizeMoves(moves) {
-    if (CORE?.normalizeMovesObject) return CORE.normalizeMovesObject(moves);
-    if (Array.isArray(moves)) {
-      return {
-        move1: moves[0] || null,
-        move2: moves[1] || null,
-        move3: moves[2] || null,
-        move4: moves[3] || null
-      };
-    }
-    const source = moves && typeof moves === 'object' ? moves : {};
-    return {
-      move1: source.move1 || null,
-      move2: source.move2 || null,
-      move3: source.move3 || null,
-      move4: source.move4 || null
-    };
+    return CORE.normalizeMovesObject(moves);
   }
 
   function normalizeFriendship(source) {
@@ -442,28 +396,9 @@
     return normalizePkmState(migrated, product);
   }
 
-  function readMessageVariables() {
-    if (typeof getVariables !== 'function') return {};
-    return getVariables({ type: 'message' }) || {};
-  }
-
-  async function updateMessageVariables(updater) {
-    if (typeof updateVariablesWith === 'function') {
-      return updateVariablesWith(updater, { type: 'message' });
-    }
-    if (typeof replaceVariables === 'function') {
-      const current = readMessageVariables();
-      const next = await updater(clone(current, {}));
-      replaceVariables(next, { type: 'message' });
-      return next;
-    }
-    throw new Error('MVUZ variable APIs are not available');
-  }
-
   async function loadState(options = {}) {
     const product = options.product || runtime.product || DEFAULT_PRODUCT;
-    const vars = readMessageVariables();
-    const existing = getPath(vars, `${STATE_ROOT}.${STATE_KEY}`, null);
+    const existing = await CORE.mvu.readState(STATE_ROOT, STATE_KEY, { type: 'message' });
     if (existing) return normalizePkmState(existing, product);
 
     if (options.migrate !== false) {
@@ -479,12 +414,7 @@
 
   async function saveState(nextState) {
     const normalized = normalizePkmState(nextState, nextState?.meta?.product || runtime.product);
-    await updateMessageVariables((vars) => {
-      const target = vars && typeof vars === 'object' ? vars : {};
-      if (!target[STATE_ROOT] || typeof target[STATE_ROOT] !== 'object') target[STATE_ROOT] = {};
-      target[STATE_ROOT][STATE_KEY] = normalized;
-      return target;
-    });
+    await CORE.mvu.writeState(STATE_ROOT, STATE_KEY, normalized, { type: 'message' });
     runtime.lastStateSnapshot = normalized;
     return normalized;
   }
