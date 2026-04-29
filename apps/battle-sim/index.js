@@ -98,14 +98,6 @@ setTimeout(() => {
     document.getElementById('btn-start').style.fontWeight = "900";
 }, 800);
 
-// 【提前应用战斗设置】确保开始界面就生效竖屏/性能模式，不等点击开始
-if (typeof applyBattleSettings === 'function') {
-    const _earlyJson = (typeof globalBattleData !== 'undefined' && globalBattleData)
-        ? globalBattleData
-        : (typeof getDefaultBattleData === 'function' ? getDefaultBattleData() : null);
-    if (_earlyJson) applyBattleSettings(_earlyJson.settings || {});
-}
-
 window.addEventListener('resize', updateUIScale);
 updateUIScale();
 
