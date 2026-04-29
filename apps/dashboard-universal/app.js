@@ -636,7 +636,8 @@ const DefaultSettings = {
     enableBGM: true,
     enableSFX: true,
     enableClash: false,
-    enableEnvironment: true
+    enableEnvironment: true,
+    enableBattlePerformanceMode: false
 };
 
 // 获取父窗口的事件系统（iframe 内部需要通过 parent 访问）
@@ -982,6 +983,12 @@ const SettingsManifest = [
         label: 'ENVIRONMENT', 
         desc: 'Enable weather & terrain effects in battle.', 
         color: '#55efc4'
+    },
+    {
+        key: 'enableBattlePerformanceMode',
+        label: 'PERF. MODE',
+        desc: 'Disable heavy VFX, filters, shadows and weather particles.',
+        color: '#95a5a6'
     }
 ];
 

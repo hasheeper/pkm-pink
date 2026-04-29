@@ -5814,3 +5814,55 @@ body {
 }
 
 /* ========================================================== END PP SYSTEM ========================================================== */
+
+/* ==========================================================
+   Performance Mode - mobile/low-power rendering path
+   ========================================================== */
+
+.battle-perf-mode *,
+.battle-perf-mode *::before,
+.battle-perf-mode *::after {
+    animation: none !important;
+    transition: none !important;
+    filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    mix-blend-mode: normal !important;
+}
+
+.battle-perf-mode .screen-filters,
+.battle-perf-mode #weather-canvas,
+.battle-perf-mode .flash-overlay,
+.battle-perf-mode .vfx-hit-anchor,
+.battle-perf-mode .vfx-ring,
+.battle-perf-mode .vfx-icon,
+.battle-perf-mode .vfx-status-icon,
+.battle-perf-mode .stat-particle-container,
+.battle-perf-mode .bubble-glow-ring,
+.battle-perf-mode .pulse-ring,
+.battle-perf-mode .tera-crown,
+.battle-perf-mode .tera-crown-connector {
+    display: none !important;
+}
+
+.battle-perf-mode .ui-root,
+.battle-perf-mode .ui-scale,
+.battle-perf-mode .bg-gradient,
+.battle-perf-mode .overlay-screen,
+.battle-perf-mode .result-screen,
+.battle-perf-mode .cmd-layer,
+.battle-perf-mode .glass-panel,
+.battle-perf-mode .trainer-panel {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    filter: none !important;
+}
+
+.battle-perf-mode .p-sprite,
+.battle-perf-mode .shadow-base {
+    filter: none !important;
+}
+
+/* ========================================================== END PERFORMANCE MODE ========================================================== */

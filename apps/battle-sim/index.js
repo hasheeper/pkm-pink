@@ -129,17 +129,9 @@ async function initGame() {
     // ============================================
     // 【全局系统开关】从 JSON settings 读取
     // ============================================
-    const settings = json.settings || {};
-    window.GAME_SETTINGS = {
-        enableAVS: settings.enableAVS !== false,           // AVS 羁绊值系统
-        enableCommander: settings.enableCommander !== false, // 战术指挥系统
-        enableEVO: settings.enableEVO !== false,           // 进化/羁绊共鸣系统
-        enableBGM: settings.enableBGM !== false,           // 背景音乐
-        enableSFX: settings.enableSFX !== false,           // 音效
-        enableClash: settings.enableClash !== false,       // 对冲系统
-        enableEnvironment: settings.enableEnvironment !== false  // 环境天气系统
-    };
-    console.log('[SETTINGS] 全局系统开关:', window.GAME_SETTINGS);
+    if (typeof applyBattleSettings === 'function') {
+        applyBattleSettings(json.settings || {});
+    }
     
     // 预加载本局资源
     const playerParty = (json.player && json.player.party) || [];

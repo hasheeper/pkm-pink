@@ -13,6 +13,22 @@ let animationFrameId = null;
 let transitionProgress = 1.0; // 1.0 = 完全显示，0.0 = 完全隐藏
 let isTransitioning = false;
 
+function isPerformanceMode() {
+    return typeof window !== 'undefined'
+        && window.BATTLE_PERFORMANCE
+        && window.BATTLE_PERFORMANCE.disableWeatherParticles === true;
+}
+
+function stopWeatherAnimation() {
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+    }
+    particles = [];
+    if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (canvas) canvas.style.opacity = '0';
+}
+
 // [粒子配置参数]
 const CONFIG = {
     // ---------------- 原版 ----------------
@@ -335,6 +351,10 @@ class Particle {
 }
 
 function animate() {
+    if (isPerformanceMode()) {
+        stopWeatherAnimation();
+        return;
+    }
     if (!ctx || !canvas) {
         animationFrameId = requestAnimationFrame(animate);
         return;
@@ -403,6 +423,11 @@ function animate() {
  * 初始化天气系统
  */
 function initWeatherSystem() {
+    if (isPerformanceMode()) {
+        canvas = document.getElementById('weather-canvas');
+        stopWeatherAnimation();
+        return;
+    }
     // 优先尝试获取已存在的或者重新创建
     canvas = document.getElementById('weather-canvas');
     if (!canvas) {
@@ -466,6 +491,22 @@ function setWeatherVisuals(type) {
     
     if (weatherType === targetKey) return; // 没变化则不重置
 
+    if (isPerformanceMode()) {
+        weatherType = targetKey;
+        stopWeatherAnimation();
+        const bgLayer = document.querySelector('.bg-gradient');
+        if (bgLayer) {
+            const allClasses = [
+                'bg-rain', 'bg-heavyrain', 'bg-sand', 'bg-snow', 'bg-hail',
+                'bg-harshsun', 'bg-sun', 'bg-deltastream',
+                'bg-smog', 'bg-ashfall', 'bg-fog', 'bg-gale', 'bg-ambrosia', 'bg-distortion', 'bg-chronalrift'
+            ];
+            bgLayer.classList.remove(...allClasses);
+        }
+        console.log(`[WEATHER VISUAL] Performance mode: skip particles for ${weatherType}`);
+        return;
+    }
+
     // 若系统挂了则尝试重启
     if (!canvas || !ctx) initWeatherSystem();
 
@@ -517,6 +558,14 @@ function clearWeatherVisuals() {
 window.initWeatherSystem = initWeatherSystem;
 window.setWeatherVisuals = setWeatherVisuals;
 window.clearWeatherVisuals = clearWeatherVisuals;
+
+window.addEventListener?.('battle-performance-change', (event) => {
+    if (event?.detail?.disableWeatherParticles) {
+        stopWeatherAnimation();
+    } else if (!animationFrameId) {
+        initWeatherSystem();
+    }
+});
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => setTimeout(initWeatherSystem, 500));

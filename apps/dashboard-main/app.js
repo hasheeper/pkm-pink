@@ -1295,7 +1295,8 @@ const DefaultSettings = {
     enableBGM: true,
     enableSFX: true,
     enableClash: true,
-    enableEnvironment: true
+    enableEnvironment: true,
+    enableBattlePerformanceMode: false
 };
 
 let statusClockTimer = null;
@@ -1765,6 +1766,12 @@ const SettingsManifest = [
         label: 'ENVIRONMENT', 
         desc: 'Enable weather & terrain effects in battle.', 
         color: '#55efc4'
+    },
+    {
+        key: 'enableBattlePerformanceMode',
+        label: 'PERF. MODE',
+        desc: 'Disable heavy VFX, filters, shadows and weather particles.',
+        color: '#95a5a6'
     }
 ];
 
@@ -3608,4 +3615,3 @@ function clearLocationContextInjection() {
 window.injectLocationContext = injectLocationContext;
 window.clearLocationContextInjection = clearLocationContextInjection;
 window.generateLocationContextText = generateLocationContextText;
-

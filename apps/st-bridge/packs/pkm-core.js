@@ -23,7 +23,8 @@
       enableBGM: true,
       enableSFX: true,
       enableClash: false,
-      enableEnvironment: true
+      enableEnvironment: true,
+      enableBattlePerformanceMode: false
     },
     main: {
       enableAVS: true,
@@ -32,7 +33,8 @@
       enableBGM: true,
       enableSFX: true,
       enableClash: false,
-      enableBattleEnvironment: true
+      enableBattleEnvironment: true,
+      enableBattlePerformanceMode: false
     }
   };
 

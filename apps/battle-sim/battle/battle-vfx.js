@@ -36,6 +36,12 @@ window.TYPE_COLORS = TYPE_COLORS;
 
 const CDN_TYPE_ICONS = 'https://cdn.jsdelivr.net/gh/duiker101/pokemon-type-svg-icons/icons/';
 
+function isPerformanceMode() {
+    return typeof window !== 'undefined'
+        && window.BATTLE_PERFORMANCE
+        && window.BATTLE_PERFORMANCE.disableBattleVFX === true;
+}
+
 // ============================================
 // 辅助：根据 spriteId 找到 wrapper 和 sprite
 // ============================================
@@ -60,6 +66,7 @@ function _getWrapper(side) {
 // ============================================
 
 function triggerRangedVFX(type, targetSpriteId, effectiveness, isCritical) {
+    if (isPerformanceMode()) return;
     const typeLower = (type || 'normal').toLowerCase();
     const color = TYPE_COLORS[typeLower] || '#FFFFFF';
 
@@ -143,6 +150,7 @@ function triggerRangedVFX(type, targetSpriteId, effectiveness, isCritical) {
 // ============================================
 
 function triggerContactVFX(type, attackerSpriteId, effectiveness, isCritical) {
+    if (isPerformanceMode()) return;
     const atkEls = _getElements(attackerSpriteId);
     if (!atkEls) return;
     const { sprite: atkSprite, wrapper: atkWrap } = atkEls;
@@ -222,6 +230,7 @@ function triggerContactVFX(type, attackerSpriteId, effectiveness, isCritical) {
 // ============================================
 
 function triggerMissVFX(targetSpriteId) {
+    if (isPerformanceMode()) return;
     const els = _getElements(targetSpriteId);
     if (!els) return;
     const { sprite: targetSprite, wrapper: targetWrapper } = els;
@@ -248,6 +257,7 @@ function triggerMissVFX(targetSpriteId) {
 // ============================================
 
 function triggerStatVFX(mode, targetSpriteId) {
+    if (isPerformanceMode()) return;
     const els = _getElements(targetSpriteId);
     if (!els) return;
     const { sprite: targetSprite, wrapper: targetWrap } = els;
@@ -323,6 +333,7 @@ const STATUS_INLINE_SVG = {
 };
 
 function triggerStatusVFX(statusType, targetSpriteId) {
+    if (isPerformanceMode()) return;
     const els = _getElements(targetSpriteId);
     if (!els) return;
     const { sprite: targetSprite, wrapper: targetWrap } = els;
@@ -396,6 +407,7 @@ function triggerStatusVFX(statusType, targetSpriteId) {
  * @param {object} result - 伤害计算结果 { effectiveness, isCrit }
  */
 function playAttackVFX(attackerSpriteId, defenderSpriteId, move, result) {
+    if (isPerformanceMode()) return { isContact: false, skipped: true };
     const moveType = (move.type || 'Normal').toLowerCase();
     const effectiveness = result.effectiveness || 1;
     const isCrit = result.isCrit || false;

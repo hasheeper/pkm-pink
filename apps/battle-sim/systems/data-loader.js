@@ -36,7 +36,8 @@ function getDefaultBattleData() {
             "enableBGM": true,
             "enableSFX": true,
             "enableClash": false,
-            "enableEnvironment": false
+            "enableEnvironment": false,
+            "enableBattlePerformanceMode": false
         },
         "player": {
             "name": "Revival Blessing Tester",
@@ -138,6 +139,79 @@ function getDefaultBattleData() {
 }
 
 // ============================================
+// 全局系统开关 / 性能模式
+// ============================================
+
+const DEFAULT_BATTLE_SETTINGS = {
+    enableAVS: true,
+    enableCommander: true,
+    enableEVO: true,
+    enableBGM: true,
+    enableSFX: true,
+    enableClash: false,
+    enableEnvironment: true,
+    enableBattlePerformanceMode: false
+};
+
+function parseBattleSettings(settings = {}) {
+    const source = settings && typeof settings === 'object' ? settings : {};
+    const performanceEnabled = source.enableBattlePerformanceMode === true
+        || source.performanceMode === true
+        || source.enablePerformanceMode === true;
+
+    return {
+        ...DEFAULT_BATTLE_SETTINGS,
+        enableAVS: source.enableAVS !== false,
+        enableCommander: source.enableCommander !== false,
+        enableEVO: source.enableEVO !== false,
+        enableBGM: source.enableBGM !== false,
+        enableSFX: source.enableSFX !== false,
+        enableClash: source.enableClash === true,
+        enableEnvironment: source.enableEnvironment !== false,
+        enableBattlePerformanceMode: performanceEnabled
+    };
+}
+
+function buildPerformanceConfig(settings = {}) {
+    const enabled = settings.enableBattlePerformanceMode === true;
+    return {
+        enabled,
+        disableScreenFilters: enabled,
+        disableBlur: enabled,
+        disableShadows: enabled,
+        disableDecorativeAnimations: enabled,
+        disableBattleVFX: enabled,
+        disableWeatherParticles: enabled,
+        reduceSpriteFilters: enabled
+    };
+}
+
+function applyBattleSettings(settings = {}) {
+    const parsed = parseBattleSettings(settings);
+    const perf = buildPerformanceConfig(parsed);
+    if (typeof window !== 'undefined') {
+        window.GAME_SETTINGS = parsed;
+        window.BATTLE_PERFORMANCE = perf;
+        const root = document.documentElement;
+        const body = document.body;
+        root?.classList.toggle('battle-perf-mode', perf.enabled);
+        body?.classList.toggle('battle-perf-mode', perf.enabled);
+        window.dispatchEvent?.(new CustomEvent('battle-performance-change', { detail: perf }));
+    }
+    console.log('[SETTINGS] 全局系统开关:', parsed);
+    return parsed;
+}
+
+function getBattlePerformanceSettings() {
+    if (typeof window === 'undefined') return buildPerformanceConfig(DEFAULT_BATTLE_SETTINGS);
+    return window.BATTLE_PERFORMANCE || buildPerformanceConfig(window.GAME_SETTINGS || DEFAULT_BATTLE_SETTINGS);
+}
+
+function isBattlePerformanceMode() {
+    return getBattlePerformanceSettings().enabled === true;
+}
+
+// ============================================
 // JSON 数据加载
 // ============================================
 
@@ -160,6 +234,7 @@ function loadBattleFromJSON(jsonString) {
     
     try {
         const json = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
+        applyBattleSettings(json.settings || {});
         
         // 加载玩家队伍 (如果有)
         if (json.player && json.player.party) {
@@ -414,6 +489,10 @@ function validateBattleJSON(json) {
 if (typeof window !== 'undefined') {
     window.getDefaultBattleData = getDefaultBattleData;
     window.loadBattleFromJSON = loadBattleFromJSON;
+    window.parseBattleSettings = parseBattleSettings;
+    window.applyBattleSettings = applyBattleSettings;
+    window.getBattlePerformanceSettings = getBattlePerformanceSettings;
+    window.isBattlePerformanceMode = isBattlePerformanceMode;
     window.parseUnlocks = parseUnlocks;
     window.parseEnvironmentConfig = parseEnvironmentConfig;
     window.applyEnvironmentConfig = applyEnvironmentConfig;
@@ -428,6 +507,10 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         getDefaultBattleData,
         loadBattleFromJSON,
+        parseBattleSettings,
+        applyBattleSettings,
+        getBattlePerformanceSettings,
+        isBattlePerformanceMode,
         parseUnlocks,
         parseEnvironmentConfig,
         applyEnvironmentConfig,
