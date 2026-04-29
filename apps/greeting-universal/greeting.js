@@ -992,22 +992,17 @@ const Launcher = {
             guideText = `当前开局模式：${tiers[State.m8RankTier]} (PVP Career Layout)。\n玩家叙事设定包含 ${Object.keys(narrativeTeam).length} 只核心宝可梦。首发王牌为 ${finalStarter}。\n根据 'animeMode=${State.animeMode}'，请${State.animeMode ? '注重角色羁绊表现与技能喊话' : '注重数值硬核计算与战术'}。`;
         } else {
             guideText = isCustom ? 
-            `这里是自建世界区域${finalRegion}。请描述主角获得了${finalStarter || '自定义搭档'}的场景。` : '请沿用官方开局剧本。';
+            `这里是自建世界区域${finalRegion}。请描述主角获得了${finalStarter || '自定义搭档'}的场景。` : '请沿用宝可梦官方开局剧本。';
         }
 
         const msg = `
 [SYSTEM: WORLD RESET]
-// Mode: ${logicType}
 // Region: ${finalRegion}
 // Starter: ${finalStarter ? finalStarter.toUpperCase() : 'UNKNOWN'}
-// Modules: ${Object.values(finalMechanics).filter(Boolean).length} Active
 ${teamDescription}
 
 [引导]
 ${guideText}
-
-[MVU]
-机制与设置已经由 greeting 页面写入当前楼层 stat_data.pkm。
 请只演绎开局叙事，不要输出变量更新块，不要写入初始宝可梦变量。`.trim();
 
         copyToClipboard(msg, injected);
