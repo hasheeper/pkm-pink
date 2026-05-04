@@ -351,36 +351,40 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     return String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
   }
 
-  function extractJsonCandidate(rawText) {
+  function extractJsonCandidates(rawText) {
     const text = stripCodeFence(rawText);
-    const start = text.indexOf('{');
-    if (start < 0) return null;
+    const candidates = [];
 
-    let depth = 0;
-    let inString = false;
-    let escaped = false;
-    for (let index = start; index < text.length; index += 1) {
-      const char = text[index];
-      if (inString) {
-        if (escaped) {
-          escaped = false;
-        } else if (char === '\\') {
-          escaped = true;
-        } else if (char === '"') {
-          inString = false;
+    for (let start = text.indexOf('{'); start >= 0; start = text.indexOf('{', start + 1)) {
+      let depth = 0;
+      let inString = false;
+      let escaped = false;
+      for (let index = start; index < text.length; index += 1) {
+        const char = text[index];
+        if (inString) {
+          if (escaped) {
+            escaped = false;
+          } else if (char === '\\') {
+            escaped = true;
+          } else if (char === '"') {
+            inString = false;
+          }
+          continue;
         }
-        continue;
-      }
-      if (char === '"') {
-        inString = true;
-      } else if (char === '{') {
-        depth += 1;
-      } else if (char === '}') {
-        depth -= 1;
-        if (depth === 0) return text.slice(start, index + 1);
+        if (char === '"') {
+          inString = true;
+        } else if (char === '{') {
+          depth += 1;
+        } else if (char === '}') {
+          depth -= 1;
+          if (depth === 0) {
+            candidates.push(text.slice(start, index + 1));
+            break;
+          }
+        }
       }
     }
-    return null;
+    return candidates;
   }
 
   function parseBattlePayload(content) {
@@ -392,18 +396,32 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     let latest = null;
     while ((match = regex.exec(cleaned)) !== null) latest = match;
     if (!latest) return null;
-    const candidate = extractJsonCandidate(latest[1]);
-    if (!candidate) {
+    const candidates = extractJsonCandidates(latest[1]);
+    if (!candidates.length) {
       console.warn(`${PLUGIN_NAME} ignored ${BATTLE_TAG}: no JSON object found in tag content`);
       return null;
     }
-    try {
-      const parsed = JSON.parse(stripJsonComments(candidate));
-      return normalizeBattleInput(parsed);
-    } catch (error) {
-      console.warn(`${PLUGIN_NAME} ignored ${BATTLE_TAG}: invalid JSON object`, error);
-      return null;
+    let lastError = null;
+    for (const candidate of candidates) {
+      try {
+        const parsed = JSON.parse(stripJsonComments(candidate));
+        return normalizeBattleInput(parsed);
+      } catch (error) {
+        lastError = error;
+      }
     }
+    console.warn(`${PLUGIN_NAME} ignored ${BATTLE_TAG}: invalid JSON object`, lastError);
+    return null;
+  }
+
+  function appendPayloadBeforeUpdateVariable(content, payload) {
+    const source = String(content || '').trim();
+    const updateMatch = source.match(/<UpdateVariable\b[\s\S]*?<\/UpdateVariable>/i);
+    if (!updateMatch) return `${source}\n\n${payload}`;
+
+    const before = source.slice(0, updateMatch.index).trimEnd();
+    const after = source.slice(updateMatch.index).trimStart();
+    return `${before}\n\n${payload}\n\n${after}`.trim();
   }
 
   function mergeUnlocks(...unlocksList) {
@@ -711,14 +729,14 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
 
   async function appendFrontendToMessage(messageId, battleJson, contentOverride = null) {
     const payload = `<${FRONTEND_TAG}>\n${JSON.stringify(battleJson)}\n</${FRONTEND_TAG}>`;
-    if (contentOverride !== null) return `${String(contentOverride).trim()}\n\n${payload}`;
+    if (contentOverride !== null) return appendPayloadBeforeUpdateVariable(contentOverride, payload);
     if (typeof ROOT.getChatMessages !== 'function' || typeof ROOT.setChatMessages !== 'function') return false;
     const messages = ROOT.getChatMessages(messageId);
     const msg = Array.isArray(messages) ? messages[0] : null;
     if (!msg) return false;
     await ROOT.setChatMessages([{
       message_id: messageId,
-      message: `${String(msg.message || '').trim()}\n\n${payload}`
+      message: appendPayloadBeforeUpdateVariable(msg.message || '', payload)
     }], { refresh: 'affected' });
     return true;
   }
