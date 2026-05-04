@@ -50,7 +50,9 @@
   }
 
   async function loadMvuzState() {
-    if (ROOT.PKMPlugin?.loadState) return ROOT.PKMPlugin.loadState();
+    if (ROOT.PKMPlugin?.loadState) {
+      return ROOT.PKMPlugin.loadState({ persist: false, skipMigration: true, requireExisting: true });
+    }
     if (CORE.mvu.readState) return CORE.mvu.readState('stat_data', 'pkm', { type: 'message' });
     if (typeof ROOT.getVariables !== 'function') {
       console.warn(`${PLUGIN_NAME} getVariables is unavailable; cannot read stat_data.pkm`);
