@@ -24,6 +24,7 @@
 
   let iframeInitialized = false;
   let refreshTimer = null;
+  let transferTimer = null;
   let actionLock = false;
   let dashboardWindow = null;
   const messageTargets =[];
@@ -172,6 +173,20 @@
     }
   }
 
+  function scheduleTransferBufferCheck(reason = 'refresh') {
+    if (transferTimer) clearTimeout(transferTimer);
+    const delays = [250, 900, 2200];
+    let index = 0;
+    const run = () => {
+      transferTimer = null;
+      handleTransferBuffer();
+      index += 1;
+      if (index < delays.length) transferTimer = setTimeout(run, delays[index]);
+    };
+    transferTimer = setTimeout(run, delays[index]);
+    console.log(`${PLUGIN_NAME} scheduled transferBuffer check`, { reason });
+  }
+
   function handlePromptInjection(eventData) {
     if (!eventData?.id) return;
     try {
@@ -277,19 +292,32 @@
 
   function bindSillyTavernEvents() {
     ROOT.addEventListener?.('pkm:stateChanged', handleLocalStateChanged);
+    ROOT.addEventListener?.('pkm:stateChanged', () => scheduleTransferBufferCheck('stateChanged'));
+    ROOT.addEventListener?.('st-bridge:state-written', () => scheduleTransferBufferCheck('stateWritten'));
     if (typeof ROOT.eventOn !== 'function') return;
-    ROOT.eventOn('pkm:stateChanged', () => scheduleRefresh('stateChanged'));
+    ROOT.eventOn('pkm:stateChanged', () => {
+      scheduleRefresh('stateChanged');
+      scheduleTransferBufferCheck('stateChanged');
+    });
     ROOT.eventOn('character_message_rendered', () => {
       scheduleRefresh('messageRendered');
-      handleTransferBuffer();
+      scheduleTransferBufferCheck('messageRendered');
     });
     ROOT.eventOn('message_received', () => {
       scheduleRefresh('messageReceived');
-      setTimeout(handleTransferBuffer, 600);
+      scheduleTransferBufferCheck('messageReceived');
     });
     ROOT.eventOn('generation_ended', () => {
       scheduleRefresh('generationEnded');
-      handleTransferBuffer();
+      scheduleTransferBufferCheck('generationEnded');
+    });
+    ROOT.eventOn('message_updated', () => {
+      scheduleRefresh('messageUpdated');
+      scheduleTransferBufferCheck('messageUpdated');
+    });
+    ROOT.eventOn('era:writeDone', () => {
+      scheduleRefresh('writeDone');
+      scheduleTransferBufferCheck('writeDone');
     });
     ROOT.eventOn('CHAT_CHANGED', () => {
       iframeInitialized = false;
