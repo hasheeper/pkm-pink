@@ -22,6 +22,7 @@
   const BATTLE_TAG = 'PKM_BATTLE';
   const FRONTEND_TAG = 'PKM_FRONTEND';
   const MAX_PARTY_SIZE = 6;
+  const FRONTEND_BLOCK_RE = new RegExp(`\\n*<${FRONTEND_TAG}>[\\s\\S]*?<\\/${FRONTEND_TAG}>\\n*`, 'gi');
   if (!CORE?.mvu) throw new Error(`${PLUGIN_NAME} requires PKMPackCore. Load pkm-core.js before this script.`);
 
   let isProcessingMessage = false;
@@ -415,7 +416,7 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
   }
 
   function appendPayloadBeforeUpdateVariable(content, payload) {
-    const source = String(content || '').trim();
+    const source = String(content || '').replace(FRONTEND_BLOCK_RE, '\n\n').trim();
     const updateMatch = source.match(/<UpdateVariable\b[\s\S]*?<\/UpdateVariable>/i);
     if (!updateMatch) return `${source}\n\n${payload}`;
 
@@ -514,20 +515,6 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
         trainerMetadata.push(trainer.name);
       });
     });
-
-    if (allParty.length > MAX_PARTY_SIZE) {
-      const indices = allParty.map((_, index) => index);
-      for (let i = indices.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [indices[i], indices[j]] = [indices[j], indices[i]];
-      }
-      const keepIndices = indices.slice(0, MAX_PARTY_SIZE).sort((a, b) => a - b);
-      return {
-        party: keepIndices.map((index) => allParty[index]),
-        trainerMetadata: keepIndices.map((index) => trainerMetadata[index]),
-        names: names.join(' & ')
-      };
-    }
 
     return { party: allParty, trainerMetadata, names: names.join(' & ') };
   }
@@ -640,6 +627,70 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     return party.slice(0, MAX_PARTY_SIZE);
   }
 
+  function allocateTrainerParties(trainersWithParty) {
+    const activeTrainers = trainersWithParty
+      .map((trainer) => ({
+        ...trainer,
+        party: Array.isArray(trainer.party) ? trainer.party.filter(Boolean) : []
+      }))
+      .filter((trainer) => trainer.party.length);
+    const totalCount = activeTrainers.reduce((sum, trainer) => sum + trainer.party.length, 0);
+    if (totalCount <= MAX_PARTY_SIZE) return activeTrainers.flatMap((trainer) => trainer.party);
+    if (activeTrainers.length >= MAX_PARTY_SIZE) {
+      return activeTrainers.slice(0, MAX_PARTY_SIZE).map((trainer) => trainer.party[0]).filter(Boolean);
+    }
+
+    const allocations = activeTrainers.map((trainer) => ({
+      ...trainer,
+      allocated: Math.max(1, Math.round((trainer.party.length / totalCount) * MAX_PARTY_SIZE))
+    }));
+    let allocatedTotal = allocations.reduce((sum, trainer) => sum + trainer.allocated, 0);
+    while (allocatedTotal > MAX_PARTY_SIZE) {
+      const target = allocations
+        .filter((trainer) => trainer.allocated > 1)
+        .sort((a, b) => b.allocated - a.allocated || b.party.length - a.party.length)[0];
+      if (!target) break;
+      target.allocated -= 1;
+      allocatedTotal -= 1;
+    }
+    while (allocatedTotal < MAX_PARTY_SIZE) {
+      const target = allocations
+        .filter((trainer) => trainer.allocated < trainer.party.length)
+        .sort((a, b) => (b.party.length - b.allocated) - (a.party.length - a.allocated))[0];
+      if (!target) break;
+      target.allocated += 1;
+      allocatedTotal += 1;
+    }
+    return allocations.flatMap((trainer) => trainer.party.slice(0, trainer.allocated));
+  }
+
+  function resolveTrainerBattleParty(trainersData, currentParty = []) {
+    const trainersWithParty = [];
+    for (const trainer of trainersData || []) {
+      const party = trainer.isPlayer
+        ? selectCurrentPartyByNames(currentParty, trainer.party)
+        : normalizeBattlePartyForFrontend(trainer.party, trainer.tier || 2);
+      trainersWithParty.push({
+        name: trainer.name,
+        party: party.map((pokemon) => ({
+          ...pokemon,
+          trainer: trainer.isPlayer ? (pokemon.trainer || 'player') : (pokemon.trainer || trainer.name)
+        }))
+      });
+    }
+    return allocateTrainerParties(trainersWithParty);
+  }
+
+  function resolveSideName(sideConfig, fallbackName) {
+    if (Array.isArray(sideConfig?._trainersData) && sideConfig._trainersData.length) {
+      return sideConfig._trainersData
+        .map((trainer) => (trainer.isPlayer ? fallbackName : trainer.name))
+        .filter(Boolean)
+        .join(' & ');
+    }
+    return isPlayerEntrantName(sideConfig?.name) ? fallbackName : (sideConfig?.name || fallbackName);
+  }
+
   function resolvePlayerBattleParty(state, aiPlayer) {
     const currentParty = state.party.slots
       .filter((pokemon) => pokemon?.name)
@@ -647,15 +698,8 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
       .filter(Boolean);
 
     if (Array.isArray(aiPlayer?._trainersData) && aiPlayer._trainersData.length) {
-      const merged = [];
-      for (const trainer of aiPlayer._trainersData) {
-        if (trainer.isPlayer) {
-          merged.push(...selectCurrentPartyByNames(currentParty, trainer.party));
-        } else {
-          merged.push(...normalizeBattlePartyForFrontend(trainer.party, trainer.tier || 2));
-        }
-      }
-      return trimBattleParty(merged.length ? merged : currentParty);
+      const merged = resolveTrainerBattleParty(aiPlayer._trainersData, currentParty);
+      return merged.length ? merged : currentParty;
     }
 
     if (Array.isArray(aiPlayer?.party) && aiPlayer.party.length && !isPlayerEntrantName(aiPlayer.name)) {
@@ -663,6 +707,18 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     }
 
     return currentParty;
+  }
+
+  function resolveEnemyBattleParty(aiEnemy, battleData) {
+    if (Array.isArray(aiEnemy?._trainersData) && aiEnemy._trainersData.length) {
+      return resolveTrainerBattleParty(aiEnemy._trainersData);
+    }
+    const enemyPartySource = Array.isArray(battleData.party)
+      ? battleData.party
+      : Array.isArray(aiEnemy.party)
+        ? aiEnemy.party
+        : [];
+    return trimBattleParty(normalizeBattlePartyForFrontend(enemyPartySource, aiEnemy.tier || battleData.tier || 2));
   }
 
   function resolveBattleEnvironment(state, battleData) {
@@ -686,13 +742,7 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     const aiPlayer = battleData.player || {};
     const aiEnemy = battleData.enemy || {};
     const playerParty = resolvePlayerBattleParty(state, aiPlayer);
-    const enemyPartySource = Array.isArray(battleData.party)
-      ? battleData.party
-      : Array.isArray(aiEnemy.party)
-        ? aiEnemy.party
-        : [];
-
-    const enemyParty = trimBattleParty(normalizeBattlePartyForFrontend(enemyPartySource, aiEnemy.tier || battleData.tier || 2));
+    const enemyParty = resolveEnemyBattleParty(aiEnemy, battleData);
     const playerUnlocks = mergeUnlocks(
       state.player.unlocks,
       aiPlayer.unlocks,
@@ -705,7 +755,7 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
       settings: { ...state.settings, ...(isObject(battleData.settings) ? battleData.settings : {}) },
       difficulty: battleData.difficulty || aiEnemy.difficulty || 'normal',
       player: {
-        name: isPlayerEntrantName(aiPlayer.name) ? state.player.name : (aiPlayer.name || state.player.name),
+        name: resolveSideName(aiPlayer, state.player.name),
         trainerProficiency: Math.max(
           clampNumber(aiPlayer.trainerProficiency ?? aiPlayer.proficiency, 0, 255, 0),
           state.player.proficiency
@@ -716,7 +766,7 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
       enemy: {
         id: aiEnemy.id || battleData.enemy_id || 'generated_enemy',
         type: aiEnemy.type || battleData.enemy_type || 'generated_trainer',
-        name: aiEnemy.name || battleData.enemy_name || 'Opponent',
+        name: resolveSideName(aiEnemy, battleData.enemy_name || 'Opponent'),
         trainerProficiency: clampNumber(aiEnemy.trainerProficiency, 0, 255, 0),
         lines: aiEnemy.lines || null,
         unlocks: Object.values(enemyUnlocks).some(Boolean) ? enemyUnlocks : (isObject(aiEnemy.unlocks) ? aiEnemy.unlocks : null)
@@ -742,13 +792,14 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
   }
 
   async function processBattleContent(content) {
-    if (!content || !content.includes(`<${BATTLE_TAG}>`) || content.includes(`<${FRONTEND_TAG}>`)) {
+    if (!content || !content.includes(`<${BATTLE_TAG}>`)) {
       return { changed: false, content };
     }
     const aiBattleData = parseBattlePayload(content);
     if (!aiBattleData) return { changed: false, content };
     const battleJson = await buildBattleJson(aiBattleData);
-    return { changed: true, content: await appendFrontendToMessage(null, battleJson, content), battleJson };
+    const nextContent = await appendFrontendToMessage(null, battleJson, content);
+    return { changed: nextContent !== content, content: nextContent, battleJson };
   }
 
   async function handleBeforeMessageUpdate(event) {
