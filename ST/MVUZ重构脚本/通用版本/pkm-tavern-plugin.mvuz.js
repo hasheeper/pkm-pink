@@ -657,16 +657,44 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     return explicit || 'generated_trainer';
   }
 
-  function normalizeBattlePartyEntry(entry, tier) {
-    if (typeof entry === 'string') {
-      return { name: entry.trim(), _needGenerate: true, _tier: tier };
-    }
-    if (!isObject(entry)) return null;
-    const normalized = normalizePokemon(entry, null);
+  function getTierDefaultLevel(tier) {
+    const normalized = clampNumber(tier, 1, 4, 2);
+    return ({ 1: 25, 2: 50, 3: 75, 4: 85 })[normalized] || 50;
+  }
+
+  function completeBattlePartySeed(entry, tier, trainerType = 'generated_trainer') {
+    const src = typeof entry === 'string' ? { name: entry.trim() } : clone(entry, {});
+    if (!isObject(src) || !src.name) return null;
+
+    const lv = clampNumber(src.lv ?? src.level, 1, 100, getTierDefaultLevel(tier));
+    const isWild = trainerType === 'wild';
+    return {
+      ...src,
+      lv,
+      quality: src.quality || src.iv_quality || (lv >= 75 ? 'high' : lv >= 45 ? 'medium' : 'low'),
+      moves: Array.isArray(src.moves) && src.moves.length ? src.moves : ['Tackle'],
+      stats_meta: isObject(src.stats_meta)
+        ? src.stats_meta
+        : {
+            ivs: normalizeIvs(null),
+            ev_level: isWild ? 0 : Math.min(252, Math.floor(lv * 2.5))
+          }
+    };
+  }
+
+  function normalizeBattlePartyEntry(entry, tier, trainerType = 'generated_trainer') {
+    const seed = completeBattlePartySeed(entry, tier, trainerType);
+    if (!seed) return null;
+    const normalized = normalizePokemon(seed, null);
     if (!normalized?.name) return null;
+    if (isObject(seed.stats_meta) && seed.stats_meta.ev_level !== undefined && seed.stats_meta.ev_level !== null) {
+      normalized.stats_meta = {
+        ...(isObject(normalized.stats_meta) ? normalized.stats_meta : {}),
+        ev_level: clampNumber(seed.stats_meta.ev_level, 0, 252, 0)
+      };
+    }
     delete normalized.slot;
-    normalized._needGenerate = entry._needGenerate !== false;
-    normalized._tier = entry._tier || tier;
+    normalized._tier = seed._tier || tier;
     return normalized;
   }
 
@@ -676,7 +704,7 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     const tier = src.tier || defaultTier;
     const trainerType = detectBattleEntrantType(src);
     const party = Array.isArray(src.party)
-      ? src.party.map((pokemon) => normalizeBattlePartyEntry(pokemon, tier)).filter(Boolean)
+      ? src.party.map((pokemon) => normalizeBattlePartyEntry(pokemon, tier, trainerType)).filter(Boolean)
       : [];
     const unlocks = mergeUnlocks(src.unlocks, detectUnlocksFromParty(party));
 
@@ -778,17 +806,43 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     if (!pokemon?.name) return null;
     const next = clone(pokemon, {});
     next.moves = normalizeMoves(next.moves).filter(Boolean);
-    delete next['a' + 'vs'];
+    next.avs = normalizeBattleAvs(next);
     delete next['friend' + 'ship'];
     delete next._needGenerate;
     delete next._tier;
     return next;
   }
 
-  function normalizeBattlePartyForFrontend(party, fallbackTier = 2) {
+  function normalizeBattleAvs(pokemon) {
+    const zero = { trust: 0, passion: 0, insight: 0, devotion: 0 };
+    let source = null;
+    if (isObject(pokemon?.avs)) {
+      source = pokemon.avs;
+    } else if (isObject(pokemon?.friendship?.avs)) {
+      source = pokemon.friendship.avs;
+    } else if (isObject(pokemon?.friendship)) {
+      source = pokemon.friendship;
+    } else if (typeof pokemon?.bonds === 'number') {
+      source = {
+        trust: pokemon.bonds,
+        passion: pokemon.bonds,
+        insight: pokemon.bonds,
+        devotion: pokemon.bonds
+      };
+    }
+    if (!source) return zero;
+    return {
+      trust: clampNumber(source.trust, 0, 255, 0),
+      passion: clampNumber(source.passion, 0, 255, 0),
+      insight: clampNumber(source.insight, 0, 255, 0),
+      devotion: clampNumber(source.devotion, 0, 255, 0)
+    };
+  }
+
+  function normalizeBattlePartyForFrontend(party, fallbackTier = 2, trainerType = 'generated_trainer') {
     if (!Array.isArray(party)) return [];
     return party
-      .map((pokemon) => battlePokemonForFrontend(normalizeBattlePartyEntry(pokemon, fallbackTier)))
+      .map((pokemon) => battlePokemonForFrontend(normalizeBattlePartyEntry(pokemon, fallbackTier, trainerType)))
       .filter(Boolean);
   }
 
@@ -858,7 +912,7 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     for (const trainer of trainersData || []) {
       const party = trainer.isPlayer
         ? selectCurrentPartyByNames(currentParty, trainer.party)
-        : normalizeBattlePartyForFrontend(trainer.party, trainer.tier || 2);
+        : normalizeBattlePartyForFrontend(trainer.party, trainer.tier || 2, trainer.trainerType);
       trainersWithParty.push({
         name: trainer.name,
         party: party.map((pokemon) => ({
@@ -892,7 +946,7 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     }
 
     if (Array.isArray(aiPlayer?.party) && aiPlayer.party.length && !isPlayerEntrantName(aiPlayer.name)) {
-      return trimBattleParty(normalizeBattlePartyForFrontend(aiPlayer.party, aiPlayer.tier || 2));
+      return trimBattleParty(normalizeBattlePartyForFrontend(aiPlayer.party, aiPlayer.tier || 2, aiPlayer.type || 'generated_trainer'));
     }
 
     return currentParty;
@@ -907,7 +961,11 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
       : Array.isArray(aiEnemy.party)
         ? aiEnemy.party
         : [];
-    return trimBattleParty(normalizeBattlePartyForFrontend(enemyPartySource, aiEnemy.tier || battleData.tier || 2));
+    return trimBattleParty(normalizeBattlePartyForFrontend(
+      enemyPartySource,
+      aiEnemy.tier || battleData.tier || 2,
+      aiEnemy.type || battleData.enemy_type || 'generated_trainer'
+    ));
   }
 
   function resolveBattleEnvironment(state, battleData) {
@@ -931,13 +989,7 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     const aiPlayer = battleData.player || {};
     const aiEnemy = battleData.enemy || {};
     const playerParty = resolvePlayerBattleParty(state, aiPlayer);
-    const enemyPartySource = Array.isArray(battleData.party)
-      ? battleData.party
-      : Array.isArray(aiEnemy.party)
-        ? aiEnemy.party
-        : [];
-
-    const enemyParty = trimBattleParty(normalizeBattlePartyForFrontend(enemyPartySource, aiEnemy.tier || battleData.tier || 2));
+    const enemyParty = resolveEnemyBattleParty(aiEnemy, battleData);
     const playerUnlocks = mergeUnlocks(
       state.player.unlocks,
       aiPlayer.unlocks,
