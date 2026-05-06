@@ -481,6 +481,32 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     return normalized;
   }
 
+  function normalizeBattleAvs(pokemon) {
+    const zero = { trust: 0, passion: 0, insight: 0, devotion: 0 };
+    let source = null;
+    if (isObject(pokemon?.avs)) {
+      source = pokemon.avs;
+    } else if (isObject(pokemon?.friendship?.avs)) {
+      source = pokemon.friendship.avs;
+    } else if (isObject(pokemon?.friendship)) {
+      source = pokemon.friendship;
+    } else if (typeof pokemon?.bonds === 'number') {
+      source = {
+        trust: pokemon.bonds,
+        passion: pokemon.bonds,
+        insight: pokemon.bonds,
+        devotion: pokemon.bonds
+      };
+    }
+    if (!source) return zero;
+    return {
+      trust: clampNumber(source.trust, 0, 255, 0),
+      passion: clampNumber(source.passion, 0, 255, 0),
+      insight: clampNumber(source.insight, 0, 255, 0),
+      devotion: clampNumber(source.devotion, 0, 255, 0)
+    };
+  }
+
   function processBattleEntrant(entrant, defaultTier = 2) {
     const src = isObject(entrant) ? entrant : { name: String(entrant || '') };
     const name = normalizeString(src.name, 'Unknown');
@@ -589,7 +615,7 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     if (!pokemon?.name) return null;
     const next = clone(pokemon, {});
     next.moves = normalizeMoves(next.moves).filter(Boolean);
-    delete next['a' + 'vs'];
+    next.avs = normalizeBattleAvs(next);
     delete next['friend' + 'ship'];
     delete next._needGenerate;
     delete next._tier;
