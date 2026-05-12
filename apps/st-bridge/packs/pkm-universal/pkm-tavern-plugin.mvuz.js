@@ -352,6 +352,16 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     return String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
   }
 
+  function hashString(value) {
+    const text = String(value || '');
+    let hash = 2166136261;
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+  }
+
   function extractJsonCandidates(rawText) {
     const text = stripCodeFence(rawText);
     const candidates = [];
@@ -388,30 +398,38 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
     return candidates;
   }
 
+  function isBattlePayloadRoot(value) {
+    if (!isObject(value)) return false;
+    if (value.p1 || value.p2 || value.player || value.enemy) return true;
+    if ((value.trainer || value.enemy_id || value.enemy_name) && Array.isArray(value.party)) return true;
+    return false;
+  }
+
   function parseBattlePayload(content) {
     let cleaned = String(content || '')
       .replace(/[\s\S]*<\/planning>/gi, '')
       .replace(/[\s\S]*<\/think>/gi, '');
     const regex = new RegExp(`<${BATTLE_TAG}>([\\s\\S]*?)<\\/${BATTLE_TAG}>`, 'gi');
     let match = null;
-    let latest = null;
-    while ((match = regex.exec(cleaned)) !== null) latest = match;
-    if (!latest) return null;
-    const candidates = extractJsonCandidates(latest[1]);
-    if (!candidates.length) {
-      console.warn(`${PLUGIN_NAME} ignored ${BATTLE_TAG}: no JSON object found in tag content`);
-      return null;
-    }
+    const matches = [];
+    while ((match = regex.exec(cleaned)) !== null) matches.push(match[1]);
+    if (!matches.length) return null;
     let lastError = null;
-    for (const candidate of candidates) {
-      try {
-        const parsed = JSON.parse(stripJsonComments(candidate));
-        return normalizeBattleInput(parsed);
-      } catch (error) {
-        lastError = error;
+
+    for (let matchIndex = matches.length - 1; matchIndex >= 0; matchIndex -= 1) {
+      const candidates = extractJsonCandidates(matches[matchIndex]);
+      if (!candidates.length) continue;
+      for (const candidate of candidates) {
+        try {
+          const parsed = JSON.parse(stripJsonComments(candidate));
+          if (isBattlePayloadRoot(parsed)) return normalizeBattleInput(parsed);
+        } catch (error) {
+          lastError = error;
+        }
       }
     }
-    console.warn(`${PLUGIN_NAME} ignored ${BATTLE_TAG}: invalid JSON object`, lastError);
+
+    console.warn(`${PLUGIN_NAME} ignored ${BATTLE_TAG}: no complete battle root found`, lastError);
     return null;
   }
 
@@ -867,19 +885,19 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
 
   async function handleMessageRendered(messageId) {
     if (isProcessingMessage) return;
-    const marker = `${messageId || ''}`;
-    if (marker && marker === lastHandledMarker) return;
 
     try {
       isProcessingMessage = true;
       const messages = typeof ROOT.getChatMessages === 'function' ? ROOT.getChatMessages(messageId) : null;
       const msg = Array.isArray(messages) ? messages[0] : null;
       const content = msg?.message || '';
+      const marker = `${messageId || ''}:${hashString(content)}`;
+      if (marker && marker === lastHandledMarker) return;
       const result = await processBattleContent(content);
       if (result.changed) {
         await ROOT.setChatMessages([{ message_id: messageId, message: result.content }], { refresh: 'affected' });
-        lastHandledMarker = marker;
       }
+      lastHandledMarker = marker;
     } catch (error) {
       console.error(`${PLUGIN_NAME} battle frontend injection failed:`, error);
     } finally {

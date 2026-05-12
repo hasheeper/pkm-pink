@@ -579,19 +579,51 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
       .replace(/(^|[^:])\/\/.*$/gm, '$1');
   }
 
-  function extractJsonCandidate(rawText) {
+  function hashString(value) {
+    const text = String(value || '');
+    let hash = 2166136261;
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+  }
+
+  function extractJsonCandidates(rawText) {
     const text = String(rawText || '').trim();
-    const start = Math.min(
-      ...['{', '['].map((char) => {
-        const idx = text.indexOf(char);
-        return idx < 0 ? Number.POSITIVE_INFINITY : idx;
-      })
-    );
-    if (!Number.isFinite(start)) return null;
-    const opening = text[start];
-    const closing = opening === '{' ? '}' : ']';
-    const end = text.lastIndexOf(closing);
-    return end >= start ? text.slice(start, end + 1) : null;
+    const candidates = [];
+
+    for (let start = text.indexOf('{'); start >= 0; start = text.indexOf('{', start + 1)) {
+      let depth = 0;
+      let inString = false;
+      let escaped = false;
+      for (let index = start; index < text.length; index += 1) {
+        const char = text[index];
+        if (inString) {
+          if (escaped) escaped = false;
+          else if (char === '\\') escaped = true;
+          else if (char === '"') inString = false;
+          continue;
+        }
+        if (char === '"') inString = true;
+        else if (char === '{') depth += 1;
+        else if (char === '}') {
+          depth -= 1;
+          if (depth === 0) {
+            candidates.push(text.slice(start, index + 1));
+            break;
+          }
+        }
+      }
+    }
+    return candidates;
+  }
+
+  function isBattlePayloadRoot(value) {
+    if (!isObject(value)) return false;
+    if (value.p1 || value.p2 || value.player || value.enemy) return true;
+    if ((value.trainer || value.enemy_id || value.enemy_name) && Array.isArray(value.party)) return true;
+    return false;
   }
 
   function parseBattlePayload(content) {
@@ -600,18 +632,24 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
       .replace(/[\s\S]*<\/think>/gi, '');
     const regex = new RegExp(`<${BATTLE_TAG}>([\\s\\S]*?)<\\/${BATTLE_TAG}>`, 'gi');
     let match = null;
-    let latest = null;
-    while ((match = regex.exec(cleaned)) !== null) latest = match;
-    if (!latest) return null;
-    const candidate = extractJsonCandidate(latest[1]);
-    if (!candidate) return null;
-    try {
-      const parsed = JSON.parse(stripJsonComments(candidate));
-      return normalizeBattleInput(parsed);
-    } catch (error) {
-      console.error(`${PLUGIN_NAME} failed to parse ${BATTLE_TAG}:`, error);
-      return null;
+    const matches = [];
+    while ((match = regex.exec(cleaned)) !== null) matches.push(match[1]);
+    if (!matches.length) return null;
+    let lastError = null;
+
+    for (let matchIndex = matches.length - 1; matchIndex >= 0; matchIndex -= 1) {
+      const candidates = extractJsonCandidates(matches[matchIndex]);
+      for (const candidate of candidates) {
+        try {
+          const parsed = JSON.parse(stripJsonComments(candidate));
+          if (isBattlePayloadRoot(parsed)) return normalizeBattleInput(parsed);
+        } catch (error) {
+          lastError = error;
+        }
+      }
     }
+    console.warn(`${PLUGIN_NAME} ignored ${BATTLE_TAG}: no complete battle root found`, lastError);
+    return null;
   }
 
   function mergeUnlocks(...unlocksList) {
@@ -1026,20 +1064,28 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
 
   async function appendFrontendToMessage(messageId, battleJson, contentOverride = null) {
     const payload = `<${FRONTEND_TAG}>\n${JSON.stringify(battleJson)}\n</${FRONTEND_TAG}>`;
-    if (contentOverride !== null) return `${String(contentOverride).trim()}\n\n${payload}`;
+    const appendPayload = (content) => {
+      const source = String(content || '').replace(FRONTEND_BLOCK_RE, '\n\n').trim();
+      const updateMatch = source.match(/<UpdateVariable\b[\s\S]*?<\/UpdateVariable>/i);
+      if (!updateMatch) return `${source}\n\n${payload}`;
+      const before = source.slice(0, updateMatch.index).trimEnd();
+      const after = source.slice(updateMatch.index).trimStart();
+      return `${before}\n\n${payload}\n\n${after}`.trim();
+    };
+    if (contentOverride !== null) return appendPayload(contentOverride);
     if (typeof ROOT.getChatMessages !== 'function' || typeof ROOT.setChatMessages !== 'function') return false;
     const messages = ROOT.getChatMessages(messageId);
     const msg = Array.isArray(messages) ? messages[0] : null;
     if (!msg) return false;
     await ROOT.setChatMessages([{
       message_id: messageId,
-      message: `${String(msg.message || '').trim()}\n\n${payload}`
+      message: appendPayload(msg.message || '')
     }], { refresh: 'affected' });
     return true;
   }
 
   async function processBattleContent(content) {
-    if (!content || !content.includes(`<${BATTLE_TAG}>`) || content.includes(`<${FRONTEND_TAG}>`)) {
+    if (!content || !content.includes(`<${BATTLE_TAG}>`)) {
       return { changed: false, content };
     }
     const aiBattleData = parseBattlePayload(content);
@@ -1055,19 +1101,19 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
 
   async function handleMessageRendered(messageId) {
     if (isProcessingMessage) return;
-    const marker = `${messageId || ''}`;
-    if (marker && marker === lastHandledMarker) return;
 
     try {
       isProcessingMessage = true;
       const messages = typeof ROOT.getChatMessages === 'function' ? ROOT.getChatMessages(messageId) : null;
       const msg = Array.isArray(messages) ? messages[0] : null;
       const content = msg?.message || '';
+      const marker = `${messageId || ''}:${hashString(content)}`;
+      if (marker && marker === lastHandledMarker) return;
       const result = await processBattleContent(content);
       if (result.changed) {
         await ROOT.setChatMessages([{ message_id: messageId, message: result.content }], { refresh: 'affected' });
-        lastHandledMarker = marker;
       }
+      lastHandledMarker = marker;
     } catch (error) {
       console.error(`${PLUGIN_NAME} battle frontend injection failed:`, error);
     } finally {
