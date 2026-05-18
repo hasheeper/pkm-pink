@@ -4253,7 +4253,7 @@ function battleEndSequence(result) {
     const descEl = document.getElementById('col-desc');
     const reasonEl = document.getElementById('col-reason');
     const dotsEl = document.getElementById('res-party-viz');
-    const clipEl = document.getElementById('res-clipboard-text');
+    const outputEl = document.getElementById('res-output-text');
 
     if (!overlay || !card) return;
 
@@ -4309,8 +4309,8 @@ function battleEndSequence(result) {
         });
     }
 
-    if (clipEl) {
-        clipEl.value = analysis.fullReport;
+    if (outputEl) {
+        outputEl.value = analysis.fullReport;
     }
 
     let endLine = '';
@@ -4538,9 +4538,9 @@ window.restartBattle = function() {
 };
 
 // =========================================================
-// 【已迁移】日志清洗与复制系统 -> systems/log-filter.js
-// copyResultOnly, copyFullProcess, extractBattleLog,
-// copyToAndClose, endGameCleanup
+// 【已迁移】日志清洗与输入栏输出系统 -> systems/log-filter.js
+// writeResultOnlyToTavern, writeFullProcessToTavern, extractBattleLog,
+// writeToTavernInputAndClose, endGameCleanup
 // =========================================================
 
 /**

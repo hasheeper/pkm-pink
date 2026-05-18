@@ -236,9 +236,25 @@
       frame.addEventListener('load', postBattleData);
 
       window.addEventListener('message', (event) => {
-        const injectedBattleData = parseInjectedData();
         const payload = event?.data;
-        if (!payload || payload.type !== 'pkm-battle-data-request') return;
+        if (!payload || !payload.type) return;
+
+        if (payload.type === 'PKM_SET_TAVERN_INPUT') {
+          if (event.source !== frame.contentWindow) return;
+          try {
+            window.parent.postMessage(payload, '*');
+          } catch (e) {}
+          return;
+        }
+
+        if (payload.type === 'PKM_SET_TAVERN_INPUT_RESULT' || payload.type === 'PKM_SET_TAVERN_INPUT_ERROR') {
+          if (!frame || !frame.contentWindow) return;
+          frame.contentWindow.postMessage(payload, '*');
+          return;
+        }
+
+        if (payload.type !== 'pkm-battle-data-request') return;
+        const injectedBattleData = parseInjectedData();
         if (!injectedBattleData || !frame || !frame.contentWindow) return;
         frame.contentWindow.postMessage(
           {

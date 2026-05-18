@@ -279,6 +279,8 @@ async function refreshMovePoolPanel(slotKey) {
 
 let pkmActionRequestSeq = 0;
 const pendingPkmActionRequests = new Map();
+let pkmTavernInputRequestSeq = 0;
+const pendingPkmTavernInputRequests = new Map();
 
 function getPkmActionTargets() {
     const targets = [];
@@ -296,6 +298,10 @@ function getPkmActionTargets() {
 
 function formatPkmActionError(data) {
     return data?.message || data?.reason || 'PKM action failed';
+}
+
+function formatTavernInputError(data) {
+    return data?.message || data?.reason || 'Failed to write Tavern input';
 }
 
 function showPkmActionFailure(message) {
@@ -318,6 +324,23 @@ function handlePkmActionResultMessage(data) {
         pending.resolve(data);
     } else {
         const error = new Error(formatPkmActionError(data));
+        error.result = data;
+        pending.reject(error);
+    }
+    return true;
+}
+
+function handleTavernInputResultMessage(data) {
+    if (!data || (data.type !== 'PKM_SET_TAVERN_INPUT_RESULT' && data.type !== 'PKM_SET_TAVERN_INPUT_ERROR')) return false;
+    const requestId = data.requestId || '';
+    const pending = requestId ? pendingPkmTavernInputRequests.get(requestId) : null;
+    if (!pending) return true;
+    clearTimeout(pending.timer);
+    pendingPkmTavernInputRequests.delete(requestId);
+    if (data.type === 'PKM_SET_TAVERN_INPUT_RESULT' && data.ok !== false) {
+        pending.resolve(data);
+    } else {
+        const error = new Error(formatTavernInputError(data));
         error.result = data;
         pending.reject(error);
     }
@@ -352,10 +375,42 @@ function postPkmAction(action, payload = {}, options = {}) {
     });
 }
 
+function postTavernInput(text, options = {}) {
+    const inputText = typeof text === 'string' ? text : '';
+    if (!inputText.trim()) {
+        return Promise.reject(new Error('Cannot write empty text to Tavern input'));
+    }
+    const requestId = options.requestId || `pkm-input-${Date.now()}-${++pkmTavernInputRequestSeq}`;
+    const message = {
+        type: 'PKM_SET_TAVERN_INPUT',
+        requestId,
+        text: inputText,
+        source: options.source || 'dashboard-universal'
+    };
+
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            pendingPkmTavernInputRequests.delete(requestId);
+            reject(new Error('Writing to Tavern input timed out'));
+        }, options.timeoutMs || 10000);
+
+        pendingPkmTavernInputRequests.set(requestId, { resolve, reject, timer });
+
+        try {
+            getPkmActionTargets().forEach((target) => target.postMessage(message, '*'));
+        } catch (error) {
+            clearTimeout(timer);
+            pendingPkmTavernInputRequests.delete(requestId);
+            reject(error);
+        }
+    });
+}
+
 window.postPkmAction = postPkmAction;
+window.postTavernInput = postTavernInput;
 window.showPkmActionFailure = showPkmActionFailure;
 
-function buildNarrativeClipboard(title, bodyLines) {
+function buildNarrativeInputText(title, bodyLines) {
     return `[System Event: ${title}]
 Variables have already been updated in the current message MVU state (stat_data.pkm) by the dashboard.
 Do not output <UpdateVariable>, <VariableEdit>, <VariableInsert>, <VariableDelete>, <JSONPatch>, or any variable update block.
@@ -409,13 +464,13 @@ window.saveMoveChanges = async function(slotKey) {
         return;
     }
     
-    // 复制到剪贴板
     try {
-        await navigator.clipboard.writeText(aiPrompt);
-        console.log('[MOVE_POOL] ✓ 已复制到剪贴板');
-    } catch (e) {
-        console.warn('[MOVE_POOL] 剪贴板复制失败，尝试降级方案:', e);
-        fallbackCopyToClipboard(aiPrompt);
+        await postTavernInput(aiPrompt, { source: 'dashboard-universal:move-pool' });
+        console.log('[MOVE_POOL] ✓ 演绎提示已写入酒馆输入栏');
+    } catch (error) {
+        console.error('[MOVE_POOL] 输入栏写入失败:', error);
+        showPkmActionFailure(`输入栏写入失败：${error.message}`);
+        return;
     }
 
     // 清理临时变更
@@ -424,8 +479,7 @@ window.saveMoveChanges = async function(slotKey) {
     // 关闭面板
     closeMovePoolModal();
 
-    // 显示成功通知（包含复制提示）
-    showMovePoolNotification(`${displayName} 技能已更新！演绎提示已复制到剪贴板`, 'success');
+    showMovePoolNotification(`${displayName} 技能已更新！演绎提示已写入酒馆输入栏`, 'success');
 };
 
 /**
@@ -439,7 +493,7 @@ function generateMoveChangeNarrative(slotKey, moves, pkm, changedMoves) {
     const changedKeys = Object.keys(changedMoves || {});
     
     if (changedKeys.length === 0) {
-        return buildNarrativeClipboard('Move configuration unchanged', [
+        return buildNarrativeInputText('Move configuration unchanged', [
             `${displayName} 的技能配置未发生变化。请只做一句轻描写，不要更新变量。`
         ]);
     }
@@ -454,28 +508,11 @@ function generateMoveChangeNarrative(slotKey, moves, pkm, changedMoves) {
     
     const changeListStr = changeDescriptions.join('、');
     
-    return buildNarrativeClipboard('Move configuration updated', [
+    return buildNarrativeInputText('Move configuration updated', [
         `目标: ${displayName} (Lv.${lv})`,
         `技能已重组: ${changeListStr}`,
         `请简短描写 ${displayName} 调整技能、训练家确认配置的场景。`
     ]);
-}
-
-/**
- * 降级剪贴板复制方案
- */
-function fallbackCopyToClipboard(text) {
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.style.cssText = 'position:fixed;left:-9999px;top:-9999px;';
-    document.body.appendChild(textarea);
-    textarea.select();
-    try {
-        document.execCommand('copy');
-    } catch (e) {
-        console.error('[MOVE_POOL] 降级复制也失败:', e);
-    }
-    document.body.removeChild(textarea);
 }
 
 /**
@@ -649,20 +686,20 @@ window.triggerMockBag = function(el) {
     const messageTitle = 'ACCESS DENIED';
     const messageBody = '战术背包尚未激活或内容为空。';
 
-    if (typeof showCopyNotification === 'function') {
+    if (typeof showTavernInputNotification === 'function') {
         const notif = document.createElement('div');
-        notif.className = 'copy-notification show';
+        notif.className = 'tavern-input-notification show';
         notif.innerHTML = `
-            <div class="copy-notif-internal">
-                <div class="copy-notif-icon" style="color:#ff7675;">
+            <div class="tavern-input-notif-internal">
+                <div class="tavern-input-notif-icon" style="color:#ff7675;">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                         <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                     </svg>
                 </div>
-                <div class="copy-notif-text">
-                    <div class="copy-notif-title" style="color:#ff7675;">${messageTitle}</div>
-                    <div class="copy-notif-desc">${messageBody}</div>
+                <div class="tavern-input-notif-text">
+                    <div class="tavern-input-notif-title" style="color:#ff7675;">${messageTitle}</div>
+                    <div class="tavern-input-notif-desc">${messageBody}</div>
                 </div>
             </div>
         `;
@@ -756,6 +793,9 @@ window.addEventListener('message', function(event) {
     if (!event.data || !event.data.type) return;
     if (String(event.data.type).startsWith('PKM_')) {
         console.log('[PKM] 收到桥接消息', event.data.type);
+    }
+    if (handleTavernInputResultMessage(event.data)) {
+        return;
     }
     if (handlePkmActionResultMessage(event.data)) {
         return;
@@ -1907,7 +1947,7 @@ window.confirmBoxTransfer = async function() {
         });
 
         actionLog = `
-${buildNarrativeClipboard('Pink network batch store completed', [
+${buildNarrativeInputText('Pink network batch store completed', [
 `操作：传输通道 [${zoneName}] 已建立。`,
 `上行 Upload: ${uploadList.join(', ')} >>> 云端服务器存储。`,
 `已清空 ${filledPartyInfos.length} 个队伍槽位。`,
@@ -1938,7 +1978,7 @@ ${buildNarrativeClipboard('Pink network batch store completed', [
         });
 
         actionLog = `
-${buildNarrativeClipboard('Pink network batch retrieve completed', [
+${buildNarrativeInputText('Pink network batch retrieve completed', [
 `操作：传输通道 [${zoneName}] 已建立。`,
 `下行 Download: ${downloadList.join(', ')} <<< 云端服务器。`,
 `已加入 ${bKeys.length} 个队伍槽位。`,
@@ -1995,7 +2035,7 @@ ${buildNarrativeClipboard('Pink network batch retrieve completed', [
             : `> 下行 (Download): ${downloadList.join(', ')} <<< 云端服务器。`;
 
         actionLog = `
-${buildNarrativeClipboard('Pink network batch transfer completed', [
+${buildNarrativeInputText('Pink network batch transfer completed', [
 `操作：传输通道 [${zoneName}] 已建立。`,
 opDesc.replace(/^> /gm, ''),
 `${uploadList.length > 0 ? `${uploadList.join('、')} 与 ${downloadList.join('、')} 完成了交换传输！` : `${downloadList.join('、')} 已从云端传送回来！`}请简短描写多道光束交错的画面，宝可梦们出现后对 ${playerName} 的反应，以及 ${playerName} 与新伙伴们的互动。`
@@ -2018,7 +2058,14 @@ opDesc.replace(/^> /gm, ''),
             return;
         }
     }
-    copyToClipboard(actionLog);
+    try {
+        await postTavernInput(actionLog, { source: 'dashboard-universal:box' });
+        showTavernInputNotification('BOX 叙事提示已写入酒馆输入栏');
+    } catch (error) {
+        console.error('[BOX] 输入栏写入失败:', error);
+        showPkmActionFailure(`输入栏写入失败：${error.message}`);
+        return;
+    }
     resetBoxSelection(); 
 };
 
@@ -2044,60 +2091,25 @@ function normalizeToBoxFormat(partyObj) {
     return clone;
 }
 
-// 复制到剪贴板函数
-function copyToClipboard(text) {
-    // 尝试使用现代 Clipboard API
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(() => {
-            console.log("[BOX] ✓ 已复制到剪贴板");
-            showCopyNotification("✓ 指令已复制到剪贴板，请粘贴发送给AI");
-        }).catch(err => {
-            console.error("[BOX] 剪贴板写入失败:", err);
-            fallbackCopy(text);
-        });
-    } else {
-        fallbackCopy(text);
-    }
-}
-
-// 降级复制方案
-function fallbackCopy(text) {
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.style.position = 'fixed';
-    textarea.style.left = '-9999px';
-    document.body.appendChild(textarea);
-    textarea.select();
-    try {
-        document.execCommand('copy');
-        console.log("[BOX] ✓ 已复制到剪贴板 (fallback)");
-        showCopyNotification("✓ 指令已复制到剪贴板，请粘贴发送给AI");
-    } catch (err) {
-        console.error("[BOX] 复制失败:", err);
-        alert("复制失败，请手动复制控制台中的指令");
-    }
-    document.body.removeChild(textarea);
-}
-
 /* --- 新版通知系统 (app.js) --- */
-function showCopyNotification(msg) { // msg 参数暂保留以兼容旧调用
+function showTavernInputNotification(msg) {
     // 1. 移除旧的（依然存在的话）
-    const old = document.querySelector('.copy-notification');
+    const old = document.querySelector('.tavern-input-notification');
     if (old) old.remove();
 
     // 2. 创建新结构 (对应CSS)
     const notification = document.createElement('div');
-    notification.className = 'copy-notification';
+    notification.className = 'tavern-input-notification';
     notification.innerHTML = `
-        <div class="copy-notif-internal">
-            <div class="copy-notif-icon">
+        <div class="tavern-input-notif-internal">
+            <div class="tavern-input-notif-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="24" height="24">
                     <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
             </div>
-            <div class="copy-notif-text">
-                <div class="copy-notif-title">SYSTEM READY</div>
-                <div class="copy-notif-desc">指令已生成并复制至剪贴板</div>
+            <div class="tavern-input-notif-text">
+                <div class="tavern-input-notif-title">SYSTEM READY</div>
+                <div class="tavern-input-notif-desc">${msg || '指令已写入酒馆输入栏'}</div>
             </div>
         </div>
     `;

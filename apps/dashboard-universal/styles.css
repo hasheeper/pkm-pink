@@ -2050,10 +2050,10 @@ body {
 }
 
 /* =========================================
-   [IMPROVED] COPY NOTIFICATION
+   [IMPROVED] TAVERN INPUT NOTIFICATION
    更具科技感的横幅提示，不再是绿方块
    ========================================= */
-.copy-notification {
+.tavern-input-notification {
     position: fixed;
     top: 60px; /* 从顶部滑入 */
     left: 20px; right: 20px;
@@ -2079,13 +2079,13 @@ body {
     transition: all 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
 }
 
-.copy-notification.show {
+.tavern-input-notification.show {
     opacity: 1;
     transform: skewX(-15deg) translateY(0); /* 滑入 */
 }
 
 /* 内部内容反转以保持正 */
-.copy-notif-internal {
+.tavern-input-notif-internal {
     transform: skewX(15deg);
     display: flex; 
     align-items: center; 
@@ -2093,25 +2093,25 @@ body {
     width: 100%;
 }
 
-.copy-notif-icon {
+.tavern-input-notif-icon {
     font-size: 1.5rem;
     color: #55efc4;
     display: flex; align-items: center;
 }
 
-.copy-notif-text {
+.tavern-input-notif-text {
     font-family: var(--font-ui);
     color: #fff;
     line-height: 1.2;
 }
-.copy-notif-title {
+.tavern-input-notif-title {
     font-weight: 800;
     font-size: 0.9rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: #55efc4; /* Tech Green */
 }
-.copy-notif-desc {
+.tavern-input-notif-desc {
     font-size: 0.75rem;
     color: #b2bec3;
     font-weight: 500;
@@ -2122,7 +2122,7 @@ body {
     100% { transform: translateX(200%); }
 }
 /* 扫描线特效 */
-.copy-notification::after {
+.tavern-input-notification::after {
     content: '';
     position: absolute;
     top: 0; bottom: 0; left: 0; right: 0;

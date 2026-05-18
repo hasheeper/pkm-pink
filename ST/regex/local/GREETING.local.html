@@ -82,6 +82,32 @@
       } catch (e) {
         console.error("URL 重载失败:", e);
       }
+
+      window.addEventListener('message', (event) => {
+        const payload = event?.data;
+        if (!payload || !payload.type) return;
+
+        if (
+          payload.type === 'PKM_GREETING_LAUNCH'
+          || payload.type === 'PKM_TAVERN_NOTICE'
+        ) {
+          if (event.source !== frame.contentWindow) return;
+          try {
+            window.parent.postMessage(payload, '*');
+          } catch (e) {}
+          return;
+        }
+
+        if (
+          payload.type === 'PKM_GREETING_LAUNCH_RESULT'
+          || payload.type === 'PKM_GREETING_LAUNCH_ERROR'
+          || payload.type === 'PKM_TAVERN_NOTICE_RESULT'
+          || payload.type === 'PKM_TAVERN_NOTICE_ERROR'
+        ) {
+          if (!frame || !frame.contentWindow) return;
+          frame.contentWindow.postMessage(payload, '*');
+        }
+      });
     })();
   </script>
 </body>

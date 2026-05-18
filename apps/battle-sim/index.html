@@ -372,7 +372,7 @@
                                     <span class="tile-val" id="col-reason">Total Domination</span>
                                 </div>
                             </div>
-                            <textarea id="res-clipboard-text" readonly></textarea>
+                            <textarea id="res-output-text" readonly></textarea>
                         </div>
 
                         <div class="res-pills-action">
@@ -382,12 +382,12 @@
                                 </svg>
                                 RETRY
                             </button>
-                            <button class="pill-btn sec" onclick="copyResultOnly()">
+                            <button class="pill-btn sec" onclick="writeResultOnlyToTavern()">
                                 DATA ONLY
                             </button>
-                            <button class="pill-btn primary" onclick="copyFullProcess()">
-                                <span class="btn-text">COPY FULL LOG</span>
-                                <span class="btn-sub">RP Mode</span>
+                            <button class="pill-btn primary" onclick="writeFullProcessToTavern()">
+                                <span class="btn-text">WRITE FULL LOG</span>
+                                <span class="btn-sub">Input Bar</span>
                             </button>
                         </div>
                     </div>

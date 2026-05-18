@@ -157,6 +157,49 @@ html, body {
     z-index: 0; pointer-events: none;
 }
 
+.greeting-inline-notice {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: 18px;
+    z-index: 300;
+    display: grid;
+    gap: 3px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(45, 52, 54, 0.14);
+    background: rgba(255, 255, 255, 0.95);
+    color: var(--c-text);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+    font-size: 0.78rem;
+    font-weight: 700;
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: none;
+}
+.greeting-inline-notice strong {
+    font-family: var(--font-ui);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+}
+.greeting-inline-notice span {
+    line-height: 1.35;
+}
+.greeting-inline-notice.is-success {
+    border-color: rgba(0, 184, 148, 0.35);
+}
+.greeting-inline-notice.is-warning {
+    border-color: rgba(253, 203, 110, 0.7);
+}
+.greeting-inline-notice.is-error {
+    border-color: rgba(255, 71, 87, 0.45);
+}
+.greeting-inline-notice.is-hiding {
+    opacity: 0;
+    transform: translateY(8px);
+}
+
 /* === 头部 HEADER === */
 .header-strip {
     position: relative; z-index: 10;

@@ -214,8 +214,184 @@
     return '';
   }
 
-  function postActionResult(type, detail = {}) {
-    postToIframe({
+  function postActionResult(type, detail = {}, event = null) {
+    const message = {
+      type,
+      product: PRODUCT,
+      ...detail
+    };
+    if (event) return postToMessageSource(event, message);
+    return postToIframe(message);
+  }
+
+  function postToMessageSource(event, message) {
+    const targetWindow = event?.source;
+    if (targetWindow && typeof targetWindow.postMessage === 'function') {
+      try {
+        targetWindow.postMessage(message, '*');
+        return true;
+      } catch (error) {
+        console.warn(`${PLUGIN_NAME} failed to post message to source:`, error);
+      }
+    }
+    return postToIframe(message);
+  }
+
+  function postTavernInputResult(event, type, detail = {}) {
+    return postToMessageSource(event, {
+      type,
+      product: PRODUCT,
+      ...detail
+    });
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  function showTavernNotice(level, title, message, options = {}) {
+    const normalizedLevel = ['success', 'info', 'warning', 'error'].includes(level) ? level : 'info';
+    const noticeTitle = title || '[PKM]';
+    const noticeMessage = message || '';
+    if (options.usePopup !== false) {
+      try {
+        const tavern = ROOT.SillyTavern;
+        if (tavern && typeof tavern.callGenericPopup === 'function') {
+          const popupType = tavern.POPUP_TYPE?.TEXT || 'text';
+          tavern.callGenericPopup(
+            `<strong>${escapeHtml(noticeTitle)}</strong><br>${escapeHtml(noticeMessage)}`,
+            popupType,
+            '',
+            { wide: false, large: false }
+          );
+          return true;
+        }
+      } catch (error) {
+        console.warn(`${PLUGIN_NAME} Tavern popup failed:`, error);
+      }
+    }
+    try {
+      const toastr = ROOT.toastr;
+      if (toastr && typeof toastr[normalizedLevel] === 'function') {
+        toastr[normalizedLevel](noticeMessage, noticeTitle, {
+          closeButton: true,
+          newestOnTop: true,
+          timeOut: options.timeOut ?? 5000
+        });
+        return true;
+      }
+    } catch (error) {
+      console.warn(`${PLUGIN_NAME} Tavern toast failed:`, error);
+    }
+    console[normalizedLevel === 'error' ? 'error' : 'log'](`${noticeTitle} ${noticeMessage}`);
+    return false;
+  }
+
+  function handleTavernNotice(event, eventData) {
+    const requestId = eventData?.requestId || '';
+    try {
+      const shown = showTavernNotice(eventData?.level, eventData?.title, eventData?.message, {
+        usePopup: eventData?.usePopup !== false,
+        timeOut: eventData?.timeOut
+      });
+      postToMessageSource(event, {
+        type: 'PKM_TAVERN_NOTICE_RESULT',
+        product: PRODUCT,
+        ok: true,
+        shown,
+        requestId,
+        source: eventData?.source || ''
+      });
+    } catch (error) {
+      postToMessageSource(event, {
+        type: 'PKM_TAVERN_NOTICE_ERROR',
+        product: PRODUCT,
+        ok: false,
+        requestId,
+        source: eventData?.source || '',
+        reason: error?.message || 'tavern_notice_failed',
+        message: error?.message || String(error)
+      });
+    }
+  }
+
+  function escapeSetInputText(text) {
+    return String(text)
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\|/g, '\\|')
+      .replace(/\{/g, '\\{')
+      .replace(/\}/g, '\\}');
+  }
+
+  function withTimeout(promise, timeoutMs, timeoutMessage) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+      Promise.resolve(promise).then(
+        (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        (error) => {
+          clearTimeout(timer);
+          reject(error);
+        }
+      );
+    });
+  }
+
+  function getPlainObject(value, fallback = {}) {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : fallback;
+  }
+
+  async function writeTavernInput(text) {
+    if (typeof ROOT.triggerSlash !== 'function') {
+      throw new Error('triggerSlash is unavailable');
+    }
+    const inputText = typeof text === 'string' ? text : '';
+    if (!inputText.trim()) {
+      throw new Error('Cannot write empty text to Tavern input');
+    }
+    const command = `/setinput "${escapeSetInputText(inputText)}"`;
+    await withTimeout(
+      ROOT.triggerSlash(command),
+      10000,
+      'Writing to Tavern input timed out'
+    );
+  }
+
+  async function handleSetTavernInput(event, eventData) {
+    const requestId = eventData?.requestId || '';
+    const source = eventData?.source || '';
+    try {
+      await writeTavernInput(eventData?.text);
+      postTavernInputResult(event, 'PKM_SET_TAVERN_INPUT_RESULT', {
+        ok: true,
+        requestId,
+        source
+      });
+      return { ok: true, requestId, source };
+    } catch (error) {
+      console.error(`${PLUGIN_NAME} set Tavern input failed:`, error);
+      const result = {
+        ok: false,
+        requestId,
+        source,
+        reason: error?.message || 'set_tavern_input_failed',
+        message: error?.message || String(error)
+      };
+      postTavernInputResult(event, 'PKM_SET_TAVERN_INPUT_ERROR', result);
+      return result;
+    }
+  }
+
+  function postGreetingLaunchResult(event, type, detail = {}) {
+    return postToMessageSource(event, {
       type,
       product: PRODUCT,
       ...detail
@@ -225,9 +401,11 @@
   async function dispatchAction(action, payload = {}, meta = {}) {
     const requestId = meta.requestId || '';
     const floorKey = meta.floorKey || getCurrentFloorKey();
+    const replyEvent = meta.replyEvent || null;
+    const suppressResult = meta.suppressResult === true;
     if (actionLock) {
       const busy = { ok: false, action, requestId, floorKey, message: 'PKM action is already in progress', reason: 'action_in_progress' };
-      postActionResult('PKM_ACTION_ERROR', busy);
+      if (!suppressResult) postActionResult('PKM_ACTION_ERROR', busy, replyEvent);
       return busy;
     }
     actionLock = true;
@@ -236,13 +414,15 @@
         throw new Error('PKMPlugin.dispatchAction is unavailable');
       }
       const state = await ROOT.PKMPlugin.dispatchAction(action, payload, { floorKey });
-      postActionResult('PKM_ACTION_RESULT', {
-        ok: true,
-        action,
-        requestId,
-        floorKey,
-        state
-      });
+      if (!suppressResult) {
+        postActionResult('PKM_ACTION_RESULT', {
+          ok: true,
+          action,
+          requestId,
+          floorKey,
+          state
+        }, replyEvent);
+      }
       await pushDashboardState(`action:${action}`, state);
       return { ok: true, action, requestId, floorKey, state };
     } catch (error) {
@@ -255,10 +435,60 @@
         reason: error?.result?.reason || error?.message || 'action_failed',
         message: error?.message || String(error)
       };
-      postActionResult('PKM_ACTION_ERROR', result);
+      if (!suppressResult) postActionResult('PKM_ACTION_ERROR', result, replyEvent);
       return result;
     } finally {
       setTimeout(() => { actionLock = false; }, 150);
+    }
+  }
+
+  async function handleGreetingLaunch(event, eventData) {
+    const requestId = eventData?.requestId || '';
+    const source = eventData?.source || 'greeting-universal';
+    const floorKey = eventData?.floorKey || getCurrentFloorKey();
+    const configPayload = getPlainObject(eventData?.payload);
+    const notice = getPlainObject(eventData?.notice);
+    try {
+      const actionResult = await dispatchAction('greeting.configure', configPayload, {
+        requestId,
+        floorKey,
+        suppressResult: true
+      });
+      if (!actionResult?.ok) {
+        throw new Error(actionResult?.message || actionResult?.reason || 'Greeting MVU injection failed');
+      }
+
+      await writeTavernInput(eventData?.text);
+
+      const shown = showTavernNotice(
+        notice.level || 'success',
+        notice.title || 'PKM 开局准备完成',
+        notice.message || '机制变量和世界设置已注入当前楼层，开局叙事已写入酒馆输入栏。确认后发送输入栏内容，就可以开始游玩。',
+        {
+          usePopup: notice.usePopup !== false,
+          timeOut: notice.timeOut
+        }
+      );
+
+      postGreetingLaunchResult(event, 'PKM_GREETING_LAUNCH_RESULT', {
+        ok: true,
+        requestId,
+        source,
+        floorKey,
+        shown
+      });
+    } catch (error) {
+      console.error(`${PLUGIN_NAME} greeting launch failed:`, error);
+      const message = error?.message || String(error);
+      showTavernNotice('error', 'PKM 开局准备失败', message, { usePopup: true });
+      postGreetingLaunchResult(event, 'PKM_GREETING_LAUNCH_ERROR', {
+        ok: false,
+        requestId,
+        source,
+        floorKey,
+        reason: error?.message || 'greeting_launch_failed',
+        message
+      });
     }
   }
 
@@ -332,8 +562,21 @@
     if (data.type === 'PKM_ACTION') {
       dispatchAction(data.action, data.payload || {}, {
         requestId: data.requestId || '',
-        floorKey: data.floorKey || ''
+        floorKey: data.floorKey || '',
+        replyEvent: event
       });
+      return;
+    }
+    if (data.type === 'PKM_GREETING_LAUNCH') {
+      handleGreetingLaunch(event, data);
+      return;
+    }
+    if (data.type === 'PKM_SET_TAVERN_INPUT') {
+      handleSetTavernInput(event, data);
+      return;
+    }
+    if (data.type === 'PKM_TAVERN_NOTICE') {
+      handleTavernNotice(event, data);
       return;
     }
     if (data.type === 'PKM_INJECT_LOCATION') {

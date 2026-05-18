@@ -1,6 +1,6 @@
 /**
  * ===========================================
- * LOG-FILTER.JS - 战斗日志清洗与复制系统
+ * LOG-FILTER.JS - 战斗日志清洗与输入栏输出系统
  * ===========================================
  * 
  * 职责:
@@ -8,9 +8,9 @@
  * - D-E-L 模型: 事件分级 (T0~T3)、过滤、压缩
  * - 形态链合并 (Necrozma 等连续变身)
  * - 字数推荐算法 (基于有效事件权值 + 参战规模 + 等级系数)
- * - 复制到剪贴板 & 结束清理
+ * - 写入酒馆输入栏 & 结束清理
  * 
- * 依赖: battle (全局), DOM (#log-box, #res-clipboard-text)
+ * 依赖: battle (全局), DOM (#log-box, #res-output-text)
  */
 
 (function() {
@@ -859,22 +859,83 @@ function calculateWordCount(stats, battle) {
 }
 
 // ============================================
-// 【复制系统】
+// 【输入栏输出系统】
 // ============================================
 
-/**
- * 仅复制战斗结果摘要
- */
-function copyResultOnly() {
-    const summary = document.getElementById('res-clipboard-text').value;
-    copyToAndClose(summary);
+let tavernInputRequestSeq = 0;
+const pendingTavernInputRequests = new Map();
+let tavernInputWriteInFlight = false;
+
+function handleTavernInputResultMessage(event) {
+    const data = event?.data;
+    if (!data || (data.type !== 'PKM_SET_TAVERN_INPUT_RESULT' && data.type !== 'PKM_SET_TAVERN_INPUT_ERROR')) return;
+    const requestId = data.requestId || '';
+    const pending = requestId ? pendingTavernInputRequests.get(requestId) : null;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingTavernInputRequests.delete(requestId);
+    if (data.type === 'PKM_SET_TAVERN_INPUT_RESULT' && data.ok !== false) {
+        pending.resolve(data);
+    } else {
+        const error = new Error(data.message || data.reason || 'Failed to write Tavern input');
+        error.result = data;
+        pending.reject(error);
+    }
+}
+
+window.addEventListener('message', handleTavernInputResultMessage);
+
+function postTavernInput(text, source) {
+    const inputText = typeof text === 'string' ? text : '';
+    if (!inputText.trim()) {
+        return Promise.reject(new Error('Cannot write empty text to Tavern input'));
+    }
+    if (!window.parent || window.parent === window) {
+        return Promise.reject(new Error('Tavern input bridge is unavailable'));
+    }
+    const requestId = `pkm-battle-input-${Date.now()}-${++tavernInputRequestSeq}`;
+    const message = {
+        type: 'PKM_SET_TAVERN_INPUT',
+        requestId,
+        text: inputText,
+        source: source || 'battle-sim'
+    };
+
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            pendingTavernInputRequests.delete(requestId);
+            reject(new Error('Writing to Tavern input timed out'));
+        }, 10000);
+        pendingTavernInputRequests.set(requestId, { resolve, reject, timer });
+        try {
+            window.parent.postMessage(message, '*');
+        } catch (error) {
+            clearTimeout(timer);
+            pendingTavernInputRequests.delete(requestId);
+            reject(error);
+        }
+    });
+}
+
+function showTavernInputError(error) {
+    const message = `写入酒馆输入栏失败：${error?.message || error}`;
+    console.error('[LOG-FILTER]', message, error);
+    alert(message);
 }
 
 /**
- * 复制完整战斗过程 (清洗后的日志 + 提示词模板)
+ * 仅输出战斗结果摘要
  */
-function copyFullProcess() {
-    const summary = document.getElementById('res-clipboard-text').value;
+function writeResultOnlyToTavern() {
+    const summary = document.getElementById('res-output-text').value;
+    writeToTavernInputAndClose(summary, 'battle-sim:result-only');
+}
+
+/**
+ * 输出完整战斗过程 (清洗后的日志 + 提示词模板)
+ */
+function writeFullProcessToTavern() {
+    const summary = document.getElementById('res-output-text').value;
     
     // 提取并清洗日志
     const rawLines = extractRawLog();
@@ -927,31 +988,24 @@ function copyFullProcess() {
         '</WRITING_INSTRUCTION>'
     ].join('\n');
     
-    copyToAndClose(finalContent);
+    writeToTavernInputAndClose(finalContent, 'battle-sim:full-log');
 }
 
 /**
- * 复制文本到剪贴板并执行结束清理
- * @param {string} textStr - 要复制的文本
+ * 写入酒馆输入栏并执行结束清理
+ * @param {string} textStr - 要写入的文本
  */
-function copyToAndClose(textStr) {
-    const fallbackCopy = () => {
-        const el = document.createElement('textarea');
-        el.value = textStr;
-        document.body.appendChild(el);
-        el.select();
-        document.execCommand('copy');
-        document.body.removeChild(el);
-        endGameCleanup();
-    };
-
-    if (navigator.clipboard) {
-        navigator.clipboard.writeText(textStr).then(() => {
+function writeToTavernInputAndClose(textStr, source) {
+    if (tavernInputWriteInFlight) return;
+    tavernInputWriteInFlight = true;
+    postTavernInput(textStr, source)
+        .then(() => {
             endGameCleanup();
-        }).catch(fallbackCopy);
-    } else {
-        fallbackCopy();
-    }
+        })
+        .catch((error) => {
+            tavernInputWriteInFlight = false;
+            showTavernInputError(error);
+        });
 }
 
 /**
@@ -963,16 +1017,16 @@ function endGameCleanup() {
             window.parent.postMessage({ type: 'pkm-battle-close' }, '*');
         }
         document.getElementById('ui-root').style.filter = "grayscale(1) brightness(0.2)";
-        document.body.innerHTML = "<div style='color:white;text-align:center;margin-top:20%'><h1>SESSION ENDED</h1><p>已复制结果，请在对话框粘贴。</p></div>";
+        document.body.innerHTML = "<div style='color:white;text-align:center;margin-top:20%'><h1>SESSION ENDED</h1><p>结果已写入酒馆输入栏，请回到对话框确认后发送。</p></div>";
     }, 600);
 }
 
 // ============================================
 // 【导出到 window】
 // ============================================
-window.copyResultOnly = copyResultOnly;
-window.copyFullProcess = copyFullProcess;
-window.copyToAndClose = copyToAndClose;
+window.writeResultOnlyToTavern = writeResultOnlyToTavern;
+window.writeFullProcessToTavern = writeFullProcessToTavern;
+window.writeToTavernInputAndClose = writeToTavernInputAndClose;
 window.endGameCleanup = endGameCleanup;
 
 // 导出工具函数供调试/测试

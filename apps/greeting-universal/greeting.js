@@ -170,52 +170,148 @@ function normalizeGreetingSettings(settings) {
     };
 }
 
-async function injectMvuzGreetingConfig(payload) {
-    const message = {
-        type: 'PKM_ACTION',
-        action: 'greeting.configure',
-        payload,
-        source: 'greeting-universal'
+let bridgeRequestSeq = 0;
+const pendingBridgeRequests = new Map();
+
+function getBridgeTarget() {
+    try {
+        if (window.parent && window.parent !== window) return window.parent;
+    } catch (_) {}
+    try {
+        if (window.top && window.top !== window) return window.top;
+    } catch (_) {}
+    try {
+        if (window.opener && !window.opener.closed) return window.opener;
+    } catch (_) {}
+    return null;
+}
+
+function handleBridgeResultMessage(event) {
+    const data = event?.data;
+    if (!data || !data.type || !data.requestId) return;
+    const pending = pendingBridgeRequests.get(data.requestId);
+    if (!pending) return;
+    if (!pending.successTypes.includes(data.type) && !pending.errorTypes.includes(data.type)) return;
+    clearTimeout(pending.timer);
+    pendingBridgeRequests.delete(data.requestId);
+    if (pending.successTypes.includes(data.type) && data.ok !== false) {
+        pending.resolve(data);
+    } else {
+        const error = new Error(data.message || data.reason || `${pending.label} failed`);
+        error.result = data;
+        pending.reject(error);
+    }
+}
+
+window.addEventListener('message', handleBridgeResultMessage);
+
+function postBridgeRequest(message, options) {
+    const target = getBridgeTarget();
+    if (!target) return Promise.reject(new Error('ST bridge is unavailable'));
+    const requestId = message.requestId || `greeting-${Date.now()}-${++bridgeRequestSeq}`;
+    const payload = {
+        ...message,
+        requestId,
+        source: message.source || 'greeting-universal'
     };
-    let sent = false;
+    const successTypes = options.successTypes || [];
+    const errorTypes = options.errorTypes || [];
+    const timeoutMs = options.timeoutMs || 10000;
+    const label = options.label || payload.type || 'Bridge request';
 
-    try {
-        if (window.parent && window.parent !== window) {
-            window.parent.postMessage(message, '*');
-            sent = true;
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            pendingBridgeRequests.delete(requestId);
+            reject(new Error(`${label} timed out`));
+        }, timeoutMs);
+        pendingBridgeRequests.set(requestId, { resolve, reject, timer, successTypes, errorTypes, label });
+        try {
+            target.postMessage(payload, '*');
+        } catch (error) {
+            clearTimeout(timer);
+            pendingBridgeRequests.delete(requestId);
+            reject(error);
         }
-    } catch (err) {
-        console.warn('[Greeting] parent MVU injection failed:', err);
-    }
+    });
+}
 
+function launchGreetingWorld(payload, text) {
+    return postBridgeRequest({
+        type: 'PKM_GREETING_LAUNCH',
+        payload,
+        text,
+        notice: {
+            level: 'success',
+            title: 'PKM 开局准备完成',
+            message: '机制变量和世界设置已注入当前楼层，开局叙事已写入酒馆输入栏。确认后发送输入栏内容，就可以开始游玩。',
+            usePopup: true
+        },
+        source: 'greeting-universal'
+    }, {
+        successTypes: ['PKM_GREETING_LAUNCH_RESULT'],
+        errorTypes: ['PKM_GREETING_LAUNCH_ERROR'],
+        timeoutMs: 20000,
+        label: 'Greeting launch'
+    });
+}
+
+function showGreetingTavernNotice(level, title, message) {
+    return postBridgeRequest({
+        type: 'PKM_TAVERN_NOTICE',
+        level,
+        title,
+        message,
+        usePopup: true,
+        source: 'greeting-universal'
+    }, {
+        successTypes: ['PKM_TAVERN_NOTICE_RESULT'],
+        errorTypes: ['PKM_TAVERN_NOTICE_ERROR'],
+        timeoutMs: 5000,
+        label: 'Greeting Tavern notice'
+    });
+}
+
+function showInlineGreetingNotice(level, title, message) {
+    const normalizedLevel = ['success', 'info', 'warning', 'error'].includes(level) ? level : 'info';
+    let notice = document.getElementById('greeting-inline-notice');
+    if (!notice) {
+        notice = document.createElement('div');
+        notice.id = 'greeting-inline-notice';
+        notice.setAttribute('role', 'status');
+        notice.setAttribute('aria-live', 'polite');
+        document.body.appendChild(notice);
+    }
+    notice.className = `greeting-inline-notice is-${normalizedLevel}`;
+    const heading = document.createElement('strong');
+    heading.textContent = title || 'PKM';
+    const body = document.createElement('span');
+    body.textContent = message || '';
+    notice.replaceChildren(heading, body);
+    window.clearTimeout(showInlineGreetingNotice.timer);
+    showInlineGreetingNotice.timer = window.setTimeout(() => {
+        notice.classList.add('is-hiding');
+    }, normalizedLevel === 'error' ? 8000 : 5000);
+}
+
+async function showGreetingNotice(level, title, message) {
     try {
-        if (window.top && window.top !== window && window.top !== window.parent) {
-            window.top.postMessage(message, '*');
-            sent = true;
+        const result = await showGreetingTavernNotice(level, title, message);
+        if (result?.shown === false) {
+            showInlineGreetingNotice(level, title, message);
         }
-    } catch (err) {
-        console.warn('[Greeting] top MVU injection failed:', err);
+    } catch (error) {
+        console.warn('[Greeting] Tavern notice failed:', error);
+        showInlineGreetingNotice(level, title, message);
     }
+}
 
-    try {
-        if (window.opener && !window.opener.closed) {
-            window.opener.postMessage(message, '*');
-            sent = true;
-        }
-    } catch (err) {
-        console.warn('[Greeting] opener MVU injection failed:', err);
-    }
+async function showGreetingFailure(message) {
+    console.error('[Greeting]', message);
+    await showGreetingNotice('error', 'PKM 开局准备失败', message);
+}
 
-    try {
-        if (window.PKMPlugin?.dispatchAction) {
-            await window.PKMPlugin.dispatchAction('greeting.configure', payload);
-            sent = true;
-        }
-    } catch (err) {
-        console.warn('[Greeting] direct MVU injection failed:', err);
-    }
-
-    return sent;
+function showGreetingValidation(message) {
+    void showGreetingNotice('warning', 'PKM 开局配置未完成', message);
 }
 
 const BASE_UNLOCK_STATE = MECHANICS_DICT.reduce((acc, mech) => {
@@ -814,7 +910,10 @@ const Launcher = {
         };
 
         const species = getString('ed-species');
-        if (!species) return alert('Species Name required!');
+        if (!species) {
+            showGreetingValidation('请填写宝可梦 Species Name。');
+            return;
+        }
 
         const newData = {
             species,
@@ -836,7 +935,10 @@ const Launcher = {
 
     async createWorld() {
         const idx = State.selectedGenIndex;
-        if (idx === -1) return alert('请选择一个 Option！');
+        if (idx === -1) {
+            showGreetingValidation('请选择一个开局区域或模式。');
+            return;
+        }
 
         const data = GenesisData[idx];
         const isCustom = data.id === 99;
@@ -853,7 +955,8 @@ const Launcher = {
         if (isM8) {
             const slotAllowance = State.m8RankTier === 1 ? 1 : (State.m8RankTier === 2 ? 3 : 6);
             if (!State.m8TeamData[1] || !State.m8TeamData[1].species) {
-                return alert("配置错误：\n请点击插槽 (+) 并至少保存 Ace (Slot 01) 的数据！");
+                showGreetingValidation('请点击插槽 (+)，并至少保存 Ace (Slot 01) 的数据。');
+                return;
             }
 
             finalRegion = "World Coronation Series (WCS)";
@@ -891,7 +994,10 @@ const Launcher = {
                 };
             }
 
-            if (!narrativeTeam.slot1) return alert("逻辑错误：Slot 01 为空！");
+            if (!narrativeTeam.slot1) {
+                showGreetingValidation('Slot 01 为空，请重新保存 Ace 数据。');
+                return;
+            }
 
             finalSettings.enableM8mode = true;
             finalSettings.enableSFX = true;
@@ -933,7 +1039,10 @@ const Launcher = {
             let animeModeActive = false;
 
             if (!isCustom) {
-                if (!finalStarter) return alert('请选择初始宝可梦！');
+                if (!finalStarter) {
+                    showGreetingValidation('请选择初始宝可梦。');
+                    return;
+                }
                 applyGenUnlocks(finalMechanics, data.id);
                 applyAnimeUnlocks(finalMechanics, State.animeMode);
                 animeModeActive = !!State.animeMode;
@@ -943,7 +1052,10 @@ const Launcher = {
                 const startInput = document.getElementById('cust-starter');
                 const toggleCards = document.querySelectorAll('.mech-grid .switch-card');
 
-                if (!startInput || !startInput.value.trim()) return alert('请输入自定义宝可梦的名字 (英文ID)！');
+                if (!startInput || !startInput.value.trim()) {
+                    showGreetingValidation('请输入自定义宝可梦的名字 (英文 ID)。');
+                    return;
+                }
 
                 finalRegion = regInput && regInput.value ? regInput.value.trim() : 'Unknown Region';
                 finalStarter = startInput.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
@@ -964,11 +1076,6 @@ const Launcher = {
             applySettingsMode(finalSettings, animeModeActive);
             applyMechanicsToMvuz(mechanicsList, finalMechanics, finalSettings);
         }
-
-        const injected = await injectMvuzGreetingConfig({
-            unlocks: finalMechanics,
-            settings: normalizeGreetingSettings(finalSettings)
-        });
 
         let teamDescription = '';
         if (isM8) {
@@ -1001,11 +1108,19 @@ const Launcher = {
 // Starter: ${finalStarter ? finalStarter.toUpperCase() : 'UNKNOWN'}
 ${teamDescription}
 
-[引导]
-${guideText}
-请只演绎开局叙事，不要输出变量更新块，不要写入初始宝可梦变量。`.trim();
+	[引导]
+	${guideText}
+机制变量和世界设置已经注入当前楼层，请只演绎开局叙事，不要输出变量更新块，不要写入初始宝可梦变量。`.trim();
 
-        copyToClipboard(msg, injected);
+        try {
+            await launchGreetingWorld({
+                unlocks: finalMechanics,
+                settings: normalizeGreetingSettings(finalSettings)
+            }, msg);
+        } catch (error) {
+            await showGreetingFailure(`开局准备失败：${error.message}`);
+            return;
+        }
     }
 };
 
@@ -1036,18 +1151,6 @@ if (typeof Launcher !== 'undefined') {
             statusTxt.innerText = 'OFFLINE';
         }
     };
-}
-
-function copyToClipboard(text, injected = false) {
-    const el = document.createElement('textarea');
-    el.value = text;
-    document.body.appendChild(el);
-    el.select();
-    document.execCommand('copy');
-    document.body.removeChild(el);
-    alert(injected
-        ? '叙事提示已复制；机制与设置已发送到 MVU 当前楼层。'
-        : '叙事提示已复制；未检测到 ST 父窗口，机制设置未直接注入。');
 }
 
 // 启动

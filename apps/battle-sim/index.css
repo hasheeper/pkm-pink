@@ -1125,7 +1125,7 @@ body {
     margin-top: 2px;
 }
 
-#res-clipboard-text {
+#res-output-text {
     position: absolute;
     width: 1px;
     height: 1px;
