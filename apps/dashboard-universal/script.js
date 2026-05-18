@@ -14,7 +14,7 @@ function toggleCard(cardElement) {
     cardElement.classList.toggle('open');
 }
 
-window.toggleLeader = function(event, slotStr) {
+window.toggleLeader = async function(event, slotStr) {
     if (event) {
         event.stopPropagation();
         const btn = event.currentTarget;
@@ -27,29 +27,19 @@ window.toggleLeader = function(event, slotStr) {
     }
     console.log(`[PKM UI] Request Set Leader -> ${slotStr}`);
     
-    // 优先使用直接回调（build-iframe.js 注入方式）
-    if (window.pkmSetLeaderCallback) {
-        console.log('[PKM UI] 调用 pkmSetLeaderCallback');
-        window.pkmSetLeaderCallback(slotStr);
-    } else {
-        // 降级：使用 postMessage（tavern-inject.js 跨域方式）
-        console.log('[PKM UI] 使用 postMessage 发送 Leader 切换请求');
-        const message = {
-            type: 'PKM_SET_LEADER',
-            data: { targetSlot: slotStr }
-        };
-        // 尝试发送到 parent 和 top
+    const slot = Number(String(slotStr).replace('slot', '')) || 1;
+    if (typeof window.postPkmAction === 'function') {
         try {
-            if (window.parent && window.parent !== window) {
-                window.parent.postMessage(message, '*');
-                console.log('[PKM UI] ✓ 已发送到 parent');
-            }
-            if (window.top && window.top !== window && window.top !== window.parent) {
-                window.top.postMessage(message, '*');
-                console.log('[PKM UI] ✓ 已发送到 top');
-            }
+            await window.postPkmAction('party.setLead', { slot });
+            console.log('[PKM UI] ✓ Leader 写入已确认');
         } catch (e) {
-            console.error('[PKM UI] postMessage 发送失败:', e);
+            console.error('[PKM UI] Leader 写入失败:', e);
+            if (typeof window.showPkmActionFailure === 'function') {
+                window.showPkmActionFailure(`队长切换失败：${e.message}`);
+            }
         }
+        return;
     }
+
+    console.warn('[PKM UI] postPkmAction 不可用，无法写入 Leader');
 };

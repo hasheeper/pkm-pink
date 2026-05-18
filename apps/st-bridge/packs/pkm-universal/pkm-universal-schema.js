@@ -5,14 +5,11 @@
  *
  * Role:
  *   1. Defines stat_data.pkm for the Universal content pack.
- *   2. Normalizes old ERA-ish structures into the MVUZ namespace.
- *   3. Keeps numeric fields clamp-safe after MVU JSONPatch delta:
+ *   2. Keeps numeric fields clamp-safe after MVU JSONPatch delta:
  *      - player.proficiency
  *      - party.slots[].stats_meta.ev_level
  *      - party.slots[].bonds
- *      - transfer_buffer -> party.transferBuffer
- *      - slot1-slot6 -> party.slots
- *   4. Registers with MVU-zod.
+ *   3. Registers with MVU-zod.
  *
  * Storage:
  *   message variables -> stat_data.pkm
@@ -23,7 +20,6 @@
 import { registerMvuSchema } from 'https://testingcf.jsdelivr.net/gh/StageDog/tavern_resource/dist/util/mvu_zod.js';
 
 const PRODUCT = 'universal';
-const VERSION = '0.1.0-mvuz-universal';
 const CORE = globalThis.PKMPackCore || null;
 const MAX_PARTY_SIZE = 6;
 if (!CORE) throw new Error('[PKM-Universal-Schema] requires PKMPackCore. Load pkm-core.js before this module.');
@@ -149,25 +145,8 @@ function normalizePokemon(raw, slot = null) {
   return next;
 }
 
-function extractPartySlots(value) {
-  if (Array.isArray(value)) return value.slice(0, MAX_PARTY_SIZE);
-  if (!isObject(value)) return [];
-
-  const namedSlots = [];
-  for (let i = 1; i <= MAX_PARTY_SIZE; i += 1) {
-    namedSlots.push(value[`slot${i}`] || makeEmptySlot(i));
-  }
-  if (namedSlots.some((slot) => isObject(slot) && slot.name)) return namedSlots;
-
-  return Object.keys(value)
-    .filter((key) => /^\d+$/.test(key))
-    .sort((a, b) => Number(a) - Number(b))
-    .map((key) => value[key])
-    .slice(0, MAX_PARTY_SIZE);
-}
-
 function normalizePartySlots(value) {
-  const rawSlots = extractPartySlots(value);
+  const rawSlots = Array.isArray(value) ? value.slice(0, MAX_PARTY_SIZE) : [];
   const slots = Array.from({ length: MAX_PARTY_SIZE }, (_, index) => {
     const slotNumber = index + 1;
     return normalizePokemon(rawSlots[index] || makeEmptySlot(slotNumber), slotNumber);
@@ -192,28 +171,16 @@ function normalizeTransferBuffer(value) {
 }
 
 function normalizeBox(value) {
-  if (Array.isArray(value?.boxes)) {
-    return {
-      boxes: value.boxes.map((box, index) => ({
-        id: normalizeString(box.id, `box_${String(index + 1).padStart(2, '0')}`),
-        name: normalizeString(box.name, `Box ${index + 1}`),
-        slots: Array.isArray(box.slots)
-          ? box.slots.filter((pokemon) => pokemon && pokemon.name).map((pokemon) => normalizePokemon(pokemon, null))
-          : []
-      })),
-      indexes: isObject(value.indexes) ? clone(value.indexes, {}) : {}
-    };
-  }
-
-  const slots = [];
-  if (isObject(value)) {
-    Object.keys(value).filter((key) => key.startsWith('storage_')).sort().forEach((key) => {
-      if (isObject(value[key]) && value[key].name) slots.push(normalizePokemon(value[key], null));
-    });
-  }
   return {
-    boxes: [{ id: 'box_01', name: 'Box 1', slots }],
-    indexes: {}
+    boxes: Array.isArray(value?.boxes)
+      ? value.boxes.map((box, index) => ({
+          id: normalizeString(box.id, `box_${String(index + 1).padStart(2, '0')}`),
+          name: normalizeString(box.name, `Box ${index + 1}`),
+          slots: Array.isArray(box.slots)
+            ? box.slots.filter((pokemon) => pokemon && pokemon.name).map((pokemon) => normalizePokemon(pokemon, null))
+            : []
+        }))
+      : [{ id: 'box_01', name: 'Box 1', slots: [] }]
   };
 }
 
@@ -221,22 +188,18 @@ function normalizeFinalNumbers(pkm) {
   const next = clone(pkm, {});
 
   next.player.proficiency = clampNumber(
-    next.player.proficiency ?? next.player.trainerProficiency ?? 0,
+    next.player.proficiency,
     0,
     255,
     0
   );
-  delete next.player.trainerProficiency;
-  delete next.player['proficiency' + '_up'];
 
   next.party.slots = next.party.slots.map((pokemon) => {
     if (!pokemon?.name) return pokemon;
     const slot = clone(pokemon, pokemon);
     slot.bonds = clampNumber(slot.bonds, 0, 255, 0);
-    delete slot['bonds' + '_up'];
     if (slot.stats_meta) {
       slot.stats_meta.ev_level = clampNumber(slot.stats_meta.ev_level, 0, 252, 0);
-      delete slot.stats_meta['ev' + '_up'];
     }
     slot.isAce = true;
     return slot;
@@ -248,40 +211,21 @@ function normalizeFinalNumbers(pkm) {
 export function normalizePkmState(value = {}) {
   const source = isObject(value) ? clone(value, {}) : {};
   const player = isObject(source.player) ? source.player : {};
-  const oldParty = isObject(player.party) ? player.party : {};
   const party = isObject(source.party) ? source.party : {};
 
   const pkm = {
-    meta: {
-      schemaVersion: 1,
-      product: PRODUCT,
-      version: VERSION,
-      migratedFrom: source.meta?.migratedFrom || null,
-      updatedAt: new Date().toISOString()
-    },
     player: {
       name: normalizeString(player.name, '{{user}}'),
-      proficiency: clampNumber(player.proficiency ?? player.trainerProficiency, 0, 255, 0),
-      unlocks: { ...DEFAULT_UNLOCKS, ...(isObject(player.unlocks) ? player.unlocks : {}) },
-      bonds: isObject(player.bonds) ? clone(player.bonds, {}) : {}
+      proficiency: clampNumber(player.proficiency, 0, 255, 0),
+      unlocks: { ...DEFAULT_UNLOCKS, ...(isObject(player.unlocks) ? player.unlocks : {}) }
     },
     party: {
-      slots: normalizePartySlots(Array.isArray(party.slots) ? party.slots : oldParty),
-      transferBuffer: normalizeTransferBuffer(party.transferBuffer || party.transfer_buffer || oldParty.transfer_buffer)
+      slots: normalizePartySlots(party.slots),
+      transferBuffer: normalizeTransferBuffer(party.transferBuffer)
     },
-    box: normalizeBox(source.box || player.box || {}),
-    world: normalizeWorld(isObject(source.world) ? source.world : source.world_state),
-    battle: isObject(source.battle) ? clone(source.battle, {}) : {
-      lastConfig: null,
-      lastResult: null,
-      pendingNarrative: null
-    },
-    settings: { ...DEFAULT_SETTINGS, ...(isObject(source.settings) ? source.settings : player.settings || {}) },
-    runtime: {
-      migration: isObject(source.runtime?.migration) ? clone(source.runtime.migration, {}) : {},
-      flags: isObject(source.runtime?.flags) ? clone(source.runtime.flags, {}) : {},
-      caches: isObject(source.runtime?.caches) ? clone(source.runtime.caches, {}) : {}
-    }
+    box: normalizeBox(source.box),
+    world: normalizeWorld(source.world),
+    settings: { ...DEFAULT_SETTINGS, ...(isObject(source.settings) ? source.settings : {}) }
   };
 
   return normalizeFinalNumbers(pkm);
@@ -309,7 +253,6 @@ function registerSchemaWhenReady() {
 
 const host = typeof window !== 'undefined' ? window : globalThis;
 host.PKMUniversalSchemaRuntime = {
-  version: VERSION,
   product: PRODUCT,
   normalizePkmState,
   PKMUniversalSchema,

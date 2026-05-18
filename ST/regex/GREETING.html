@@ -1,0 +1,89 @@
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PKM Greeting</title>
+  <style>
+    /* 重置基础样式并隐藏外部滚动条 */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      border-radius: 16px; /* 保底的圆角裁剪 */
+    }
+
+    /* 内部 App Frame 满铺展示 */
+    #app-frame {
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+      border: 0;
+      display: block;
+      background: transparent;
+      border-radius: 16px; /* 内部圆角 */
+    }
+  </style>
+</head>
+<body>
+  
+  <iframe
+    id="app-frame"
+    title="PKM Greeting"
+    src="https://hasheeper.github.io/pkm-pink/apps/greeting-universal/index.html"
+    sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
+    allow="fullscreen"
+    allowfullscreen
+    referrerpolicy="no-referrer"
+  ></iframe>
+
+  <script>
+    (function () {
+      const frame = document.getElementById('app-frame');
+      const hostFrame = window.frameElement; // 获取酒馆注入时的父级 iframe
+
+      // 修改宿主层（在酒馆楼层内的表现形式）
+      function resizeAndStyleHostFrame() {
+        if (!hostFrame) return;
+        
+        // 宽度充满楼层容器，设置最大宽度保证不变形
+        hostFrame.style.width = '100%';
+        hostFrame.style.maxWidth = '500px';
+        
+        // 强制展开高度：彻底解决“高度太低被挤压”的问题
+        hostFrame.style.height = '800px';
+        hostFrame.style.minHeight = '800px'; // 防止被外部 flex/grid 容器无视高度
+        
+        // 屏幕与卡片视觉优化（解决生硬感）
+        hostFrame.style.border = '1px solid rgba(128, 128, 128, 0.2)'; // 质感边框
+        hostFrame.style.borderRadius = '16px'; // 屏幕感平滑圆角
+        hostFrame.style.overflow = 'hidden';
+        hostFrame.style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.15)'; // 卡片悬浮投影
+        
+        // 居中呈现
+        hostFrame.style.margin = '10px auto';
+        hostFrame.style.display = 'block';
+      }
+      
+      resizeAndStyleHostFrame();
+      window.addEventListener('resize', resizeAndStyleHostFrame);
+
+      // 追加时间戳参数，强制刷新缓存的逻辑（保留原有机制）
+      try {
+        const base = frame.getAttribute('src') || '';
+        if (base && !/\bv=\d+\b/.test(base)) {
+          const sep = base.includes('?') ? '&' : '?';
+          frame.src = base + sep + 'v=' + Date.now();
+        }
+      } catch (e) {
+        console.error("URL 重载失败:", e);
+      }
+    })();
+  </script>
+</body>
+</html>
+```

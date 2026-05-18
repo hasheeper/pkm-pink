@@ -18,6 +18,31 @@
           "url": "./packs/pkm-universal/pkm-universal-schema.js"
         },
         {
+          "id": "pkm-universal-plugin-shared",
+          "type": "script",
+          "url": "./packs/pkm-universal/plugin/shared.mvuz.js"
+        },
+        {
+          "id": "pkm-universal-plugin-state-replay",
+          "type": "script",
+          "url": "./packs/pkm-universal/plugin/state-replay.mvuz.js"
+        },
+        {
+          "id": "pkm-universal-plugin-prompt-injection",
+          "type": "script",
+          "url": "./packs/pkm-universal/plugin/prompt-injection.mvuz.js"
+        },
+        {
+          "id": "pkm-universal-plugin-battle-frontend",
+          "type": "script",
+          "url": "./packs/pkm-universal/plugin/battle-frontend.mvuz.js"
+        },
+        {
+          "id": "pkm-universal-plugin-actions-api",
+          "type": "script",
+          "url": "./packs/pkm-universal/plugin/actions-api.mvuz.js"
+        },
+        {
           "id": "pkm-universal-plugin",
           "type": "script",
           "url": "./packs/pkm-universal/pkm-tavern-plugin.mvuz.js"

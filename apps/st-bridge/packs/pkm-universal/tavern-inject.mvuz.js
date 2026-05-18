@@ -4,7 +4,6 @@
  * This file intentionally keeps UI/status bridge concerns here:
  * - Floating entry + iframe
  * - MVUZ state push to dashboard/status page
- * - Legacy dashboard message compatibility
  * - Frontend actions -> PKMPlugin.dispatchAction
  */
 (function () {
@@ -14,7 +13,19 @@
   const CORE = ROOT.PKMPackCore || null;
   const PLUGIN_NAME = '[PKM Universal Dashboard MVUZ]';
   if (!CORE?.mvu) throw new Error(`${PLUGIN_NAME} requires PKMPackCore. Load pkm-core.js before this script.`);
-  const PKM_URL = 'https://hasheeper.github.io/pkm-pink/apps/dashboard-universal/index.html';
+  const DEFAULT_APP_BASE_URL = 'https://hasheeper.github.io/pkm-pink';
+  const DEFAULT_DASHBOARD_URL = `${DEFAULT_APP_BASE_URL}/apps/dashboard-universal/index.html`;
+  function trimTrailingSlash(value) {
+    return typeof value === 'string' ? value.trim().replace(/\/+$/, '') : '';
+  }
+  function resolveDashboardUrl() {
+    if (typeof ROOT.PKM_UNIVERSAL_DASHBOARD_URL === 'string' && ROOT.PKM_UNIVERSAL_DASHBOARD_URL.trim()) {
+      return ROOT.PKM_UNIVERSAL_DASHBOARD_URL.trim();
+    }
+    const appBase = trimTrailingSlash(ROOT.PKM_APP_BASE_URL || DEFAULT_APP_BASE_URL);
+    return appBase ? `${appBase}/apps/dashboard-universal/index.html` : DEFAULT_DASHBOARD_URL;
+  }
+  const PKM_URL = resolveDashboardUrl();
   const PRODUCT = 'universal';
   const VERSION = '0.1.0-mvuz-universal';
   const IFRAME_ID = 'pkm-mvuz-iframe';
@@ -43,31 +54,63 @@
     setTimeout(() => waitForJQuery(callback), 100);
   }
 
-  function stateToLegacyDashboard(state) {
-    if (ROOT.PKMPlugin?.legacyDashboardShape) {
-      return ROOT.PKMPlugin.legacyDashboardShape(state);
+  function clone(value, fallback = null) {
+    if (value === undefined || value === null) return fallback;
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (_) {
+      return fallback;
     }
-    return CORE.legacyDashboardShape(state);
+  }
+
+  function toDashboardPokemon(pokemon, fallback = {}) {
+    const next = clone(pokemon, fallback);
+    next.moves = CORE.normalizeMovesObject(next.moves);
+    return next;
+  }
+
+  function stateToDashboardView(state) {
+    const maxPartySize = CORE.constants?.MAX_PARTY_SIZE || 6;
+    const slots = Array.isArray(state?.party?.slots) ? state.party.slots : [];
+    const party = {};
+    for (let index = 0; index < maxPartySize; index += 1) {
+      const slot = index + 1;
+      party[`slot${slot}`] = toDashboardPokemon(slots[index], CORE.createEmptySlot(slot, { moves: 'object' }));
+    }
+    party.transferBuffer = toDashboardPokemon(
+      state?.party?.transferBuffer,
+      CORE.createEmptySlot(maxPartySize + 1, { moves: 'object' })
+    );
+
+    const box = {};
+    let boxIndex = 1;
+    (state?.box?.boxes || []).forEach((boxEntry) => {
+      (boxEntry?.slots || []).forEach((pokemon) => {
+        box[`storage_${String(boxIndex).padStart(2, '0')}`] = toDashboardPokemon(pokemon, {});
+        boxIndex += 1;
+      });
+    });
+
+    return {
+      player: {
+        ...clone(state?.player, {}),
+        party,
+        box,
+        settings: clone(state?.settings, {})
+      },
+      party,
+      box,
+      settings: clone(state?.settings, {}),
+      world: clone(state?.world, {})
+    };
   }
 
   async function loadMvuzState() {
     if (ROOT.PKMPlugin?.loadState) {
-      return ROOT.PKMPlugin.loadState({ persist: false, skipMigration: true, requireExisting: true });
+      return ROOT.PKMPlugin.loadState({ persist: false, requireExisting: true });
     }
-    if (CORE.mvu.readState) return CORE.mvu.readState('stat_data', 'pkm', { type: 'message' });
-    if (typeof ROOT.getVariables !== 'function') {
-      console.warn(`${PLUGIN_NAME} getVariables is unavailable; cannot read stat_data.pkm`);
-      return null;
-    }
-    try {
-      const vars = await ROOT.getVariables({ type: 'message' });
-      const state = vars?.stat_data?.pkm || null;
-      if (!state) console.warn(`${PLUGIN_NAME} stat_data.pkm is empty`);
-      return state;
-    } catch (error) {
-      console.warn(`${PLUGIN_NAME} failed to read MVUZ state:`, error);
-      return null;
-    }
+    console.warn(`${PLUGIN_NAME} PKMPlugin.loadState is unavailable; cannot read stat_data.pkm`);
+    return null;
   }
 
   function postToIframe(message) {
@@ -86,23 +129,23 @@
     }
   }
 
-  async function pushDashboardState(reason = 'refresh') {
+  async function pushDashboardState(reason = 'refresh', stateOverride = null) {
     if (pushDedupState.inFlight) {
       console.log(`${PLUGIN_NAME} skip dashboard push while another push is in flight`, { reason });
       return false;
     }
     pushDedupState.inFlight = true;
-    const state = await loadMvuzState();
+    const state = stateOverride || await loadMvuzState();
     if (!state) {
       pushDedupState.inFlight = false;
       return false;
     }
-    const legacy = stateToLegacyDashboard(state);
+    const dashboard = stateToDashboardView(state);
     const payloadKey = JSON.stringify({
-      player: legacy?.player?.name,
-      party: Object.values(legacy?.player?.party || {}).map((pokemon) => pokemon?.name || null),
-      boxCount: Object.keys(legacy?.player?.box || {}).length,
-      settings: legacy?.settings || legacy?.player?.settings || {}
+      player: dashboard?.player?.name,
+      party: Object.values(dashboard?.player?.party || {}).map((pokemon) => pokemon?.name || null),
+      boxCount: Object.keys(dashboard?.player?.box || {}).length,
+      settings: dashboard?.settings || dashboard?.player?.settings || {}
     });
     const now = Date.now();
     if (payloadKey === pushDedupState.key && now - pushDedupState.at < 1500) {
@@ -117,14 +160,14 @@
       version: VERSION,
       reason,
       state,
-      legacy
+      dashboard
     });
 
     console.log(`${PLUGIN_NAME} pushed dashboard state`, {
       reason,
       pushedState,
-      player: legacy?.player?.name,
-      slot1: legacy?.player?.party?.slot1?.name || null
+      player: dashboard?.player?.name,
+      slot1: dashboard?.player?.party?.slot1?.name || null
     });
     if (pushedState) {
       pushDedupState.key = payloadKey;
@@ -142,25 +185,78 @@
     }, 120);
   }
 
-  async function dispatchAction(action, payload = {}) {
-    if (actionLock) return null;
+  function makeMessageFloorKey(messageId) {
+    if (messageId === null || messageId === undefined || messageId === '') return '';
+    const id = Number(messageId);
+    return Number.isFinite(id) && id >= 0 ? `message:${Math.round(id)}` : '';
+  }
+
+  function getCurrentFloorKey() {
+    try {
+      if (typeof ROOT.getCurrentMessageId === 'function') {
+        const floorKey = makeMessageFloorKey(ROOT.getCurrentMessageId());
+        if (floorKey) return floorKey;
+      }
+    } catch (_) {}
+    try {
+      if (typeof ROOT.getChatMessages === 'function') {
+        const latest = ROOT.getChatMessages(-1)?.[0];
+        const floorKey = makeMessageFloorKey(latest?.message_id);
+        if (floorKey) return floorKey;
+      }
+    } catch (_) {}
+    try {
+      if (typeof ROOT.getLastMessageId === 'function') {
+        const floorKey = makeMessageFloorKey(ROOT.getLastMessageId());
+        if (floorKey) return floorKey;
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  function postActionResult(type, detail = {}) {
+    postToIframe({
+      type,
+      product: PRODUCT,
+      ...detail
+    });
+  }
+
+  async function dispatchAction(action, payload = {}, meta = {}) {
+    const requestId = meta.requestId || '';
+    const floorKey = meta.floorKey || getCurrentFloorKey();
+    if (actionLock) {
+      const busy = { ok: false, action, requestId, floorKey, message: 'PKM action is already in progress', reason: 'action_in_progress' };
+      postActionResult('PKM_ACTION_ERROR', busy);
+      return busy;
+    }
     actionLock = true;
     try {
       if (typeof ROOT.PKMPlugin?.dispatchAction !== 'function') {
         throw new Error('PKMPlugin.dispatchAction is unavailable');
       }
-      const state = await ROOT.PKMPlugin.dispatchAction(action, payload);
-      await pushDashboardState(`action:${action}`);
-      return state;
+      const state = await ROOT.PKMPlugin.dispatchAction(action, payload, { floorKey });
+      postActionResult('PKM_ACTION_RESULT', {
+        ok: true,
+        action,
+        requestId,
+        floorKey,
+        state
+      });
+      await pushDashboardState(`action:${action}`, state);
+      return { ok: true, action, requestId, floorKey, state };
     } catch (error) {
       console.error(`${PLUGIN_NAME} action failed: ${action}`, error);
-      postToIframe({
-        type: 'PKM_ACTION_ERROR',
-        product: PRODUCT,
+      const result = {
+        ok: false,
         action,
+        requestId,
+        floorKey,
+        reason: error?.result?.reason || error?.message || 'action_failed',
         message: error?.message || String(error)
-      });
-      return null;
+      };
+      postActionResult('PKM_ACTION_ERROR', result);
+      return result;
     } finally {
       setTimeout(() => { actionLock = false; }, 150);
     }
@@ -217,22 +313,6 @@
     }
   }
 
-  function normalizeSetLeaderPayload(data) {
-    const targetSlot = data?.targetSlot ?? data?.slot;
-    if (typeof targetSlot === 'string' && /^slot\d+$/.test(targetSlot)) {
-      return { slot: Number(targetSlot.replace('slot', '')) };
-    }
-    return { slot: Number(targetSlot) || 1 };
-  }
-
-  function normalizeUpdateMovePayload(data) {
-    return {
-      slot: Number(data?.slot) || 1,
-      moveIndex: Number(data?.moveIndex ?? data?.index) || 1,
-      move: data?.move || data?.value || null
-    };
-  }
-
   function handleWindowMessage(event) {
     const data = event?.data;
     if (!data || !data.type) return;
@@ -250,19 +330,10 @@
       return;
     }
     if (data.type === 'PKM_ACTION') {
-      dispatchAction(data.action, data.payload || data.data || {});
-      return;
-    }
-    if (data.type === 'PKM_SET_LEADER') {
-      dispatchAction('party.setLead', normalizeSetLeaderPayload(data.data || data));
-      return;
-    }
-    if (data.type === 'PKM_UPDATE_SETTINGS') {
-      dispatchAction('settings.update', data.data || data.payload || {});
-      return;
-    }
-    if (data.type === 'PKM_UPDATE_MOVES') {
-      dispatchAction('party.updateMove', normalizeUpdateMovePayload(data.data || data.payload || {}));
+      dispatchAction(data.action, data.payload || {}, {
+        requestId: data.requestId || '',
+        floorKey: data.floorKey || ''
+      });
       return;
     }
     if (data.type === 'PKM_INJECT_LOCATION') {
@@ -271,22 +342,6 @@
     }
     if (data.type === 'PKM_CLEAR_INJECTION') {
       handleClearInjection(data);
-    }
-  }
-
-  function exposeGlobals() {
-    ROOT.pkmSetLeader = (targetSlot) => dispatchAction('party.setLead', normalizeSetLeaderPayload({ targetSlot }));
-    ROOT.pkmUpdateSettings = (settings) => dispatchAction('settings.update', settings || {});
-    ROOT.pkmUpdateMove = (payload) => dispatchAction('party.updateMove', normalizeUpdateMovePayload(payload || {}));
-
-    if (typeof ROOT.initializeGlobal === 'function') {
-      try {
-        ROOT.initializeGlobal('pkmSetLeader', ROOT.pkmSetLeader);
-        ROOT.initializeGlobal('pkmUpdateSettings', ROOT.pkmUpdateSettings);
-        ROOT.initializeGlobal('pkmUpdateMove', ROOT.pkmUpdateMove);
-      } catch (error) {
-        console.warn(`${PLUGIN_NAME} initializeGlobal failed:`, error);
-      }
     }
   }
 
@@ -541,9 +596,6 @@
             const iframeWindow = iframe[0]?.contentWindow;
             if (iframeWindow) {
               dashboardWindow = iframeWindow;
-              iframeWindow.pkmSetLeaderCallback = ROOT.pkmSetLeader;
-              iframeWindow.pkmUpdateSettingsCallback = ROOT.pkmUpdateSettings;
-              iframeWindow.pkmUpdateMoveCallback = ROOT.pkmUpdateMove;
             }
           } catch (_) {}
         });
@@ -576,7 +628,6 @@
     ROOT.removeEventListener?.('pagehide', unload);
   }
 
-  exposeGlobals();
   bindSillyTavernEvents();
   bindMessageTargets();
   ROOT.removeEventListener?.('pagehide', unload);

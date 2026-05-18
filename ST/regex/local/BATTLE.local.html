@@ -1,0 +1,265 @@
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PKM - Frame Wrapper</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      border-radius: 16px;
+    }
+    #app-frame {
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+      border: 0;
+      display: block;
+      background: transparent;
+      border-radius: 16px;
+    }
+
+    #frame-toolbar {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 2147483647;
+      display: flex;
+      gap: 8px;
+      pointer-events: none; 
+    }
+
+    /* 纯图标毛玻璃按钮 */
+    .tool-btn {
+      pointer-events: auto;
+      appearance: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(25, 25, 25, 0.35);
+      color: rgba(255, 255, 255, 0.6);
+      border-radius: 10px;
+      padding: 8px; 
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .tool-btn:hover {
+      background: rgba(40, 40, 40, 0.85);
+      border-color: rgba(255, 255, 255, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .tool-btn:active {
+      transform: translateY(0);
+    }
+
+    .tool-btn[hidden] {
+      display: none !important;
+    }
+
+    .tool-icon {
+      width: 16px; 
+      height: 16px;
+    }
+
+    html.pseudo-fullscreen,
+    html.pseudo-fullscreen body {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      background: #000;
+      border-radius: 0 !important;
+      z-index: 999999;
+    }
+
+    html.pseudo-fullscreen #app-frame {
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      border-radius: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="frame-toolbar">
+    <button id="btn-enter" class="tool-btn" type="button" title="放大">
+      <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+    </button>
+    <button id="btn-exit" class="tool-btn" type="button" hidden title="退出">
+      <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path></svg>
+    </button>
+  </div>
+  
+  <script id="pkm-json" type="application/json">$1</script>
+
+  <iframe
+    id="app-frame"
+    title="PKM"
+    src="http://127.0.0.1:4173/apps/battle-sim/index.html"
+    sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
+    allow="fullscreen"
+    allowfullscreen
+    referrerpolicy="no-referrer"
+  ></iframe>
+
+  <script>
+    (function () {
+      const root = document.documentElement;
+      const btnEnter = document.getElementById('btn-enter');
+      const btnExit = document.getElementById('btn-exit');
+      const frame = document.getElementById('app-frame');
+      const hostFrame = window.frameElement;
+
+      // 从注入 JSON 读取竖屏模式设置
+      function isPortraitMode() {
+        try {
+          const dataNode = document.getElementById('pkm-json');
+          if (!dataNode) return false;
+          const raw = (dataNode.textContent || dataNode.innerText || '').trim();
+          if (!raw) return false;
+          const json = JSON.parse(raw);
+          return !!(json.settings?.enableBattlePortraitMode
+            || json.settings?.portraitMode
+            || json.settings?.enablePortraitMode);
+        } catch (e) {
+          return false;
+        }
+      }
+
+      function resizeHostFrame() {
+        if (!hostFrame) return;
+        const portrait = isPortraitMode();
+
+        // 横屏基准 1100x720，竖屏基准 720x1100
+        const maxW = portrait ? 720 : 1100;
+        const ratio = portrait ? (1100 / 720) : (720 / 1100);
+
+        hostFrame.style.width = '100%';
+        hostFrame.style.maxWidth = maxW + 'px';
+
+        let realWidth = hostFrame.getBoundingClientRect().width || hostFrame.offsetWidth;
+        if (!realWidth || realWidth === 0) {
+          realWidth = hostFrame.parentElement ? hostFrame.parentElement.clientWidth : (window.innerWidth || maxW);
+          realWidth = Math.min(realWidth, maxW);
+        }
+
+        hostFrame.style.height = Math.round(realWidth * ratio) + 'px';
+        hostFrame.style.border = 'none';
+        hostFrame.style.boxShadow = '0 0 0 1px rgba(128, 128, 128, 0.2), 0 6px 20px rgba(0, 0, 0, 0.15)';
+        hostFrame.style.borderRadius = '16px';
+        hostFrame.style.margin = '10px auto';
+        hostFrame.style.display = 'block';
+      }
+
+      resizeHostFrame();
+      window.addEventListener('resize', resizeHostFrame);
+
+      try {
+        const base = frame.getAttribute('src') || '';
+        if (base && !/\bv=\d+\b/.test(base)) {
+          const sep = base.includes('?') ? '&' : '?';
+          frame.src = base + sep + 'v=' + Date.now();
+        }
+      } catch (e) {}
+
+      function isFullscreen() {
+        return !!document.fullscreenElement;
+      }
+
+      function isPseudo() {
+        return root.classList.contains('pseudo-fullscreen');
+      }
+
+      function syncButtons() {
+        const active = isFullscreen() || isPseudo();
+        btnEnter.hidden = active;
+        btnExit.hidden = !active;
+      }
+
+      async function enterFullscreen() {
+        try {
+          if (root.requestFullscreen) {
+            await root.requestFullscreen();
+            return;
+          }
+        } catch (e) {}
+        root.classList.add('pseudo-fullscreen');
+      }
+
+      async function exitFullscreen() {
+        try {
+          if (isFullscreen() && document.exitFullscreen) {
+            await document.exitFullscreen();
+          }
+        } catch (e) {}
+        root.classList.remove('pseudo-fullscreen');
+      }
+
+      function parseInjectedData() {
+        try {
+          const dataNode = document.getElementById('pkm-json');
+          if (!dataNode) return null;
+          const raw = (dataNode.textContent || dataNode.innerText || '').trim();
+          if (!raw) return null;
+          return JSON.parse(raw);
+        } catch (e) {
+          console.warn('[PKM] 解析注入战斗数据失败:', e);
+          return null;
+        }
+      }
+
+      function postBattleData() {
+        const injectedBattleData = parseInjectedData();
+        if (!frame || !frame.contentWindow) return;
+        if (!injectedBattleData) return;
+        frame.contentWindow.postMessage(
+          {
+            type: 'pkm-battle-data',
+            payload: injectedBattleData,
+          },
+          '*'
+        );
+      }
+
+      frame.addEventListener('load', postBattleData);
+
+      window.addEventListener('message', (event) => {
+        const injectedBattleData = parseInjectedData();
+        const payload = event?.data;
+        if (!payload || payload.type !== 'pkm-battle-data-request') return;
+        if (!injectedBattleData || !frame || !frame.contentWindow) return;
+        frame.contentWindow.postMessage(
+          {
+            type: 'pkm-battle-data',
+            payload: injectedBattleData,
+          },
+          '*'
+        );
+      });
+
+      btnEnter.addEventListener('click', () => {
+        enterFullscreen().finally(syncButtons);
+      });
+      btnExit.addEventListener('click', () => {
+        exitFullscreen().finally(syncButtons);
+      });
+
+      document.addEventListener('fullscreenchange', syncButtons);
+      syncButtons();
+    })();
+  </script>
+</body>
+</html>
+```

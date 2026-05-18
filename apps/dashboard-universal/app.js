@@ -277,14 +277,83 @@ async function refreshMovePoolPanel(slotKey) {
     showMovePoolModal(slotKey, species, currentLv, currentMoves, movePool, false);
 }
 
-function postPkmAction(action, payload = {}) {
-    const parentWin = window.parent || window;
-    parentWin.postMessage({
+let pkmActionRequestSeq = 0;
+const pendingPkmActionRequests = new Map();
+
+function getPkmActionTargets() {
+    const targets = [];
+    const addTarget = (target) => {
+        if (target && !targets.includes(target) && typeof target.postMessage === 'function') {
+            targets.push(target);
+        }
+    };
+    try { addTarget(window.parent && window.parent !== window ? window.parent : null); } catch (e) {}
+    try { addTarget(window.top && window.top !== window && window.top !== window.parent ? window.top : null); } catch (e) {}
+    try { addTarget(window.opener); } catch (e) {}
+    if (!targets.length) addTarget(window.parent || window);
+    return targets;
+}
+
+function formatPkmActionError(data) {
+    return data?.message || data?.reason || 'PKM action failed';
+}
+
+function showPkmActionFailure(message) {
+    const text = message || '当前楼层写入失败，请刷新面板后重试。';
+    if (typeof showMovePoolNotification === 'function') {
+        showMovePoolNotification(text, 'error');
+    } else {
+        alert(text);
+    }
+}
+
+function handlePkmActionResultMessage(data) {
+    if (!data || (data.type !== 'PKM_ACTION_RESULT' && data.type !== 'PKM_ACTION_ERROR')) return false;
+    const requestId = data.requestId || '';
+    const pending = requestId ? pendingPkmActionRequests.get(requestId) : null;
+    if (!pending) return true;
+    clearTimeout(pending.timer);
+    pendingPkmActionRequests.delete(requestId);
+    if (data.type === 'PKM_ACTION_RESULT' && data.ok !== false) {
+        pending.resolve(data);
+    } else {
+        const error = new Error(formatPkmActionError(data));
+        error.result = data;
+        pending.reject(error);
+    }
+    return true;
+}
+
+function postPkmAction(action, payload = {}, options = {}) {
+    const requestId = options.requestId || `pkm-action-${Date.now()}-${++pkmActionRequestSeq}`;
+    const message = {
         type: 'PKM_ACTION',
         action,
-        payload
-    }, '*');
+        payload,
+        requestId
+    };
+    if (options.floorKey) message.floorKey = options.floorKey;
+
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            pendingPkmActionRequests.delete(requestId);
+            reject(new Error(`PKM action timed out: ${action}`));
+        }, options.timeoutMs || 10000);
+
+        pendingPkmActionRequests.set(requestId, { resolve, reject, timer, action });
+
+        try {
+            getPkmActionTargets().forEach((target) => target.postMessage(message, '*'));
+        } catch (error) {
+            clearTimeout(timer);
+            pendingPkmActionRequests.delete(requestId);
+            reject(error);
+        }
+    });
 }
+
+window.postPkmAction = postPkmAction;
+window.showPkmActionFailure = showPkmActionFailure;
 
 function buildNarrativeClipboard(title, bodyLines) {
     return `[System Event: ${title}]
@@ -319,16 +388,26 @@ window.saveMoveChanges = async function(slotKey) {
         }
     }
     
-    // 更新本地 db
-    if (pkm) {
-        db.player.party[slotKey].moves = { ...changes };
-    }
-    
     const species = pkm?.species || pkm?.name || 'pokemon';
     const displayName = translatePokemonNameApp(species);
     
     // 生成 AI 演绎提示词（只描述变化的技能）
     const aiPrompt = generateMoveChangeNarrative(slotKey, changes, pkm, changedMoves);
+
+    if (Object.keys(changedMoves).length === 0) {
+        delete pendingMoveChanges[slotKey];
+        closeMovePoolModal();
+        showMovePoolNotification(`${displayName} 技能配置未变化`, 'info');
+        return;
+    }
+
+    try {
+        await sendMoveChangeToTavern(slotKey, changes);
+    } catch (error) {
+        console.error('[MOVE_POOL] 技能变更写入失败:', error);
+        showPkmActionFailure(`技能写入失败：${error.message}`);
+        return;
+    }
     
     // 复制到剪贴板
     try {
@@ -338,19 +417,13 @@ window.saveMoveChanges = async function(slotKey) {
         console.warn('[MOVE_POOL] 剪贴板复制失败，尝试降级方案:', e);
         fallbackCopyToClipboard(aiPrompt);
     }
-    
-    // 发送到酒馆
-    sendMoveChangeToTavern(slotKey, changes);
-    
+
     // 清理临时变更
     delete pendingMoveChanges[slotKey];
     
     // 关闭面板
     closeMovePoolModal();
-    
-    // 刷新 Party 列表
-    renderPartyList();
-    
+
     // 显示成功通知（包含复制提示）
     showMovePoolNotification(`${displayName} 技能已更新！演绎提示已复制到剪贴板`, 'success');
 };
@@ -410,8 +483,9 @@ function fallbackCopyToClipboard(text) {
  */
 function sendMoveChangeToTavern(slotKey, moves) {
     const slot = Number(String(slotKey).replace('slot', '')) || 1;
-    postPkmAction('party.updateMoves', { slot, moves });
+    const result = postPkmAction('party.updateMoves', { slot, moves });
     console.log('[MOVE_POOL] 技能变更已发送:', slotKey, moves);
+    return result;
 }
 
 /**
@@ -641,22 +715,10 @@ const DefaultSettings = {
     enableBattlePortraitMode: false
 };
 
-// 获取父窗口的事件系统（iframe 内部需要通过 parent 访问）
-function getParentWindow() {
-    try {
-        return window.parent || window;
-    } catch (e) {
-        return window;
-    }
-}
-
 function getPkmBridgePayload(eventData) {
     if (!eventData || !eventData.type) return null;
     if (eventData.type === 'PKM_STATE_PUSH') {
-        return eventData.legacy || eventData.data || null;
-    }
-    if (eventData.type === 'PKM_ERA_DATA' || eventData.type === 'PKM_REFRESH') {
-        return eventData.data || null;
+        return eventData.dashboard || null;
     }
     return null;
 }
@@ -664,7 +726,6 @@ function getPkmBridgePayload(eventData) {
 function applyPkmBridgeData(payload, reason = 'message') {
     if (!payload || !payload.player) return false;
     db = payload;
-    window.eraData = db;
     window.pkmBridgeData = payload;
     console.log('[PKM] ✓ 桥接数据已更新', reason, db.player?.name);
     return true;
@@ -696,6 +757,9 @@ window.addEventListener('message', function(event) {
     if (String(event.data.type).startsWith('PKM_')) {
         console.log('[PKM] 收到桥接消息', event.data.type);
     }
+    if (handlePkmActionResultMessage(event.data)) {
+        return;
+    }
 
     const bridgePayload = getPkmBridgePayload(event.data);
     if (bridgePayload && applyPkmBridgeData(bridgePayload, event.data.type)) {
@@ -705,7 +769,7 @@ window.addEventListener('message', function(event) {
             party: Object.values(bridgePayload.player?.party || {}).map((pokemon) => pokemon?.name || null),
             boxCount: Object.keys(bridgePayload.player?.box || {}).length,
             settings: bridgePayload.settings || bridgePayload.player?.settings || {},
-            world: bridgePayload.world_state || bridgePayload.world || {}
+            world: bridgePayload.world || {}
         });
         const now = Date.now();
         if (payloadKey === lastBridgePayloadKey && now - lastBridgePayloadAt < 1500) {
@@ -716,28 +780,6 @@ window.addEventListener('message', function(event) {
         lastBridgePayloadAt = now;
         handleRefreshDebounced(event.data);
         return;
-    }
-    
-    if (event.data.type === 'PKM_ERA_DATA') {
-        console.log('[PKM] 收到 legacy 桥接数据 (postMessage)');
-        if (event.data.data && event.data.data.player) {
-            db = event.data.data;
-            window.eraData = db;
-            console.log('[PKM] ✓ legacy 桥接数据已更新', db.player?.name);
-            
-            // 刷新界面
-            if (typeof renderDashboard === 'function') renderDashboard();
-            if (typeof renderPartyList === 'function') renderPartyList();
-        }
-    } else if (event.data.type === 'PKM_REFRESH') {
-        console.log('[PKM] 收到刷新请求 (postMessage)');
-        if (event.data.data && event.data.data.player) {
-            db = event.data.data;
-            window.eraData = db;
-            
-            // 使用防抖避免频繁刷新导致卡顿
-            handleRefreshDebounced(event.data);
-        }
     }
 });
 
@@ -765,11 +807,11 @@ function handleRefreshDebounced(eventData) {
     }, 100);
 }
 
-// 加载 MVU 桥接数据到 db（从父窗口推送的 window.pkmBridgeData/window.eraData 获取）
+// 加载 MVU 桥接数据到 db（从父窗口推送的 window.pkmBridgeData 获取）
 function loadBridgeData() {
     console.log('[PKM] 正在加载 MVU 桥接数据...');
     
-    const bridgeData = window.pkmBridgeData || window.eraData;
+    const bridgeData = window.pkmBridgeData;
     if (bridgeData && bridgeData.player) {
         db = bridgeData;
         console.log('[PKM] ✓ MVU 桥接数据加载成功', db.player?.name);
@@ -792,7 +834,7 @@ function loadBridgeData() {
                 },
                 box: {}
             },
-            world_state: {
+            world: {
                 location: { name: 'Unknown', area: '', description: '' },
                 time: { period: 'morning' },
             },
@@ -888,7 +930,7 @@ function renderPartyList() {
     const partyData = db.player.party;
     console.log('[PKM] 渲染队伍列表，槽位数:', Object.keys(partyData).length);
     
-    // 过滤掉 transfer_buffer，只显示 slot1-slot6
+    // 只显示 slot1-slot6
     const displaySlotKeys = ['slot1', 'slot2', 'slot3', 'slot4', 'slot5', 'slot6'];
     const displaySlots = displaySlotKeys.map(key => partyData[key]).filter(Boolean);
     const activeCount = displaySlots.filter(p => p && p.name && p.name !== null).length;
@@ -911,7 +953,7 @@ function renderPartyList() {
 
     let cardsHTML = '';
 
-    // 只渲染 slot1-slot6，不渲染 transfer_buffer
+    // 只渲染 slot1-slot6
     displaySlotKeys.forEach(slotKey => {
         const pkmNode = partyData[slotKey];
         if (pkmNode) {
@@ -1038,37 +1080,41 @@ function renderSettings() {
     pageEl.innerHTML = headerHtml + contentHtml;
 }
 
-window.toggleGlobalSetting = function (key) {
+window.toggleGlobalSetting = async function (key) {
     if (!db) db = {};
     if (!db.settings) {
         db.settings = { ...DefaultSettings };
     }
 
-    db.settings[key] = !db.settings[key];
-    console.log('[PKM CONFIG] Setting Changed:', key, db.settings[key]);
+    const previousValue = db.settings[key] === true;
+    const nextValue = !previousValue;
+    db.settings[key] = nextValue;
+    console.log('[PKM CONFIG] Setting Changed:', key, nextValue);
     renderSettings();
 
-    postPkmAction('settings.update', { [key]: db.settings[key] });
+    try {
+        await postPkmAction('settings.update', { [key]: nextValue });
+    } catch (error) {
+        console.error('[PKM CONFIG] Setting write failed:', error);
+        db.settings[key] = previousValue;
+        renderSettings();
+        showPkmActionFailure(`设置写入失败：${error.message}`);
+    }
 };
 
 // ========== Leader 切换函数 ==========
-window.toggleLeader = function(event, slotKey) {
+window.toggleLeader = async function(event, slotKey) {
     if (event) event.stopPropagation();
     
     console.log('[PKM] toggleLeader 被调用:', slotKey);
-    
-    // 方案1: 使用回调函数（如果父窗口注入了）
-    if (window.pkmSetLeaderCallback) {
-        console.log('[PKM] 调用 pkmSetLeaderCallback');
-        window.pkmSetLeaderCallback(slotKey);
-    } else {
-        // 方案2: 使用 postMessage
-        const parentWin = window.parent || window;
-        parentWin.postMessage({
-            type: 'PKM_SET_LEADER',
-            data: { targetSlot: slotKey }
-        }, '*');
-        console.log('[PKM] 已发送 PKM_SET_LEADER postMessage:', slotKey);
+
+    const slot = Number(String(slotKey).replace('slot', '')) || 1;
+    try {
+        await postPkmAction('party.setLead', { slot });
+        console.log('[PKM] Leader 写入已确认:', slotKey);
+    } catch (error) {
+        console.error('[PKM] Leader 写入失败:', error);
+        showPkmActionFailure(`队长切换失败：${error.message}`);
     }
 };
 
@@ -1795,7 +1841,7 @@ function createEmptySlot(slotNum) {
     };
 }
 
-window.confirmBoxTransfer = function() {
+window.confirmBoxTransfer = async function() {
     const pIdxs = boxState.selectedPartIdxs;
     const bKeys = boxState.selectedBoxKeys;
     const emptyIdxs = boxState.selectedEmptyIdxs;
@@ -1829,7 +1875,7 @@ window.confirmBoxTransfer = function() {
     const emptyPartyInfos = partyInfos.filter(p => p.name === null);
 
     const playerName = db.player.name || "训练师";
-    const zoneName = ZoneDB[(db.world_state.location || 'Z')]?.label || "未知区域";
+    const zoneName = ZoneDB[(db.world?.location || 'Z')]?.label || "未知区域";
 
     let actionLog = "";
     let mvuzPayload = null;
@@ -1964,35 +2010,19 @@ opDesc.replace(/^> /gm, ''),
 
     console.log("[BOX] 生成的指令:\n" + actionLog);
     if (mvuzPayload) {
-        postPkmAction('box.applyLegacyMutation', mvuzPayload);
-        applyBoxMutationLocally(mvuzPayload);
+        try {
+            await postPkmAction('box.applyTransferMutation', mvuzPayload);
+        } catch (error) {
+            console.error('[BOX] 传输写入失败:', error);
+            showPkmActionFailure(`BOX 写入失败：${error.message}`);
+            return;
+        }
     }
     copyToClipboard(actionLog);
     resetBoxSelection(); 
 };
 
 /* --- Helpers --- */
-
-function applyBoxMutationLocally(payload) {
-    if (!db.player.box) db.player.box = {};
-    if (!db.player.party) db.player.party = {};
-
-    Object.entries(payload.partyEdits || {}).forEach(([slotKey, pokemon]) => {
-        db.player.party[slotKey] = JSON.parse(JSON.stringify(pokemon));
-    });
-
-    Object.entries(payload.boxInserts || {}).forEach(([key, pokemon]) => {
-        db.player.box[key] = JSON.parse(JSON.stringify(pokemon));
-    });
-
-    Object.entries(payload.boxEdits || {}).forEach(([key, pokemon]) => {
-        db.player.box[key] = JSON.parse(JSON.stringify(pokemon));
-    });
-
-    Object.keys(payload.boxDeletes || {}).forEach((key) => {
-        delete db.player.box[key];
-    });
-}
 
 function normalizeToPartyFormat(simpleObj, slotNum) {
     // 把盒子里的简单数据扩充成队伍数据
@@ -2109,7 +2139,7 @@ function renderDashboard() {
     if (!dashPage) return;
 
     const player = db?.player || {};
-    const world = db?.world_state || {};
+    const world = db?.world || {};
     const playerName = player.name || 'TRAINER';
 
     // 计算 Box 使用情况
