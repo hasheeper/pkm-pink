@@ -179,24 +179,435 @@
       return ({ 1: 25, 2: 50, 3: 75, 4: 85 })[normalized] || 50;
     }
 
+    const AUTO_MOVES_DEFAULT_DISABLED = [
+      'Return', 'Frustration',
+      'Wish', 'Healing Wish', 'Lunar Dance', 'Revival Blessing',
+      'Rest', 'Recover', 'Roost', 'Soft-Boiled', 'Slack Off', 'Moonlight',
+      'Morning Sun', 'Synthesis', 'Milk Drink', 'Shore Up', 'Strength Sap',
+      'Charm', 'Attract', 'Captivate', 'Protect', 'Detect', 'Endure', 'Substitute',
+      'Minimize', 'Double Team', 'Confuse Ray', 'Sweet Kiss', 'Yawn',
+      'Splash', 'Celebrate', 'Hold Hands', 'Happy Hour', 'Teleport',
+      'Explosion', 'Self-Destruct', 'Memento', 'Final Gambit',
+      'Destiny Bond', 'Perish Song', 'Fissure', 'Guillotine', 'Horn Drill', 'Sheer Cold',
+      'Counter', 'Mirror Coat', 'Metal Burst'
+    ];
+
+    const AUTO_MOVES_UTILITY_IDS = new Set([
+      'swordsdance', 'dragondance', 'nastyplot', 'calmmind', 'bulkup', 'coil',
+      'agility', 'rockpolish', 'workup', 'honeclaws',
+      'thunderwave', 'willowisp', 'toxic', 'stunspore', 'sleeppowder', 'spore',
+      'leechseed', 'taunt', 'encore', 'haze', 'defog', 'rapidspin'
+    ]);
+
+    const AUTO_MOVES_CACHE = {
+      pokemon: {},
+      movesDb: null,
+      movesDbPromise: null
+    };
+
+    function resolveAppBaseUrl() {
+      const raw = typeof ROOT.PKM_APP_BASE_URL === 'string' && ROOT.PKM_APP_BASE_URL.trim()
+        ? ROOT.PKM_APP_BASE_URL.trim()
+        : 'https://hasheeper.github.io/pkm-pink';
+      return raw.replace(/\/+$/, '');
+    }
+
+    function normalizeAutoMoveId(value) {
+      return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
+    function toPokeApiId(value) {
+      return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/['.:]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    }
+
+    function toDisplayMoveName(value) {
+      return String(value || '')
+        .replace(/-/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .join(' ');
+    }
+
+    function capitalizeType(value) {
+      const text = String(value || 'Normal').trim().toLowerCase();
+      return text ? text.charAt(0).toUpperCase() + text.slice(1) : 'Normal';
+    }
+
+    function getPokeApiSpeciesCandidates(species) {
+      const text = String(species || '').trim();
+      const candidates = [toPokeApiId(text)];
+      if (text.includes('-')) candidates.push(toPokeApiId(text.split('-')[0]));
+      return [...new Set(candidates.filter(Boolean))];
+    }
+
+    function getAutoMoveConfig(settings = {}) {
+      const source = isObject(settings.autoMoves) ? settings.autoMoves : {};
+      const useDefaultDenylist = source.useDefaultDenylist !== false;
+      const disabled = [
+        ...(useDefaultDenylist ? AUTO_MOVES_DEFAULT_DISABLED : []),
+        ...(Array.isArray(source.disabledMoves) ? source.disabledMoves : [])
+      ].map(normalizeAutoMoveId).filter(Boolean);
+      const allowed = [
+        ...(Array.isArray(source.allowedMoves) ? source.allowedMoves : [])
+      ].map(normalizeAutoMoveId).filter(Boolean);
+      return {
+        disabled: new Set(disabled),
+        allowed: new Set(allowed)
+      };
+    }
+
+    function isAutoMoveDenied(moveName, config) {
+      const id = normalizeAutoMoveId(moveName);
+      if (!id) return true;
+      if (config.allowed.has(id)) return false;
+      return config.disabled.has(id);
+    }
+
+    function extractMovesObjectLiteral(source) {
+      const anchor = source.indexOf('export const MOVES');
+      if (anchor < 0) return null;
+      const start = source.indexOf('{', anchor);
+      if (start < 0) return null;
+      let depth = 0;
+      let inString = false;
+      let quote = '';
+      let escaped = false;
+      for (let index = start; index < source.length; index += 1) {
+        const char = source[index];
+        if (inString) {
+          if (escaped) {
+            escaped = false;
+          } else if (char === '\\') {
+            escaped = true;
+          } else if (char === quote) {
+            inString = false;
+            quote = '';
+          }
+          continue;
+        }
+        if (char === '"' || char === '\'' || char === '`') {
+          inString = true;
+          quote = char;
+          continue;
+        }
+        if (char === '{') depth += 1;
+        if (char === '}') {
+          depth -= 1;
+          if (depth === 0) return source.slice(start, index + 1);
+        }
+      }
+      return null;
+    }
+
+    async function loadMovesDb() {
+      if (AUTO_MOVES_CACHE.movesDb) return AUTO_MOVES_CACHE.movesDb;
+      if (AUTO_MOVES_CACHE.movesDbPromise) return AUTO_MOVES_CACHE.movesDbPromise;
+      AUTO_MOVES_CACHE.movesDbPromise = (async () => {
+        if (isObject(ROOT.MOVES)) {
+          AUTO_MOVES_CACHE.movesDb = ROOT.MOVES;
+          return ROOT.MOVES;
+        }
+        try {
+          const response = await fetch(`${resolveAppBaseUrl()}/apps/battle-sim/data/moves-data.js`);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const literal = extractMovesObjectLiteral(await response.text());
+          if (!literal) throw new Error('MOVES literal not found');
+          const moves = Function(`"use strict"; return (${literal});`)();
+          AUTO_MOVES_CACHE.movesDb = isObject(moves) ? moves : {};
+          return AUTO_MOVES_CACHE.movesDb;
+        } catch (error) {
+          console.warn(`${PLUGIN_NAME} auto moves: failed to load battle move DB`, error);
+          AUTO_MOVES_CACHE.movesDb = {};
+          return AUTO_MOVES_CACHE.movesDb;
+        }
+      })();
+      return AUTO_MOVES_CACHE.movesDbPromise;
+    }
+
+    async function fetchPokemonMoveSource(species) {
+      const candidates = getPokeApiSpeciesCandidates(species);
+      for (const apiId of candidates) {
+        if (AUTO_MOVES_CACHE.pokemon[apiId]) return AUTO_MOVES_CACHE.pokemon[apiId];
+        try {
+          const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${apiId}`);
+          if (!response.ok) continue;
+          const data = await response.json();
+          const source = {
+            types: (data.types || []).map((entry) => capitalizeType(entry?.type?.name)).filter(Boolean),
+            moves: Array.isArray(data.moves) ? data.moves : []
+          };
+          AUTO_MOVES_CACHE.pokemon[apiId] = source;
+          return source;
+        } catch (error) {
+          console.warn(`${PLUGIN_NAME} auto moves: PokeAPI failed for ${apiId}`, error);
+        }
+      }
+      return { types: ['Normal'], moves: [] };
+    }
+
+    function buildLegalMoveCandidates(apiSource, level, movesDb, config) {
+      const moveMap = new Map();
+      const hasMovesDb = isObject(movesDb) && Object.keys(movesDb).length > 0;
+      for (const entry of apiSource.moves || []) {
+        const rawName = entry?.move?.name;
+        if (!rawName) continue;
+        for (const detail of entry.version_group_details || []) {
+          const method = detail?.move_learn_method?.name || '';
+          const learnLevel = Number(detail?.level_learned_at || 0);
+          const isLevelUp = method === 'level-up' && learnLevel <= level;
+          const isSupplement = method === 'machine' || method === 'tutor' || method === 'egg';
+          if (!isLevelUp && !isSupplement) continue;
+
+          const displayName = toDisplayMoveName(rawName);
+          if (isAutoMoveDenied(displayName, config)) continue;
+          const moveId = normalizeAutoMoveId(displayName);
+          const moveData = movesDb[moveId] || null;
+          if (hasMovesDb && !moveData) continue;
+          if (moveData?.isZ || moveData?.isMax || /^max|^gmax/i.test(displayName)) continue;
+          if (moveData?.isNonstandard && moveData.isNonstandard !== 'Past') continue;
+
+          const rank = method === 'level-up' ? 3 : (method === 'machine' || method === 'tutor' ? 2 : 1);
+          const existing = moveMap.get(moveId);
+          if (!existing || rank > existing.rank || learnLevel > existing.level) {
+            moveMap.set(moveId, {
+              id: moveId,
+              name: moveData?.name || displayName,
+              data: moveData,
+              method,
+              rank,
+              level: learnLevel
+            });
+          }
+        }
+      }
+      return [...moveMap.values()];
+    }
+
+    function autoMovePower(moveData) {
+      if (!moveData) return 60;
+      if (moveData.basePower && moveData.basePower > 0) return moveData.basePower;
+      return moveData.category && moveData.category !== 'Status' ? 60 : 0;
+    }
+
+    function scoreAutoMove(candidate, types, difficulty) {
+      const move = candidate.data || {};
+      const power = autoMovePower(move);
+      const category = move.category || (power > 0 ? 'Physical' : 'Status');
+      const type = move.type || null;
+      const isStatus = category === 'Status' || power <= 0;
+      const isStab = type && types.includes(type);
+      const hardMode = difficulty === 'hard' || difficulty === 'expert';
+      let score = 0;
+
+      if (isStatus) {
+        score += AUTO_MOVES_UTILITY_IDS.has(candidate.id) ? (hardMode ? 72 : 50) : 20;
+      } else {
+        score += power;
+        if (isStab) score += 38;
+        if (move.priority > 0) score += 14;
+        if (move.drain) score += 6;
+        if (move.secondary) score += 6;
+        if (move.recoil) score -= hardMode ? 4 : 12;
+      }
+
+      const accuracy = move.accuracy === true ? 100 : Number(move.accuracy || 100);
+      if (accuracy < 80) score -= hardMode ? 8 : 18;
+      if (candidate.method === 'level-up') score += 18;
+      if (candidate.method === 'machine' || candidate.method === 'tutor') score += hardMode ? 10 : 2;
+      if (candidate.method === 'egg') score += hardMode ? 4 : -8;
+      return score;
+    }
+
+    function stableAutoIndex(seed, length) {
+      if (!length) return 0;
+      let hash = 2166136261;
+      const text = String(seed || '');
+      for (let index = 0; index < text.length; index += 1) {
+        hash ^= text.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+      }
+      return Math.abs(hash >>> 0) % length;
+    }
+
+    function selectAutoMoves(candidates, species, level, difficulty, types) {
+      const scored = candidates
+        .map((candidate) => ({
+          ...candidate,
+          score: scoreAutoMove(candidate, types, difficulty)
+        }))
+        .sort((a, b) => b.score - a.score || autoMovePower(b.data) - autoMovePower(a.data));
+      const selected = [];
+      const used = new Set();
+      const add = (candidate) => {
+        if (!candidate || used.has(candidate.id) || selected.length >= 4) return false;
+        const category = candidate.data?.category || 'Physical';
+        const hasDamage = autoMovePower(candidate.data) > 0;
+        const statusCount = selected.filter((item) => (item.data?.category || 'Physical') === 'Status').length;
+        if ((category === 'Status' || !hasDamage) && statusCount >= 1 && scored.some((item) => autoMovePower(item.data) > 0)) {
+          return false;
+        }
+        selected.push(candidate);
+        used.add(candidate.id);
+        return true;
+      };
+
+      const damaging = scored.filter((item) => autoMovePower(item.data) > 0);
+      const stab = damaging.filter((item) => item.data?.type && types.includes(item.data.type));
+      const coverage = damaging.filter((item) => !item.data?.type || !types.includes(item.data.type));
+      const utility = scored.filter((item) => AUTO_MOVES_UTILITY_IDS.has(item.id));
+
+      for (const type of types) add(stab.find((item) => item.data?.type === type));
+      add(coverage.find((item) => item.data?.type && item.data.type !== 'Normal'));
+      if (difficulty === 'hard' || difficulty === 'expert') add(utility[0]);
+
+      const obscurePool = scored
+        .filter((item) => !used.has(item.id) && item.score > 25)
+        .sort((a, b) => a.score - b.score);
+      add(obscurePool[stableAutoIndex(`${species}:${level}:${difficulty}`, obscurePool.length)]);
+
+      for (const candidate of scored) add(candidate);
+      return selected.slice(0, 4).map((item) => item.name);
+    }
+
+    function fallbackAutoMoves(config) {
+      return ['Quick Attack', 'Ember', 'Water Gun', 'Vine Whip']
+        .filter((move) => !isAutoMoveDenied(move, config))
+        .slice(0, 4);
+    }
+
+    async function generateAutoMoves(pokemon, context) {
+      const species = pokemon?.name || pokemon?.species;
+      const level = clampNumber(pokemon?.lv ?? pokemon?.level, 1, 100, context.baseLevel || 50);
+      const config = getAutoMoveConfig(context.settings);
+      try {
+        const [apiSource, movesDb] = await Promise.all([
+          fetchPokemonMoveSource(species),
+          loadMovesDb()
+        ]);
+        const types = apiSource.types?.length ? apiSource.types : ['Normal'];
+        const candidates = buildLegalMoveCandidates(apiSource, level, movesDb, config);
+        const moves = selectAutoMoves(candidates, species, level, context.difficulty, types);
+        if (moves.length) return moves;
+      } catch (error) {
+        console.warn(`${PLUGIN_NAME} auto moves failed for ${species}`, error);
+      }
+      return fallbackAutoMoves(config);
+    }
+
+    function hasExplicitLevel(pokemon) {
+      return Number.isFinite(Number(pokemon?.lv)) || Number.isFinite(Number(pokemon?.level));
+    }
+
+    function hasBattleMoves(pokemon) {
+      return Array.isArray(pokemon?.moves) && pokemon.moves.filter(Boolean).length > 0;
+    }
+
+    function averageBattleLevel(party) {
+      const levels = (Array.isArray(party) ? party : [])
+        .map((pokemon) => Number(pokemon?.lv ?? pokemon?.level))
+        .filter((level) => Number.isFinite(level) && level > 0);
+      if (!levels.length) return 50;
+      return Math.round(levels.reduce((sum, level) => sum + level, 0) / levels.length);
+    }
+
+    function difficultyLevelOffset(difficulty, side, isWild) {
+      if (side === 'player') return 0;
+      if (isWild) return difficulty === 'easy' ? -6 : -3;
+      return ({ easy: -5, normal: 0, hard: 3, expert: 5 })[difficulty] || 0;
+    }
+
+    function inferAutoLevel(pokemon, context, index) {
+      const species = pokemon?.name || pokemon?.species || 'pokemon';
+      const jitter = stableAutoIndex(`${species}:${index}:${context.difficulty}`, 5) - 2;
+      return clampNumber(
+        context.baseLevel + difficultyLevelOffset(context.difficulty, context.side, context.isWild) + jitter,
+        1,
+        100,
+        context.baseLevel
+      );
+    }
+
+    function ensureAutoStatsMeta(pokemon, isWild) {
+      const level = clampNumber(pokemon?.lv ?? pokemon?.level, 1, 100, 50);
+      if (!pokemon.quality) pokemon.quality = level >= 75 ? 'high' : level >= 45 ? 'medium' : 'low';
+      if (!isObject(pokemon.stats_meta)) {
+        pokemon.stats_meta = {
+          ivs: normalizeIvs(null),
+          ev_level: isWild ? 0 : Math.min(252, Math.floor(level * 2.5))
+        };
+      }
+    }
+
+    function cleanupBattlePokemon(pokemon) {
+      const next = clone(pokemon, {});
+      delete next._autoLevel;
+      delete next._autoMoves;
+      delete next._hasExplicitStatsMeta;
+      delete next._currentPlayerParty;
+      delete next._hasExplicitBonds;
+      return next;
+    }
+
+    async function hydrateAutoBattleParty(party, context) {
+      const list = Array.isArray(party) ? party : [];
+      const hydrated = await Promise.all(list.map(async (pokemon, index) => {
+        if (!pokemon?.name) return null;
+        const next = clone(pokemon, {});
+        const skipCurrentPlayer = next._currentPlayerParty === true;
+
+        if (!skipCurrentPlayer && (next._autoLevel || !hasExplicitLevel(next))) {
+          next.lv = inferAutoLevel(next, context, index);
+        }
+
+        if (!skipCurrentPlayer && (next._autoMoves || !hasBattleMoves(next))) {
+          next.moves = await generateAutoMoves(next, context);
+        }
+
+        if (!skipCurrentPlayer && (next._autoLevel || next._autoMoves || !isObject(next.stats_meta))) {
+          ensureAutoStatsMeta(next, context.isWild);
+        }
+
+        return cleanupBattlePokemon(next);
+      }));
+      return hydrated.filter(Boolean);
+    }
+
     function completeBattlePartySeed(entry, tier, trainerType = 'generated_trainer') {
       const src = typeof entry === 'string' ? { name: entry.trim() } : clone(entry, {});
       if (!isObject(src) || !src.name) return null;
 
-      const lv = clampNumber(src.lv ?? src.level, 1, 100, getTierDefaultLevel(tier));
+      const hasExplicitLevel = src.lv !== undefined && src.lv !== null
+        || src.level !== undefined && src.level !== null;
+      const lv = hasExplicitLevel ? clampNumber(src.lv ?? src.level, 1, 100, getTierDefaultLevel(tier)) : null;
       const isWild = trainerType === 'wild';
-      return {
+      const hasExplicitMoves = Array.isArray(src.moves) && src.moves.filter(Boolean).length > 0;
+      const hasExplicitStatsMeta = isObject(src.stats_meta);
+      const seed = {
         ...src,
-        lv,
-        quality: src.quality || src.iv_quality || (lv >= 75 ? 'high' : lv >= 45 ? 'medium' : 'low'),
-        moves: Array.isArray(src.moves) && src.moves.length ? src.moves : ['Tackle'],
-        stats_meta: isObject(src.stats_meta)
-          ? src.stats_meta
-          : {
-              ivs: normalizeIvs(null),
-              ev_level: isWild ? 0 : Math.min(252, Math.floor(lv * 2.5))
-            }
+        _autoLevel: !hasExplicitLevel,
+        _autoMoves: !hasExplicitMoves,
+        _hasExplicitStatsMeta: hasExplicitStatsMeta,
+        quality: src.quality || src.iv_quality || (lv !== null
+          ? (lv >= 75 ? 'high' : lv >= 45 ? 'medium' : 'low')
+          : null)
       };
+      if (lv !== null) seed.lv = lv;
+      if (hasExplicitMoves) seed.moves = src.moves;
+      if (hasExplicitStatsMeta) {
+        seed.stats_meta = src.stats_meta;
+      } else if (lv !== null) {
+        seed.stats_meta = {
+          ivs: normalizeIvs(null),
+          ev_level: isWild ? 0 : Math.min(252, Math.floor(lv * 2.5))
+        };
+      }
+      return seed;
     }
 
     function normalizeBattlePartyEntry(entry, tier, trainerType = 'generated_trainer') {
@@ -210,9 +621,31 @@
           ev_level: clampNumber(seed.stats_meta.ev_level, 0, 252, 0)
         };
       }
+      if (!seed._hasExplicitStatsMeta && seed._autoLevel) {
+        delete normalized.stats_meta;
+      }
       delete normalized.slot;
       normalized._tier = seed._tier || tier;
+      normalized._hasExplicitBonds = seed._hasExplicitBonds === true
+        || (seed._hasExplicitBonds !== false && Object.prototype.hasOwnProperty.call(seed, 'bonds'));
       return normalized;
+    }
+
+    function avsFromQuality(value) {
+      const quality = typeof value === 'string' ? value.trim().toLowerCase() : '';
+      const amount = {
+        low: 50,
+        medium: 100,
+        high: 150,
+        perfect: 255
+      }[quality];
+      if (amount === undefined) return null;
+      return {
+        trust: amount,
+        passion: amount,
+        insight: amount,
+        devotion: amount
+      };
     }
 
     function normalizeBattleAvs(pokemon) {
@@ -224,13 +657,15 @@
         source = pokemon.friendship.avs;
       } else if (isObject(pokemon?.friendship)) {
         source = pokemon.friendship;
-      } else if (typeof pokemon?.bonds === 'number') {
+      } else if (pokemon?._hasExplicitBonds && typeof pokemon?.bonds === 'number') {
         source = {
           trust: pokemon.bonds,
           passion: pokemon.bonds,
           insight: pokemon.bonds,
           devotion: pokemon.bonds
         };
+      } else {
+        source = avsFromQuality(pokemon?.avsQuality);
       }
       if (!source) return zero;
       return {
@@ -353,6 +788,7 @@
       delete next['friend' + 'ship'];
       delete next._needGenerate;
       delete next._tier;
+      delete next._hasExplicitBonds;
       return next;
     }
 
@@ -454,7 +890,10 @@
     function resolvePlayerBattleParty(state, aiPlayer) {
       const currentParty = state.party.slots
         .filter((pokemon) => pokemon?.name)
-        .map(battlePokemonForFrontend)
+        .map((pokemon) => {
+          const normalized = battlePokemonForFrontend(pokemon);
+          return normalized ? { ...normalized, _currentPlayerParty: true } : null;
+        })
         .filter(Boolean);
 
       if (Array.isArray(aiPlayer?._trainersData) && aiPlayer._trainersData.length) {
@@ -504,8 +943,25 @@
       const battleData = normalizeBattleInput(aiBattleData || {});
       const aiPlayer = battleData.player || {};
       const aiEnemy = battleData.enemy || {};
-      const playerParty = resolvePlayerBattleParty(state, aiPlayer);
-      const enemyParty = resolveEnemyBattleParty(aiEnemy, battleData);
+      const difficulty = battleData.difficulty || aiEnemy.difficulty || 'normal';
+      const settings = { ...state.settings, ...(isObject(battleData.settings) ? battleData.settings : {}) };
+      let playerParty = resolvePlayerBattleParty(state, aiPlayer);
+      const baseLevel = averageBattleLevel(playerParty);
+      const enemyIsWild = String(aiEnemy.type || battleData.enemy_type || '').toLowerCase() === 'wild';
+      playerParty = await hydrateAutoBattleParty(playerParty, {
+        side: 'player',
+        isWild: false,
+        difficulty,
+        settings,
+        baseLevel
+      });
+      const enemyParty = await hydrateAutoBattleParty(resolveEnemyBattleParty(aiEnemy, battleData), {
+        side: 'enemy',
+        isWild: enemyIsWild,
+        difficulty,
+        settings,
+        baseLevel
+      });
       const playerUnlocks = mergeUnlocks(
         state.player.unlocks,
         aiPlayer.unlocks,
@@ -515,8 +971,8 @@
       const environment = resolveBattleEnvironment(state, battleData);
 
       return {
-        settings: { ...state.settings, ...(isObject(battleData.settings) ? battleData.settings : {}) },
-        difficulty: battleData.difficulty || aiEnemy.difficulty || 'normal',
+        settings,
+        difficulty,
         player: {
           name: resolveSideName(aiPlayer, state.player.name),
           trainerProficiency: Math.max(

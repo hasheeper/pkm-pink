@@ -305,7 +305,6 @@ body {
 .ph-sub { font-size: 0.6rem; font-weight: 700; color: #b2bec3; letter-spacing: 1px; margin-top: -5px; user-select: none; }
 
 .section-label { font-size: 0.65rem; color: #b2bec3; font-weight: 800; margin: 0 0 2px 20px; letter-spacing: 1px; }
-.dash-card-box.npc:hover { border-color: var(--c-pink); box-shadow: 6px 8px 0 rgba(253, 121, 168, 0.3); }
 
 /* =================================
    Ver. Dawn - 宝可梦数据卡 (Style R)
@@ -813,14 +812,6 @@ body {
     opacity: 1;
     transition: color 0.2s;
 }
-.nb-icon-img {
-    width: 22px;
-    height: 22px;
-    object-fit: contain;
-    image-rendering: pixelated;
-    image-rendering: -webkit-optimize-contrast;
-    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.2));
-}
 
 .dash-card-box.empty:hover {
     border-color: #a4b0be; 
@@ -1099,6 +1090,13 @@ body {
     padding: 10px 0 50px 0;
 }
 
+#social-grid-view.empty {
+    min-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .npc-card {
     position: relative;
     height: 180px;
@@ -1200,68 +1198,6 @@ body {
 }
 .npc-card[data-stage="4"] .npc-info-shade {
     background: linear-gradient(180deg, transparent 0%, rgba(255,245,210,0.9) 60%, rgba(255,245,210,1) 100%);
-}
-
-/* =========================================
-   NPC 特殊羁绊 Badge (右上角图标)
-   ========================================= */
-.npc-bond-badge {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 12;
-    border-radius: 4px;
-    font-size: 1.1rem;
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-}
-.npc-bond-badge .nb-bg {
-    display: none;
-}
-.npc-bond-badge.locked {
-    background: rgba(0,0,0,0.45);
-    border: 1px solid rgba(255,255,255,0.35);
-    border-radius: 50%;
-    filter: grayscale(100%) opacity(0.75);
-    color: #fff;
-    transform: scale(0.9);
-}
-.npc-bond-badge.locked .nb-icon {
-    opacity: 0.55;
-    filter: blur(0.4px);
-}
-.npc-bond-badge.unlocked {
-    background: rgba(255,255,255,0.2);
-    backdrop-filter: blur(4px);
-    border: 1px solid #fff;
-    border-radius: 6px;
-    box-shadow:
-        0 2px 8px rgba(0,0,0,0.12),
-        inset 0 0 10px rgba(255,255,255,0.35),
-        0 0 10px rgba(255,223,0,0.35);
-    animation: badgeFloat 3s ease-in-out infinite;
-}
-.npc-bond-badge.unlocked .nb-bg {
-    display: block;
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background: radial-gradient(circle, rgba(255,255,255,0.85) 0%, transparent 70%);
-    opacity: 0.4;
-}
-.npc-bond-badge:hover {
-    transform: scale(1.1);
-    box-shadow: 0 4px 12px rgba(255,255,255,0.5);
-    background: #fff;
-    color: #2d3436;
-}
-@keyframes badgeFloat {
-    0%,100% { transform: translateY(0); }
-    50% { transform: translateY(-2px); }
 }
 
 /* =========================================
@@ -2720,9 +2656,24 @@ body {
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
-    font-size: 0.9rem;
-    font-weight: 800;
+    max-width: calc(100% - 190px);
+    min-width: 0;
+    font-size: 0.72rem;
+    font-weight: 900;
     color: #2d3436;
+    text-align: center;
+    letter-spacing: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+}
+
+.location-label {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .ps-right {
@@ -3116,8 +3067,59 @@ body {
 }
 
 .box-tactical.tile-box,
+.box-tactical.tile-relation,
+.box-tactical.tile-map-static,
 .box-tactical.tile-settings {
     height: 150px !important;
+}
+
+.box-tactical.tile-map-static,
+.box-tactical.tile-settings {
+    height: 82px !important;
+}
+
+.tile-map-static {
+    cursor: default;
+    pointer-events: none;
+}
+
+.map-summary-data {
+    width: auto;
+    max-width: calc(100% - 28px);
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.map-summary-line {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-ui);
+    font-weight: 900;
+    line-height: 0.95;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+
+.map-summary-line.region {
+    font-size: 1.16rem;
+    color: #3d7dc3;
+    text-shadow: 2px 2px 0 rgba(255,255,255,0.8);
+}
+
+.map-summary-line.place {
+    margin-top: 5px;
+    font-size: 0.62rem;
+    color: #5dade2;
+    opacity: 0.86;
+    background: rgba(116, 185, 255, 0.12);
+    border: 1px solid rgba(116, 185, 255, 0.18);
+    border-radius: 3px;
+    padding: 2px 5px;
+    box-sizing: border-box;
 }
 .live-tile.box-tactical::after {
     content: '';

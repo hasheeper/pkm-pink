@@ -25,7 +25,8 @@
       enableClash: false,
       enableEnvironment: true,
       enableBattlePerformanceMode: false,
-      enableBattlePortraitMode: false
+      enableBattlePortraitMode: false,
+      enableEnemyStrategicSwitching: true
     },
     main: {
       enableAVS: true,

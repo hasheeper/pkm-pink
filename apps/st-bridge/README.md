@@ -23,21 +23,23 @@ Force refresh during development:
 https://hasheeper.github.io/pkm-pink/apps/st-bridge/bridge.js?pack=pkm-universal&force=1&v=dev
 ```
 
+## SillyTavern Script
+
+Load the universal pack in SillyTavern from GitHub Pages:
+
+```js
+window.ST_BRIDGE_PACK = 'pkm-universal';
+window.ST_BRIDGE_ENV = 'prod';
+window.PKM_APP_BASE_URL = 'https://hasheeper.github.io/pkm-pink';
+import 'https://hasheeper.github.io/pkm-pink/apps/st-bridge/bridge.js?pack=pkm-universal';
+```
+
 ## Local Testing
 
 Start a local static server from the repo root:
 
 ```sh
 node apps/st-bridge/scripts/serve-local.mjs --port 4173 --root .
-```
-
-Load the universal pack in SillyTavern from your local workspace:
-
-```js
-window.ST_BRIDGE_PACK = 'pkm-universal';
-window.ST_BRIDGE_ENV = 'local';
-window.PKM_APP_BASE_URL = 'http://127.0.0.1:4173';
-import 'http://127.0.0.1:4173/apps/st-bridge/bridge.js?pack=pkm-universal&env=local&force=1&v=dev';
 ```
 
 In local mode, the universal dashboard resolves to:

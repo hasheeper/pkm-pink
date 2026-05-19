@@ -6,6 +6,7 @@ PKM引擎协议是一个宝可梦对战的场景模拟器，用在实际发生�
 1. 标识符：**严格**使用官方英文 ID (Species/Moves)。例如: "Ursaluna-Bloodmoon"。
 2. 难度 (difficulty): easy / normal / hard / expert。
 3. 动态配置：由 entrants 配置决定具体对战形式。
+4. 懒人兜底：十分不重要的杂鱼野生宝可梦/路人训练家可只写 Species 或 name，让系统兜底补齐 lv/moves；不建议常用。重要战斗、Boss、王牌、剧情指定表现必须显式写 lv/moves。
 
 [根结构]
 // lines 在此处与 entrants 平级
@@ -33,17 +34,21 @@ PKM引擎协议是一个宝可梦对战的场景模拟器，用在实际发生�
 所有非玩家单位都使用现场实例化 (Constructor)，严格遵守键值类型：
 
 // 适用：野生生物、临时敌人、需要定制数值的 Boss。
-// 核心：party 必须是 Object 数组，现场定义所有数值。
+// 核心：party 支持完整构建，也支持极不重要出场的懒人兜底写法。
 {
   "name": "Display_Label_Name", // 用于显示的名称
   "type": "wild" | "trainer",
   "party": [
-    // --- 结构 1: 简易构建 (适用于杂兵/普通野怪) ---
-    // 必须包含 name, lv, moves 以防止崩溃
+    // --- 结构 1: 懒人兜底 (仅适用于十分不重要的杂鱼/普通野怪，不建议常用) ---
+    // 可直接写 Species 字符串，或只写 name；系统会补齐缺省 lv/moves。
+    "SpeciesID",
+    { "name": "SpeciesID" },
+
+    // --- 结构 1B: 半兜底 ---
+    // 可显式指定等级，让系统只兜底补 moves。
     { 
       "name": "SpeciesID", 
-      "lv": <Int>, 
-      "moves": ["MoveID_1", "MoveID_2", …………]
+      "lv": <Int>
     },
     
     // --- 结构 2: 完整构建 (适用于 Boss/队长) ---
@@ -54,6 +59,7 @@ PKM引擎协议是一个宝可梦对战的场景模拟器，用在实际发生�
       "shiny": <Bool>,
       "gender": "M" | "F" | "N",
       "quality": "low" | "medium" | "high" | "perfect", // 决定个体值精度
+      "avsQuality": "low" | "medium" | "high" | "perfect", // 可选，给四项 AVS 默认值: 50/100/150/255；显式 avs/friendship/bonds 优先
       "nature": "NatureID", // Official English
       "ability": "AbilityID", 
       "item": "ItemID",
@@ -65,6 +71,12 @@ PKM引擎协议是一个宝可梦对战的场景模拟器，用在实际发生�
     }
   ]
 }
+
+[模块：懒人兜底写法]
+- 只用于“这场战斗不重要，只需要能打起来”的杂鱼/路人/普通野怪。
+- 缺省 `lv` 或 `moves` 时，系统会兜底补齐；显式写出的 moves 不会被改。
+- 这种写法只保证基础可战斗，不保证演出效果、战术风格或王牌感。
+- 不建议常用；劲敌、馆主、Boss、王牌、剧情战、需要好看演出的战斗必须完整写出 lv/moves。
 
 [模块：Environment Overlay]
 // 可选模块，用于创建特殊战场环境，影响战斗机制

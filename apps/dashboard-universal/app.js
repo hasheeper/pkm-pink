@@ -749,7 +749,8 @@ const DefaultSettings = {
     enableClash: false,
     enableEnvironment: true,
     enableBattlePerformanceMode: false,
-    enableBattlePortraitMode: false
+    enableBattlePortraitMode: false,
+    enableEnemyStrategicSwitching: true
 };
 
 function getPkmBridgePayload(eventData) {
@@ -809,7 +810,8 @@ window.addEventListener('message', function(event) {
             party: Object.values(bridgePayload.player?.party || {}).map((pokemon) => pokemon?.name || null),
             boxCount: Object.keys(bridgePayload.player?.box || {}).length,
             settings: bridgePayload.settings || bridgePayload.player?.settings || {},
-            world: bridgePayload.world || {}
+            world: bridgePayload.world || {},
+            npcs: bridgePayload.npcs || {}
         });
         const now = Date.now();
         if (payloadKey === lastBridgePayloadKey && now - lastBridgePayloadAt < 1500) {
@@ -842,6 +844,8 @@ function handleRefreshDebounced(eventData) {
         if (typeof renderPartyList === 'function') renderPartyList();
         if (typeof renderSettings === 'function') renderSettings();
         if (typeof renderBoxPage === 'function') renderBoxPage();
+        if (typeof renderSocialList === 'function') renderSocialList();
+        if (typeof updateStatusLocation === 'function') updateStatusLocation();
         
         refreshDebounceTimer = null;
     }, 100);
@@ -875,8 +879,11 @@ function loadBridgeData() {
                 box: {}
             },
             world: {
-                location: { name: 'Unknown', area: '', description: '' },
+                location: { region: '', location: '' },
                 time: { period: 'morning' },
+            },
+            npcs: {
+                records: {}
             },
             settings: {}
         };
@@ -906,6 +913,7 @@ function initApp() {
     // 然后渲染 UI
     renderDashboard();
     renderPartyList();
+    renderSocialList();
     renderSettings();
     renderBoxPage();
 }
@@ -913,6 +921,23 @@ function initApp() {
 /* ============================================================
    PERSISTENT STATUS BAR (GLOBAL HUD)
    ============================================================ */
+function formatStatusLocation(world = db?.world) {
+    const loc = world?.location && typeof world.location === 'object' ? world.location : {};
+    const region = typeof loc.region === 'string' && loc.region.trim()
+        ? loc.region.trim()
+        : '';
+    const place = typeof loc.location === 'string' && loc.location.trim()
+        ? loc.location.trim()
+        : '';
+    const parts = [region, place].filter(Boolean);
+    return parts.length ? parts.join(' · ').toUpperCase() : 'UNKNOWN AREA';
+}
+
+function updateStatusLocation() {
+    const label = document.getElementById('world-location-label');
+    if (label) label.textContent = formatStatusLocation();
+}
+
 function initStickyStatusBar() {
     const frame = document.querySelector('.ver-dawn-frame');
     if (!frame) return;
@@ -949,6 +974,10 @@ function initStickyStatusBar() {
             </div>
         </div>
 
+        <div class="ps-center">
+            <span id="world-location-label" class="location-label"></span>
+        </div>
+
         <div class="ps-right">
             <span class="batt-val">94%</span>
             <div class="batt-shell">
@@ -958,6 +987,7 @@ function initStickyStatusBar() {
     `;
 
     frame.insertAdjacentElement('afterbegin', bar);
+    updateStatusLocation();
 }
 
 function renderPartyList() {
@@ -1021,6 +1051,239 @@ function ensureSettingsDefaults() {
 }
 
 /* ============================================================
+   RENDER SOCIAL LIST (Universal NPC relation grid)
+   ============================================================ */
+
+const RelationMeta = {
+    '-2': { label: 'HOSTILE', color: '#2d3436', light: '#b2bec3', icon: '!', desc: 'Open conflict' },
+    '-1': { label: 'WARY',    color: '#e17055', light: '#fab1a0', icon: '-', desc: 'Cautious or tense' },
+    '0':  { label: 'NEUTRAL', color: '#636e72', light: '#dfe6e9', icon: '0', desc: 'Neutral contact' },
+    '1':  { label: 'KNOWN',   color: '#0984e3', light: '#74b9ff', icon: '+', desc: 'Known contact' },
+    '2':  { label: 'TRUSTED', color: '#00b894', light: '#55efc4', icon: 'T', desc: 'Trusted ally' },
+    '3':  { label: 'ALLIED',  color: '#6c5ce7', light: '#c7c2ff', icon: 'A', desc: 'Close ally' },
+    '4':  { label: 'BONDED',  color: '#d4a017', light: '#ffeaa7', icon: 'B', desc: 'Strong bond' }
+};
+
+const NPCAvatarBaseUrl = 'https://raw.githack.com/hasheeper/pkm33/main/data/avatar/';
+const FallbackNpcAvatar = 'https://img.pokemondb.net/sprites/black-white/anim/normal/unown-q.gif';
+
+const NPCTriggerAliases = {
+    lusamine: ['Lusamine', 'ルザミーネ', '露莎米奈', '露莎米那', '露莎米恩', '卢莎米奈'],
+    erika: ['Erika', 'エリカ', '莉佳', '艾莉嘉'],
+    roxie: ['Roxie', 'Homika', 'ホミカ', '霍米加', '霍米卡'],
+    iono: ['Iono', 'Nanjamo', 'ナンジャモ', '奇树', '奇樹'],
+    marnie: ['Marnie', 'マリィ', '玛俐', '瑪俐', '真俐'],
+    cynthia: ['Cynthia', 'Shirona', 'シロナ', '竹兰', '竹蘭', '希罗娜', '希羅娜'],
+    bea: ['Saito', 'サイトウ', '彩豆'],
+    sonia: ['Sonia', 'ソニア', '索妮亚', '索妮亞'],
+    gloria: ['Gloria', 'Yuuri', 'ユウリ', '小优', '小優', '優莉'],
+    rosa: ['Rosa', 'メイ', '鸣依', '鳴依', '芽以'],
+    dawn: ['Hikari', 'ヒカリ', '小光'],
+    serena: ['Serena', 'セレナ', '莎莉娜', '瑟蕾娜', '瑟琳娜'],
+    irida: ['Irida', 'カイ', '珠贝', '珠貝'],
+    akari: ['Akari', 'ショウ', '小照'],
+    nessa: ['Nessa', 'Rurina', 'ルリナ', '露璃娜'],
+    mallow: ['Mallow', 'マオ', '玛奥', '瑪奧', '玛沃'],
+    lana: ['Suiren', 'スイレン', '水莲', '水蓮'],
+    lillie: ['Lillie', 'Lilie', 'リーリエ', '莉莉艾', '莉莉愛', '莉莉安'],
+    hex: ['Hex Maniac', 'Occult Maniac', 'オカルトマニア', '灵异迷', '靈異迷', '海可丝'],
+    selene: ['Selene', 'Mizuki', 'ミヅキ', '美月'],
+    juliana: ['Juliana', 'アオイ', '小青'],
+    may: ['Haruka', 'ハルカ', '小遥', '小遙'],
+    lacey: ['Lacey', 'Nerine', 'ネリネ', '紫竽', '紫玉', '紫芋'],
+    misty: ['Misty', 'Kasumi', 'カスミ', '小霞'],
+    acerola: ['Acerola', 'アセロラ', '阿塞萝拉', '阿塞蘿拉', '阿塞罗拉'],
+    skyla: ['Skyla', 'Fuuro', 'フウロ', '风露', '風露'],
+    iris: ['Iris', 'アイリス', '艾莉丝', '艾莉絲', '艾丽丝'],
+    nemona: ['Nemona', 'ネモ', '妮莫', '尼莫']
+};
+
+const SpriteAlias = {
+    hex: 'hexmaniac-gen6',
+    hexmaniac: 'hexmaniac-gen6',
+    juliana: 'juliana-s',
+    nemona: 'nemona-s'
+};
+
+const AvatarFixes = {
+    hex: 'hexmaniac',
+    mallows: 'mallow',
+    mallow: 'mallow'
+};
+
+const NPCAliasLookup = Object.entries(NPCTriggerAliases).reduce((lookup, [key, aliases]) => {
+    lookup[key] = key;
+    aliases.forEach((alias) => {
+        lookup[String(alias).toLowerCase().trim()] = key;
+    });
+    return lookup;
+}, {});
+
+function isPlainRecord(value) {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function clampRelationNumber(value, min, max, fallback = 0) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(min, Math.min(max, Math.round(n)));
+}
+
+function deriveRelationStage(love) {
+    const value = clampRelationNumber(love, 0, 255, 0);
+    if (value <= 31) return -2;
+    if (value <= 63) return -1;
+    if (value <= 127) return 0;
+    if (value <= 159) return 1;
+    if (value <= 191) return 2;
+    if (value <= 223) return 3;
+    return 4;
+}
+
+function normalizeNpcId(value, separator = '_') {
+    return String(value || '')
+        .toLowerCase()
+        .trim()
+        .replace(/[’']/g, '')
+        .replace(/&/g, ' and ')
+        .replace(/[^a-z0-9\u3040-\u30ff\u3400-\u9fff]+/g, separator)
+        .replace(new RegExp(`${separator}+`, 'g'), separator)
+        .replace(new RegExp(`^${separator}|${separator}$`, 'g'), '');
+}
+
+function resolveCanonicalNpcId(npcName) {
+    const raw = String(npcName || '').trim();
+    if (!raw) return '';
+    const lower = raw.toLowerCase();
+    if (NPCAliasLookup[lower]) return NPCAliasLookup[lower];
+    const normalized = normalizeNpcId(raw, '_');
+    if (NPCAliasLookup[normalized]) return NPCAliasLookup[normalized];
+    const head = normalized.split('_')[0];
+    return NPCAliasLookup[head] || normalized;
+}
+
+function getNpcPortraitSources(npcName) {
+    const canonical = resolveCanonicalNpcId(npcName);
+    if (!canonical) return [FallbackNpcAvatar];
+
+    const avatarBase = canonical.split('_')[0];
+    const avatarKey = AvatarFixes[canonical] || AvatarFixes[avatarBase] || avatarBase;
+    const trainerFull = normalizeNpcId(canonical, '-').replace(/[^a-z0-9-]/g, '');
+    const trainerBase = trainerFull.split('-')[0];
+    const trainerSlug = SpriteAlias[trainerFull] || SpriteAlias[trainerBase] || trainerFull;
+    const trainerBaseSlug = SpriteAlias[trainerBase] || trainerBase;
+
+    return [
+        trainerSlug ? `https://play.pokemonshowdown.com/sprites/trainers/${trainerSlug}.png` : '',
+        trainerBaseSlug && trainerBaseSlug !== trainerSlug ? `https://play.pokemonshowdown.com/sprites/trainers/${trainerBaseSlug}.png` : '',
+        `${NPCAvatarBaseUrl}${avatarKey}.png`,
+        FallbackNpcAvatar
+    ].filter(Boolean).filter((url, index, list) => list.indexOf(url) === index);
+}
+
+window.handleNpcPortraitError = function handleNpcPortraitError(img) {
+    if (!img) return;
+    let sources = [];
+    try {
+        sources = JSON.parse(img.dataset.sources || '[]');
+    } catch (_) {
+        sources = [];
+    }
+    const nextIndex = Number(img.dataset.sourceIndex || 0) + 1;
+    if (sources[nextIndex]) {
+        img.dataset.sourceIndex = String(nextIndex);
+        img.src = sources[nextIndex];
+        return;
+    }
+    img.style.opacity = '0.25';
+};
+
+function formatNpcDisplayName(key) {
+    const normalized = String(key || '').trim().replace(/[-_]+/g, ' ');
+    return normalized || 'Unknown';
+}
+
+function getNpcRecords() {
+    const records = db?.npcs?.records;
+    return isPlainRecord(records) ? records : {};
+}
+
+function renderSocialList() {
+    const socialPage = document.getElementById('pg-social');
+    if (!socialPage) return;
+
+    const npcs = getNpcRecords();
+    const npcKeys = Object.keys(npcs).filter((key) => isPlainRecord(npcs[key]));
+    npcKeys.sort((a, b) => {
+        const loveA = clampRelationNumber(npcs[a]?.love, 0, 255, 0);
+        const loveB = clampRelationNumber(npcs[b]?.love, 0, 255, 0);
+        const stageA = deriveRelationStage(loveA);
+        const stageB = deriveRelationStage(loveB);
+        if (stageB !== stageA) return stageB - stageA;
+        if (loveB !== loveA) return loveB - loveA;
+        return a.localeCompare(b);
+    });
+
+    const gridHtml = npcKeys.length
+        ? `<div id="social-grid-view">${npcKeys.map((key) => createNPCCard(key, npcs[key])).join('')}</div>`
+        : `<div id="social-grid-view" class="empty"><div class="empty-placeholder">NO CONTACTS</div></div>`;
+
+    socialPage.innerHTML = `
+        <div class="team-header-dash">
+             <div class="th-title">RELATION NETWORK</div>
+             <div class="th-status-grp">
+                 <div class="th-count">${npcKeys.length} <small>CONTACTS</small></div>
+             </div>
+        </div>
+        ${gridHtml}
+    `;
+}
+
+function createNPCCard(key, npcData) {
+    const loveVal = clampRelationNumber(npcData?.love, 0, 255, 0);
+    const stage = String(deriveRelationStage(loveVal));
+    const meta = RelationMeta[stage] || RelationMeta['0'];
+    const portraitSources = getNpcPortraitSources(key);
+    const portraitUrl = portraitSources[0];
+    const percent = Math.min(100, Math.max(0, (loveVal / 255) * 100));
+    const displayName = formatNpcDisplayName(key);
+
+    return `
+    <div class="npc-card" data-stage="${stage}" style="--r-color:${meta.color}" title="${escapeHtml(meta.desc)}">
+        <div class="npc-portrait">
+            <img src="${escapeHtml(portraitUrl)}" loading="lazy" alt="${escapeHtml(displayName)}"
+                 data-sources="${escapeHtml(JSON.stringify(portraitSources))}" data-source-index="0"
+                 onerror="window.handleNpcPortraitError && window.handleNpcPortraitError(this)">
+        </div>
+        <div class="npc-info-shade">
+            <div class="n-header">
+                <span class="n-name">${escapeHtml(displayName)}</span>
+                <span class="n-stage-icon">${escapeHtml(meta.icon)}</span>
+            </div>
+            <div class="n-bar-box">
+                <div class="n-bar-label">
+                    <span style="color:${meta.color}">${escapeHtml(meta.label)}</span>
+                    <span>${loveVal}<small style="opacity:0.5;font-weight:500;"> pts</small></span>
+                </div>
+                <div class="progress-track" style="background:${meta.light}">
+                    <div class="progress-fill" style="width:${percent}%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
+/* ============================================================
    RENDER SETTINGS (Config Page)
    ============================================================ */
 
@@ -1078,6 +1341,12 @@ const SettingsManifest = [
         label: 'PORTRAIT UI',
         desc: 'Use the vertical 720x1100 battle layout.',
         color: '#4fabff'
+    },
+    {
+        key: 'enableEnemyStrategicSwitching',
+        label: 'ENEMY PIVOT AI',
+        desc: 'Allow enemy AI to actively switch when threatened or disadvantaged.',
+        color: '#ff9f43'
     }
 ];
 
@@ -1409,6 +1678,8 @@ function switchPage(targetId, btn) {
         renderDashboard();
     } else if (targetId === 'party') {
         renderPartyList();
+    } else if (targetId === 'social') {
+        renderSocialList();
     } else if (targetId === 'settings') {
         renderSettings();
     }
@@ -1432,6 +1703,8 @@ window.openAppPage = function(pageId) {
             renderBoxPage();
         } else if (pageId === 'party') {
             renderPartyList();
+        } else if (pageId === 'social') {
+            renderSocialList();
         } else if (pageId === 'settings') {
             renderSettings();
         }
@@ -2185,6 +2458,14 @@ function renderDashboard() {
     });
     
     const activeStr = activePartyCount < 10 ? `0${activePartyCount}` : `${activePartyCount}`;
+    const npcCount = Object.keys(db?.npcs?.records || {}).length;
+    const location = world?.location && typeof world.location === 'object' ? world.location : {};
+    const mapRegion = typeof location.region === 'string' && location.region.trim()
+        ? location.region.trim().toUpperCase()
+        : 'UNKNOWN';
+    const mapPlace = typeof location.location === 'string' && location.location.trim()
+        ? location.location.trim().toUpperCase()
+        : 'UNKNOWN';
     const SVG_POKEBALL = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 125"><path d="M50,35c7.244,0,13.304,5.161,14.698,12h19.163C82.341,29.628,67.766,16,50,16S17.659,29.628,16.139,47h19.163    C36.696,40.161,42.756,35,50,35z"/><path d="M50,65c-7.244,0-13.304-5.161-14.698-12H16.139C17.659,70.371,32.234,84,50,84s32.341-13.629,33.861-31H64.698    C63.304,59.839,57.244,65,50,65z"/><circle cx="50" cy="50" r="9"/></svg>`;
 
     // 生成机制能量条 (完整7个)
@@ -2272,21 +2553,48 @@ function renderDashboard() {
                  </div>
             </div>
 
-            <!-- SETTINGS: 战术灰色 (Config Gray) -->
-            <div class="live-tile box-tactical theme-slate tile-settings" onclick="handleTileClick('settings')">
+            <!-- RELATION: 通用关系网 -->
+            <div class="live-tile box-tactical theme-purple tile-relation" onclick="handleTileClick('relation')">
                  <div class="t-decoration">
-                    <div class="t-watermark">${SystemIcons.settings}</div>
+                    <div class="t-watermark">${SystemIcons.unite}</div>
                     <div class="t-stripe"></div>
                     <div class="t-glow"></div>
                  </div>
                  <div class="t-content">
                     <div class="t-header">
-                        <div class="t-icon-sm">${SystemIcons.settings}</div>
+                        <div class="t-icon-sm">${SystemIcons.unite}</div>
                     </div>
                     <div class="t-main-data">
-                        <div class="t-num">SYS</div>
-                        <div class="t-label">CONFIG</div>
+                        <div class="t-num">${npcCount}</div>
+                        <div class="t-label">RELATION</div>
                     </div>
+                 </div>
+            </div>
+
+            <!-- MAP: 只显示当前位置摘要，不进入地图页 -->
+            <div class="live-tile box-tactical theme-blue small-h tile-map-static user-select-none" aria-disabled="true">
+                 <div class="t-decoration">
+                    <div class="t-watermark">${SystemIcons.map}</div>
+                    <div class="t-stripe"></div>
+                    <div class="t-glow"></div>
+                 </div>
+                 <div class="mini-header-icon">${SystemIcons.map}</div>
+                 <div class="mini-body map-summary-data">
+                    <span class="map-summary-line region">${mapRegion}</span>
+                    <span class="map-summary-line place">${mapPlace}</span>
+                 </div>
+            </div>
+
+            <!-- SETTINGS: 战术灰色 (Config Gray) -->
+            <div class="live-tile box-tactical theme-slate small-h tile-settings user-select-none" onclick="handleTileClick('settings')">
+                 <div class="t-decoration">
+                    <div class="t-watermark">${SystemIcons.settings}</div>
+                    <div class="t-stripe"></div>
+                    <div class="t-glow"></div>
+                 </div>
+                 <div class="mini-header-icon">${SystemIcons.settings}</div>
+                 <div class="mini-body">
+                    <span class="mini-title-big">SYS.CFG</span>
                  </div>
             </div>
 
@@ -2315,7 +2623,8 @@ window.handleTileClick = function(tileId) {
     const pageMap = {
         'box': 'box',
         'settings': 'settings',
-        'party': 'party'
+        'party': 'party',
+        'relation': 'social'
     };
     
     const targetPage = pageMap[tileId];

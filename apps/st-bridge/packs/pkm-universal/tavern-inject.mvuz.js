@@ -31,6 +31,8 @@
   const IFRAME_ID = 'pkm-mvuz-iframe';
   const OVERLAY_ID = 'pkm-mvuz-overlay';
   const BALL_ID = 'pkm-mvuz-ball';
+  const BALL_COLLAPSED_CLASS = 'pkm-mvuz-ball-collapsed';
+  const BALL_COLLAPSED_STORAGE_KEY = 'pkm.mvuz.ballCollapsed';
   const STYLE_ID = 'pkm-mvuz-style';
 
   let iframeInitialized = false;
@@ -101,7 +103,8 @@
       party,
       box,
       settings: clone(state?.settings, {}),
-      world: clone(state?.world, {})
+      world: clone(state?.world, {}),
+      npcs: clone(state?.npcs, { records: {} })
     };
   }
 
@@ -145,7 +148,9 @@
       player: dashboard?.player?.name,
       party: Object.values(dashboard?.player?.party || {}).map((pokemon) => pokemon?.name || null),
       boxCount: Object.keys(dashboard?.player?.box || {}).length,
-      settings: dashboard?.settings || dashboard?.player?.settings || {}
+      settings: dashboard?.settings || dashboard?.player?.settings || {},
+      world: dashboard?.world || {},
+      npcs: dashboard?.npcs || {}
     });
     const now = Date.now();
     if (payloadKey === pushDedupState.key && now - pushDedupState.at < 1500) {
@@ -167,7 +172,8 @@
       reason,
       pushedState,
       player: dashboard?.player?.name,
-      slot1: dashboard?.player?.party?.slot1?.name || null
+      slot1: dashboard?.player?.party?.slot1?.name || null,
+      npcCount: Object.keys(dashboard?.npcs?.records || {}).length
     });
     if (pushedState) {
       pushDedupState.key = payloadKey;
@@ -719,18 +725,109 @@
         }
 
         /* 悬浮球 SVG 核心动态配置 */
-        #${BALL_ID} svg {
+        #${BALL_ID} .pkm-mvuz-ball-icon {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 24px;
+          height: 24px;
+          transition: opacity 0.2s ease, transform 0.25s ease;
+          z-index: 1;
+        }
+
+        #${BALL_ID} .pkm-mvuz-ball-icon svg {
           width: 24px;
           height: 24px;
           color: #e0f2ff;
           filter: drop-shadow(0 0 4px rgba(0, 180, 255, 0.8));
           transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.3s ease, filter 0.3s ease;
-          z-index: 1;
         }
-        #${BALL_ID}:hover svg {
+        #${BALL_ID}:hover .pkm-mvuz-ball-icon svg {
           color: #ffffff;
           transform: rotate(90deg) scale(1.1);
           filter: drop-shadow(0 0 8px rgba(0, 212, 255, 1));
+        }
+
+        .pkm-mvuz-ball-fold-btn {
+          position: absolute;
+          right: -2px;
+          bottom: -2px;
+          appearance: none;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 22px;
+          height: 22px;
+          border: 1px solid rgba(255, 255, 255, 0.3);
+          border-radius: 50%;
+          background: rgba(18, 26, 34, 0.82);
+          color: rgba(255, 255, 255, 0.88);
+          cursor: pointer;
+          padding: 0;
+          z-index: 2;
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.28);
+          transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+        }
+        .pkm-mvuz-ball-fold-btn:hover {
+          background: rgba(28, 42, 54, 0.94);
+          border-color: rgba(255, 255, 255, 0.48);
+          transform: translateY(-1px);
+        }
+        .pkm-mvuz-ball-fold-btn svg {
+          width: 12px;
+          height: 12px;
+        }
+        .pkm-mvuz-ball-fold-open {
+          display: none;
+        }
+
+        #${BALL_ID}.${BALL_COLLAPSED_CLASS} {
+          right: 0;
+          width: 30px;
+          height: 62px;
+          border-radius: 18px 0 0 18px;
+          opacity: 0.76;
+          animation: none;
+          background: rgba(20, 32, 42, 0.76);
+          box-shadow:
+            0 6px 16px rgba(0, 0, 0, 0.32),
+            inset 0 0 10px rgba(255, 255, 255, 0.18);
+        }
+        #${BALL_ID}.${BALL_COLLAPSED_CLASS}::before {
+          display: none;
+        }
+        #${BALL_ID}.${BALL_COLLAPSED_CLASS}:hover {
+          transform: none;
+          opacity: 0.95;
+          background: rgba(25, 42, 54, 0.92);
+        }
+        #${BALL_ID}.${BALL_COLLAPSED_CLASS} .pkm-mvuz-ball-icon {
+          width: 20px;
+          height: 20px;
+          transform: translateY(-10px);
+          opacity: 0.88;
+        }
+        #${BALL_ID}.${BALL_COLLAPSED_CLASS} .pkm-mvuz-ball-icon svg {
+          width: 18px;
+          height: 18px;
+        }
+        #${BALL_ID}.${BALL_COLLAPSED_CLASS}:hover .pkm-mvuz-ball-icon svg {
+          transform: none;
+        }
+        #${BALL_ID}.${BALL_COLLAPSED_CLASS} .pkm-mvuz-ball-fold-btn {
+          right: 3px;
+          bottom: 5px;
+          width: 24px;
+          height: 24px;
+          border-color: transparent;
+          background: transparent;
+          box-shadow: none;
+        }
+        #${BALL_ID}.${BALL_COLLAPSED_CLASS} .pkm-mvuz-ball-fold-close {
+          display: none;
+        }
+        #${BALL_ID}.${BALL_COLLAPSED_CLASS} .pkm-mvuz-ball-fold-open {
+          display: block;
         }
 
         /* ---------------- 面板右上角关闭按钮 ---------------- */
@@ -770,14 +867,25 @@
       .attr('id', BALL_ID)
       .attr('title', 'PKM Dashboard')
       .html(`
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10" />
-          <path d="M2 12h7" />
-          <path d="M15 12h7" />
-          <circle cx="12" cy="12" r="3" />
-          <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
-        </svg>
+        <span class="pkm-mvuz-ball-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M2 12h7" />
+            <path d="M15 12h7" />
+            <circle cx="12" cy="12" r="3" />
+            <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+          </svg>
+        </span>
+        <button class="pkm-mvuz-ball-fold-btn" type="button" title="收起悬浮球" aria-label="收起悬浮球">
+          <svg class="pkm-mvuz-ball-fold-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m15 18-6-6 6-6" />
+          </svg>
+          <svg class="pkm-mvuz-ball-fold-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m9 18 6-6-6-6" />
+          </svg>
+        </button>
       `);
+    const ballFoldBtn = ball.find('.pkm-mvuz-ball-fold-btn');
 
     const overlay = $('<div>')
       .attr('id', OVERLAY_ID)
@@ -829,6 +937,23 @@
     overlay.append(wrapper);
     $('body').append(ball, overlay);
 
+    const setBallCollapsed = (collapsed) => {
+      ball.toggleClass(BALL_COLLAPSED_CLASS, collapsed);
+      ball.attr('title', collapsed ? 'PKM Dashboard（点击打开，箭头展开）' : 'PKM Dashboard');
+      ballFoldBtn
+        .attr('title', collapsed ? '展开悬浮球' : '收起悬浮球')
+        .attr('aria-label', collapsed ? '展开悬浮球' : '收起悬浮球');
+      try {
+        ROOT.localStorage?.setItem(BALL_COLLAPSED_STORAGE_KEY, collapsed ? '1' : '0');
+      } catch (_) {}
+    };
+
+    let initialBallCollapsed = true;
+    try {
+      initialBallCollapsed = ROOT.localStorage?.getItem(BALL_COLLAPSED_STORAGE_KEY) !== '0';
+    } catch (_) {}
+    setBallCollapsed(initialBallCollapsed);
+
     ball.on('click', () => {
       overlay.css('display', 'flex');
       if (!iframeInitialized) {
@@ -846,6 +971,11 @@
       } else {
         pushDashboardState('open');
       }
+    });
+    ballFoldBtn.on('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setBallCollapsed(!ball.hasClass(BALL_COLLAPSED_CLASS));
     });
 
     closeBtn.on('click', () => overlay.css('display', 'none'));

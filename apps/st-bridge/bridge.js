@@ -8,11 +8,11 @@
  *   bridge.js
  *   bridge.js?pack=<manifest-pack-id>
  *
- * Local testing:
+ * Production:
  *   window.ST_BRIDGE_PACK = 'pkm-universal';
- *   window.ST_BRIDGE_ENV = 'local';
- *   window.PKM_APP_BASE_URL = 'http://127.0.0.1:4173';
- *   import 'http://127.0.0.1:4173/apps/st-bridge/bridge.js?pack=pkm-universal&env=local&force=1&v=dev';
+ *   window.ST_BRIDGE_ENV = 'prod';
+ *   window.PKM_APP_BASE_URL = 'https://hasheeper.github.io/pkm-pink';
+ *   import 'https://hasheeper.github.io/pkm-pink/apps/st-bridge/bridge.js?pack=pkm-universal';
  */
 (async function () {
   'use strict';

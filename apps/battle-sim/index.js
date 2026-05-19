@@ -125,7 +125,7 @@ async function initGame() {
         json = getDefaultBattleData();
         console.log('[PKM] 使用默认数据 (data-loader.js)');
     }
-    
+
     // ============================================
     // 【全局系统开关】从 JSON settings 读取
     // ============================================
@@ -1963,7 +1963,8 @@ async function handleAttack(moveIndex, options = {}) {
     // 优先使用新的 AI 引擎
     if (typeof window.getAiAction === 'function') {
         enemyAction = window.getAiAction(e, p, battle.aiDifficulty || 'normal', battle.enemyParty, {
-            turnCount: battle.turnCount || 1
+            turnCount: battle.turnCount || 1,
+            settings: window.GAME_SETTINGS || {}
         });
     }
     

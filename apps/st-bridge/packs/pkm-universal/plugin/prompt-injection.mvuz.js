@@ -37,8 +37,67 @@
         .join('/');
     }
 
+    function formatLocationDisplay(world) {
+      const location = isObject(world?.location) ? world.location : {};
+      const region = typeof location.region === 'string' && location.region.trim() ? location.region.trim() : '';
+      const place = typeof location.location === 'string' && location.location.trim() ? location.location.trim() : '';
+      if (!region && !place) return 'Unknown';
+      return `${region || 'Unknown'} / ${place || 'Unknown'}`;
+    }
+
+    function clampNumber(value, min, max, fallback = 0) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return fallback;
+      return Math.max(min, Math.min(max, Math.round(n)));
+    }
+
+    function deriveNpcStage(love) {
+      const value = clampNumber(love, 0, 255, 0);
+      if (value <= 31) return -2;
+      if (value <= 63) return -1;
+      if (value <= 127) return 0;
+      if (value <= 159) return 1;
+      if (value <= 191) return 2;
+      if (value <= 223) return 3;
+      return 4;
+    }
+
+    function formatNpcRelations(state) {
+      const records = isObject(state?.npcs?.records) ? state.npcs.records : {};
+      const entries = Object.entries(records)
+        .filter(([key, record]) => key && isObject(record))
+        .map(([key, record]) => {
+          const love = clampNumber(record.love, 0, 255, 0);
+          return {
+            key: String(key).trim(),
+            love,
+            stage: deriveNpcStage(love)
+          };
+        })
+        .filter((entry) => entry.key)
+        .sort((a, b) => (b.stage - a.stage) || (b.love - a.love) || a.key.localeCompare(b.key))
+        .slice(0, 12);
+
+      if (!entries.length) return 'NPC Relations: none';
+
+      const lines = entries.map((entry) => {
+        return `- ${entry.key}: love ${entry.love}/255`;
+      });
+      return `NPC Relations:\n${lines.join('\n')}`;
+    }
+
+    function buildNpcRelationsPrompt(state) {
+      return `<pkm_npc_relations>
+${formatNpcRelations(state)}
+NPC relation changes use /pkm/npcs/records/{englishNameId}/love = 0-255. Use lowercase English portrait IDs, e.g. ash, misty, cynthia, giovanni, hex.
+</pkm_npc_relations>`;
+    }
+
     function buildPlayerPrompt(state) {
       const filledSlots = state.party.slots.filter((pokemon) => pokemon?.name);
+      const locationLine = `Location: ${formatLocationDisplay(state.world)}`;
+      const locationHint = 'If the current region or place changes, update /pkm/world/location/region and /pkm/world/location/location with replace.';
+      const npcRelationsBlock = buildNpcRelationsPrompt(state);
 
       const unlocks = state.player.unlocks || {};
       const unlockLabels = [];
@@ -56,11 +115,14 @@
       if (!filledSlots.length) {
         return `<pkm_team_summary>
 Player: ${state.player.name} | Proficiency: ${state.player.proficiency} | Unlocks: [${unlockLabels.join('/') || 'none'}] | Party: 0/6 | Box: ${boxCount}
+${locationLine}
 --------------------------------------------------
 The player currently has no Pokémon in their party.
 --------------------------------------------------
 Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is authoritative.
-</pkm_team_summary>`;
+${locationHint}
+</pkm_team_summary>
+${npcRelationsBlock}`;
       }
 
       const lines = state.party.slots.map((pokemon, index) => {
@@ -90,12 +152,15 @@ Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is 
         : '';
       return `<pkm_team_summary>
 Player: ${state.player.name} | Proficiency: ${state.player.proficiency} | Unlocks: [${unlockLabels.join('/') || 'none'}] | Party: ${filledSlots.length}/6 | Box: ${boxCount}
+${locationLine}
 --------------------------------------------------
 ${lines}
 --------------------------------------------------
 ${boxSection}
 Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is authoritative.
-</pkm_team_summary>`;
+${locationHint}
+</pkm_team_summary>
+${npcRelationsBlock}`;
     }
 
     async function handleGenerationBefore(detail) {

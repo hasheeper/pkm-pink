@@ -114,7 +114,12 @@ function normalizeStatsMeta(value, pokemon) {
 
 function normalizeWorld(value) {
   const src = isObject(value) ? clone(value, {}) : {};
+  const location = isObject(src.location) ? src.location : {};
   return {
+    location: {
+      region: normalizeString(location.region, ''),
+      location: normalizeString(location.location, '')
+    },
     time: {
       day: clampNumber(src.time?.day, 1, 99999, 1),
       period: normalizeString(src.time?.period, 'morning'),
@@ -122,6 +127,39 @@ function normalizeWorld(value) {
       period_set: src.time?.period_set || null
     }
   };
+}
+
+function deriveNpcStage(love) {
+  if (love <= 31) return -2;
+  if (love <= 63) return -1;
+  if (love <= 127) return 0;
+  if (love <= 159) return 1;
+  if (love <= 191) return 2;
+  if (love <= 223) return 3;
+  return 4;
+}
+
+function normalizeNpcRecord(value) {
+  if (!isObject(value)) return null;
+  const love = clampNumber(value.love, 0, 255, 0);
+  return {
+    love,
+    stage: deriveNpcStage(love)
+  };
+}
+
+function normalizeNpcs(value) {
+  const src = isObject(value) ? value : {};
+  const recordsSrc = isObject(src.records) ? src.records : {};
+  const records = {};
+  Object.entries(recordsSrc).forEach(([key, record]) => {
+    const normalizedKey = String(key || '').trim();
+    const normalizedRecord = normalizeNpcRecord(record);
+    if (normalizedKey && normalizedRecord) {
+      records[normalizedKey] = normalizedRecord;
+    }
+  });
+  return { records };
 }
 
 function normalizePokemon(raw, slot = null) {
@@ -225,6 +263,7 @@ export function normalizePkmState(value = {}) {
     },
     box: normalizeBox(source.box),
     world: normalizeWorld(source.world),
+    npcs: normalizeNpcs(source.npcs),
     settings: { ...DEFAULT_SETTINGS, ...(isObject(source.settings) ? source.settings : {}) }
   };
 

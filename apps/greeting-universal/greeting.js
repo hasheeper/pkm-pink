@@ -170,6 +170,13 @@ function normalizeGreetingSettings(settings) {
     };
 }
 
+function buildGreetingLocation(region) {
+    return {
+        region: (region || '').trim(),
+        location: ''
+    };
+}
+
 let bridgeRequestSeq = 0;
 const pendingBridgeRequests = new Map();
 
@@ -1115,7 +1122,10 @@ ${teamDescription}
         try {
             await launchGreetingWorld({
                 unlocks: finalMechanics,
-                settings: normalizeGreetingSettings(finalSettings)
+                settings: normalizeGreetingSettings(finalSettings),
+                world: {
+                    location: buildGreetingLocation(finalRegion)
+                }
             }, msg);
         } catch (error) {
             await showGreetingFailure(`开局准备失败：${error.message}`);

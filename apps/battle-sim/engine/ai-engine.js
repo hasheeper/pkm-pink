@@ -367,6 +367,8 @@ export function getExpertAiAction(aiPoke, playerPoke, aiParty = [], battleContex
     if (!aiPoke.moves || aiPoke.moves.length === 0) return null;
     
     const turnCount = battleContext.turnCount || 1;
+    const aiSettings = battleContext.settings || (typeof window !== 'undefined' ? window.GAME_SETTINGS : null) || {};
+    const enemyStrategicSwitchingEnabled = aiSettings.enableEnemyStrategicSwitching !== false;
     
     // ========================================
     // 阶段 0：特殊首回合技能检查
@@ -443,7 +445,7 @@ export function getExpertAiAction(aiPoke, playerPoke, aiParty = [], battleContex
     // v2.0：即使不危险，如果状态很差也考虑换人
     const shouldConsiderSwitch = threatAssessment.amIInDanger || needsStrategicSwitch;
     
-    if (canSwitch && shouldConsiderSwitch && 
+    if (canSwitch && enemyStrategicSwitchingEnabled && shouldConsiderSwitch &&
         !threatAssessment.haveAdvantage &&  // 关键修复：有优势时不换人
         aiParty && aiParty.length > 1) {
         const pivotDecision = findBestPivot(aiPoke, playerPoke, aiParty, threatAssessment);
@@ -451,6 +453,8 @@ export function getExpertAiAction(aiPoke, playerPoke, aiParty = [], battleContex
             lastSwitchTurn = turnCount; // 记录换人回合
             return pivotDecision;
         }
+    } else if (!enemyStrategicSwitchingEnabled && shouldConsiderSwitch) {
+        console.log('[AI] Enemy strategic switching disabled by settings; continue move selection');
     }
     
     // ========================================

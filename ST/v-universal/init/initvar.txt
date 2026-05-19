@@ -206,11 +206,16 @@ pkm:
         name: Box 1
         slots: []
   world:
+    location:
+      region: ""
+      location: ""
     time:
       day: 1
       period: morning
       day_advance: null
       period_set: null
+  npcs:
+    records: {}
   settings:
     enableAVS: true
     enableCommander: true
@@ -221,3 +226,4 @@ pkm:
     enableEnvironment: true
     enableBattlePerformanceMode: false
     enableBattlePortraitMode: false
+    enableEnemyStrategicSwitching: true

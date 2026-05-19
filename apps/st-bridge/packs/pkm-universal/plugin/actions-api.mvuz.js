@@ -18,6 +18,7 @@
       clampNumber,
       escapeJsonPointerPart,
       isObject,
+      normalizeString,
       normalizeMoves,
       normalizePartySlots,
       normalizePokemon,
@@ -44,30 +45,47 @@
       return keys.length ? keys.map(escapeJsonPointerPart).join('.') : fallback;
     }
 
+    function getGreetingLocationPayload(payload) {
+      const world = isObject(payload?.world) ? payload.world : {};
+      return isObject(world.location) ? world.location : null;
+    }
+
     async function dispatchAction(action, payload = {}, options = {}) {
       switch (action) {
         case 'greeting.configure':
-          return patchState((state) => {
-            if (isObject(payload.unlocks)) {
-              Object.keys(DEFAULT_UNLOCKS).forEach((key) => {
-                if (key in payload.unlocks) state.player.unlocks[key] = Boolean(payload.unlocks[key]);
-              });
-            }
-            if (isObject(payload.settings)) {
-              Object.keys(DEFAULT_SETTINGS).forEach((key) => {
-                if (key in payload.settings) state.settings[key] = Boolean(payload.settings[key]);
-              });
-            }
-            return state;
-          }, actionWriteOptions(action, options, [
-            ...(isObject(payload.unlocks) ? ['/pkm/player/unlocks'] : []),
-            ...(isObject(payload.settings)
-              ? Object.keys(payload.settings).map((key) => `/pkm/settings/${escapeJsonPointerPart(key)}`)
-              : [])
-          ], [
-            isObject(payload.unlocks) ? `unlocks.${actionObjectKeySuffix(payload.unlocks)}` : '',
-            isObject(payload.settings) ? `settings.${actionObjectKeySuffix(payload.settings)}` : ''
-          ].filter(Boolean).join(':') || 'state'));
+          {
+            const locationPayload = getGreetingLocationPayload(payload);
+            return patchState((state) => {
+              if (isObject(payload.unlocks)) {
+                Object.keys(DEFAULT_UNLOCKS).forEach((key) => {
+                  if (key in payload.unlocks) state.player.unlocks[key] = Boolean(payload.unlocks[key]);
+                });
+              }
+              if (isObject(payload.settings)) {
+                Object.keys(DEFAULT_SETTINGS).forEach((key) => {
+                  if (key in payload.settings) state.settings[key] = Boolean(payload.settings[key]);
+                });
+              }
+              if (locationPayload) {
+                state.world = isObject(state.world) ? state.world : {};
+                state.world.location = {
+                  region: normalizeString(locationPayload.region, ''),
+                  location: normalizeString(locationPayload.location, '')
+                };
+              }
+              return state;
+            }, actionWriteOptions(action, options, [
+              ...(isObject(payload.unlocks) ? ['/pkm/player/unlocks'] : []),
+              ...(isObject(payload.settings)
+                ? Object.keys(payload.settings).map((key) => `/pkm/settings/${escapeJsonPointerPart(key)}`)
+                : []),
+              ...(locationPayload ? ['/pkm/world/location/region', '/pkm/world/location/location'] : [])
+            ], [
+              isObject(payload.unlocks) ? `unlocks.${actionObjectKeySuffix(payload.unlocks)}` : '',
+              isObject(payload.settings) ? `settings.${actionObjectKeySuffix(payload.settings)}` : '',
+              locationPayload ? `location.${actionObjectKeySuffix(locationPayload)}` : ''
+            ].filter(Boolean).join(':') || 'state'));
+          }
         case 'party.setLead':
           return patchState((state) => {
             const slot = clampNumber(payload.slot ?? payload.targetSlot, 1, MAX_PARTY_SIZE, 1);

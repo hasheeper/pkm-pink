@@ -1,11 +1,5 @@
 <variable_rule>
-PKM PINK Universal MVUZ 变量规则
-仅输出本轮真实变化；禁止整段覆写
-
-变量存储位置
-- message variables -> stat_data.pkm
-- 只使用 `<UpdateVariable>` + JSONPatch。
-- 所有路径必须以 `/pkm/` 开头。
+本规则为Pokemon叙事引擎的变量计入系统，每当有核心游戏变量发生变化，更改相应变量，仅输出本轮真实变化；禁止整段覆写。
 
 允许更新的路径
 - `/pkm/player/name`
@@ -25,22 +19,19 @@ PKM PINK Universal MVUZ 变量规则
 - `/pkm/party/slots/<0-5>/bonds`
 - `/pkm/party/transferBuffer`
 - `/pkm/box/boxes/0/slots/-`
+- `/pkm/world/location/region`
+- `/pkm/world/location/location`
 - `/pkm/world/time/day_advance`
 - `/pkm/world/time/period_set`
-- `/pkm/settings/enableAVS`
-- `/pkm/settings/enableCommander`
-- `/pkm/settings/enableEVO`
-- `/pkm/settings/enableBGM`
-- `/pkm/settings/enableSFX`
-- `/pkm/settings/enableClash`
-- `/pkm/settings/enableEnvironment`
+- `/pkm/npcs/records/<npcKey>`
+- `/pkm/npcs/records/<npcKey>/love`
 
 操作约定
-- `replace`: 写入最终值；用于名字、等级、道具、机制、设置、地点摘要、时间指令、首发状态。
+- `replace`: 写入最终值；用于名字、等级、道具、机制、设置、地点摘要、时间指令、首发状态、NPC 好感度。
 - `delta`: 仅用于数字增减；优先用于 `/pkm/player/proficiency`、`/pkm/party/slots/*/stats_meta/ev_level`、`/pkm/party/slots/*/bonds`。
-- `add`: 仅用于数组尾部追加；适用 `/pkm/box/boxes/0/slots/-`。队伍空槽新增通常用 `replace` 写整个槽位对象。
-- 不新增未声明路径，不整段替换 `/pkm`、`/pkm/player`、`/pkm/party`、`/pkm/world`。
-- 无变量变化则不输出 `<UpdateVariable>`。
+- `add`: 用于数组尾部追加 `/pkm/box/boxes/0/slots/-`，或创建新的 `/pkm/npcs/records/<npcKey>`。队伍空槽新增通常用 `replace` 写整个槽位对象。
+- 不新增未声明路径，不整段替换 `/pkm`、`/pkm/player`、`/pkm/party`、`/pkm/world`、`/pkm/npcs`。
+- 无变量变化则不输出 `<UpdateVariable>`
 
 队伍槽位约定
 - `party.slots` 是长度 6 的数组。
@@ -49,15 +40,15 @@ PKM PINK Universal MVUZ 变量规则
 - 若队伍已满，或剧情明确“传送到盒子/发送给博士/进入电脑”，写入 `/pkm/party/transferBuffer`；后台会把它转入盒子并清空。
 - 不能把已有槽位直接替换为 `null`。离队/放生需要明确剧情，并优先移动到 box。
 - 同一时间只能有一个 `isLead: true`；切换首发时，把目标槽位设为 true，其他有宝可梦槽位设为 false。
-- 玩家队伍宝可梦会由 schema 自动设为 `isAce: true`。
+- 玩家队伍宝可梦会由 schema 自动设为 `isAce: true`
 
 宝可梦对象字段
 - 必填:
-  - `name`: 官方英文种族名，例如 `"Pikachu"`。
+  - `name`: 官方英文种族名，例如 `"Pikachu"`
   - `lv`: 等级，整数 1~100。
-  - `gender`: `"M"` | `"F"` | `"N"`。
-  - `quality`: `"low"` | `"medium"` | `"high"` | `"perfect"`。
-  - `moves`: 长度 4 数组，例如 `["Thunderbolt", "Iron Tail", "Quick Attack", "Protect"]`。
+  - `gender`: `"M"` | `"F"` | `"N"`
+  - `quality`: `"low"` | `"medium"` | `"high"` | `"perfect"`
+  - `moves`: 长度 4 数组，例如 `["Thunderbolt", "Iron Tail", "Quick Attack", "Protect"]`
 - 常用选填:
   - `nickname`
   - `shiny`
@@ -67,40 +58,45 @@ PKM PINK Universal MVUZ 变量规则
   - `notes`
 - 机制字段:
   - `mechanic`: `"mega"` | `"dynamax"` | `"zmove"` | `"tera"` | `null`
-  - Mega/Z 必须同时写对应 `item`，例如 `"Lucarionite"`、`"Firium Z"`。
-  - Tera 必须同时写 `teraType`，例如 `"Steel"`。
+  - Mega/Z 必须同时写对应 `item`，例如 `"Lucarionite"`、`"Firium Z"`
+  - Tera 必须同时写 `teraType`，例如 `"Steel"`
 
 成长与变动
-- 等级变化: `replace` `/pkm/party/slots/<i>/lv` 为新等级。
-- 努力值成长: 对 `/pkm/party/slots/<i>/stats_meta/ev_level` 使用 `delta`。
-- 羁绊成长: 对 `/pkm/party/slots/<i>/bonds` 使用 `delta`。
-- 进化: `replace` `/pkm/party/slots/<i>/name`，必要时同步 `species`、`ability`、`moves`。
-- 获得 Mega 石/Z 晶/太晶能力: 写 `item`、`mechanic`、必要时写 `teraType`。
+- 等级变化: `replace` `/pkm/party/slots/<i>/lv` 为新等级
+- 努力值成长: 对 `/pkm/party/slots/<i>/stats_meta/ev_level` 使用 `delta`
+- 羁绊成长: 对 `/pkm/party/slots/<i>/bonds` 使用 `delta`
+- 进化: `replace` `/pkm/party/slots/<i>/name`，必要时同步 `species`、`ability`、`moves`
+- 获得 Mega 石/Z 晶/太晶能力: 写 `item`、`mechanic`、必要时写 `teraType`
 
 世界状态
+- 地点:
+  - `/pkm/world/location/region`: 地区名，自由文本，例如 `"Kanto"`、`"Paldea"`、`"Lumiose Region"`。
+  - `/pkm/world/location/location`: 当前地点名，自由文本，例如 `"Pallet Town"`、`"Viridian Forest"`、`"Pokemon Center"`。
 - 时间:
   - `/pkm/world/time/day_advance`: `"next_period"`、`"nextday"`、`"skip_to_night"`、`"3days_morning"` 等。
   - `/pkm/world/time/period_set`: `dawn / morning / noon / afternoon / evening / night / midnight`。
 
+NPC 好感度
+- `pkm.npcs.records` 是动态 NPC 关系表，key 必须使用稳定英文名字 ID，优先小写 ASCII；例如 `ash`、`giovanni`、`misty`、`cynthia`、`hex`。不要用中文/日文名，不要包含 `/`
+- 新 NPC 首次进入关系网时，`add` `/pkm/npcs/records/<npcKey>`，值只包含 `{ "love": 0-255 }`；无明确关系不创建记录，中立初识可写 96 左右
+- 已存在 NPC 的关系变化时，只用 `replace` 写最终值：
+  - `/pkm/npcs/records/<npcKey>/love`: 0~255，低值表示冲突/疏远，高值表示亲近/信赖
+
 训练家熟练度
-- 写 `/pkm/player/proficiency`，使用 `delta`。
+- 写 `/pkm/player/proficiency`，使用 `delta`
 - schema 会把 `proficiency` 夹在 0~255。
 - 不要写旧 ERA/Mini 熟练度字段。
 
-战斗标签
-- 触发战斗使用 `<PKM_BATTLE>{...}</PKM_BATTLE>`。
-- 不要手写 `<PKM_FRONTEND>`；插件会根据当前 `stat_data.pkm` 自动补。
-
 输出要求
-- 末尾输出 `<UpdateVariable>`。
-- 使用 JSONPatch 数组。
+- 末尾输出 `<UpdateVariable>`
+- 使用 JSONPatch 数组
 - `<Analysis>` 用一句英文概括本轮变量变化。
 - 没有变量变化则不输出。
 
 参考格式:
 ```xml
 <UpdateVariable>
-<Analysis>Lucario leveled up, gained EV and bond progress; the party moved east and time advanced to night.</Analysis>
+<Analysis>………………</Analysis>
 <JSONPatch>
 [
   { "op": "delta", "path": "/pkm/player/proficiency", "value": 10 },
@@ -120,7 +116,7 @@ PKM PINK Universal MVUZ 变量规则
 新增入队示例:
 ```xml
 <UpdateVariable>
-<Analysis>Pikachu joined the party in the first empty slot.</Analysis>
+<Analysis>……………….</Analysis>
 <JSONPatch>
 [
   {

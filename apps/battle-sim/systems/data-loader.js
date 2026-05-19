@@ -28,7 +28,7 @@
  */
 function getDefaultBattleData() {
     return {
-        "difficulty": "normal",
+        "difficulty": "expert",
         "settings": {
             "enableAVS": false,
             "enableCommander": false,
@@ -38,7 +38,8 @@ function getDefaultBattleData() {
             "enableClash": false,
             "enableEnvironment": false,
             "enableBattlePerformanceMode": false,
-            "enableBattlePortraitMode": true
+            "enableBattlePortraitMode": true,
+            "enableEnemyStrategicSwitching": false
         },
         "player": {
             "name": "Revival Blessing Tester",
@@ -100,7 +101,7 @@ function getDefaultBattleData() {
             ]
         },
         "enemy": {
-            "name": "Revival Blessing Dummy",
+            "name": "Pivot Switch Dummy",
             "type": "DEBUG",
             "trainerProficiency": 0,
             "unlocks": {
@@ -115,23 +116,35 @@ function getDefaultBattleData() {
             },
             "party": [
                 {
-                    "name": "Garchomp",
+                    "name": "Tyranitar",
                     "lv": 70,
                     "isLead": true,
-                    "ability": "Rough Skin",
-                    "nature": "Jolly",
-                    "item": "Soft Sand",
-                    "moves": ["Earthquake", "Dragon Claw", "Stone Edge", "Swords Dance"],
+                    "ability": "Sand Stream",
+                    "nature": "Adamant",
+                    "item": "Smooth Rock",
+                    "moves": ["Crunch", "Rock Slide", "Stone Edge", "Stealth Rock"],
                     "stats_meta": {
                         "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 0, "spd": 31, "spe": 31 },
-                        "ev_level": { "hp": 0, "atk": 252, "def": 0, "spa": 0, "spd": 4, "spe": 252 }
+                        "ev_level": { "hp": 252, "atk": 252, "def": 0, "spa": 0, "spd": 4, "spe": 0 }
+                    }
+                },
+                {
+                    "name": "Gengar",
+                    "lv": 70,
+                    "ability": "Cursed Body",
+                    "nature": "Timid",
+                    "item": "Focus Sash",
+                    "moves": ["Shadow Ball", "Sludge Bomb", "Thunderbolt", "Protect"],
+                    "stats_meta": {
+                        "ivs": { "hp": 31, "atk": 0, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+                        "ev_level": { "hp": 0, "atk": 0, "def": 0, "spa": 252, "spd": 4, "spe": 252 }
                     }
                 }
             ],
             "lines": {
-                "start": "这是复生祈祷测试场。默认后排有一只预设为倒下的目标，用来验证复活选择与太晶回退。",
-                "lose": "复生祈祷的测试通过了。",
-                "win": "继续看日志，确认选择菜单、复活 HP 和太晶回退都正常。"
+                "start": "这是敌方主动换人开关测试场。关闭 ENEMY PIVOT AI 时，即使后排有免疫格斗的耿鬼，也不应主动换下班基拉斯。",
+                "lose": "敌方主动换人开关测试通过了。",
+                "win": "如果关闭 ENEMY PIVOT AI 后仍主动换人，请检查日志。"
             }
         }
     };
@@ -152,7 +165,8 @@ const DEFAULT_BATTLE_SETTINGS = {
     enableClash: false,
     enableEnvironment: true,
     enableBattlePerformanceMode: false,
-    enableBattlePortraitMode: false
+    enableBattlePortraitMode: false,
+    enableEnemyStrategicSwitching: true
 };
 
 function parseBattleSettings(settings = {}) {
@@ -174,7 +188,8 @@ function parseBattleSettings(settings = {}) {
         enableClash: source.enableClash === true,
         enableEnvironment: source.enableEnvironment !== false,
         enableBattlePerformanceMode: performanceEnabled,
-        enableBattlePortraitMode: portraitEnabled
+        enableBattlePortraitMode: portraitEnabled,
+        enableEnemyStrategicSwitching: source.enableEnemyStrategicSwitching !== false
     };
 }
 

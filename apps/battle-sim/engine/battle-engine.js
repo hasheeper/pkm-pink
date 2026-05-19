@@ -395,6 +395,23 @@ export function calcStats(baseStats, level, options = {}) {
     };
 }
 
+function avsFromQuality(value) {
+    const quality = typeof value === 'string' ? value.trim().toLowerCase() : '';
+    const amount = {
+        low: 50,
+        medium: 100,
+        high: 150,
+        perfect: 255
+    }[quality];
+    if (amount === undefined) return null;
+    return {
+        trust: amount,
+        passion: amount,
+        insight: amount,
+        devotion: amount
+    };
+}
+
 /**
  * Pokemon 战斗实例
  * 从 Pokemon Showdown POKEDEX 查表创建，自动计算能力值
@@ -568,11 +585,14 @@ export class Pokemon {
         // =====================================================
         // 受神馔粉雾 (Ambrosia) 影响，宝可梦与训练家的灵魂链接产生的加点
         // 每个维度 0~255，类似传统 EVs 但影响战斗机制而非数值
-        // 支持两种格式：
+        // 支持三种格式：
         // 1. 扁平格式: { avs: { trust, passion, insight, devotion } }
         // 2. 嵌套格式: { friendship: { avs: { trust, passion, insight, devotion } } }
-        let avsConfig = config.avs || {};
-        if (config.friendship) {
+        // 3. 简写格式: { avsQuality: "low" | "medium" | "high" | "perfect" }
+        let avsConfig = null;
+        if (config.avs && typeof config.avs === 'object') {
+            avsConfig = config.avs;
+        } else if (config.friendship) {
             // 嵌套格式: friendship.avs
             if (config.friendship.avs) {
                 avsConfig = config.friendship.avs;
@@ -580,7 +600,15 @@ export class Pokemon {
                 // 旧扁平格式: friendship 直接包含 trust/passion 等
                 avsConfig = config.friendship;
             }
+        } else if (Object.prototype.hasOwnProperty.call(config, 'bonds') && typeof config.bonds === 'number') {
+            avsConfig = {
+                trust: config.bonds,
+                passion: config.bonds,
+                insight: config.bonds,
+                devotion: config.bonds
+            };
         }
+        avsConfig = avsConfig || avsFromQuality(config.avsQuality) || {};
         // 【解锁系统】enable_insight 控制 AVs 上限
         // 未解锁：上限 155
         // 已解锁：上限 255

@@ -556,7 +556,8 @@ export async function enemyTurn() {
     
     if (typeof window.getAiAction === 'function') {
         enemyAction = window.getAiAction(e, p, battle.aiDifficulty || 'normal', battle.enemyParty, {
-            turnCount: battle.turnCount || 1
+            turnCount: battle.turnCount || 1,
+            settings: window.GAME_SETTINGS || {}
         });
     }
     
