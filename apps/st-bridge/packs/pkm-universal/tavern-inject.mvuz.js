@@ -12,7 +12,7 @@
 
   ROOT.PKMCommonRuntime.startDashboardHost({
     product: 'universal',
-    version: '0.1.0-mvuz-universal',
+    version: '0.1.1-mvuz-universal',
     pluginName: '[PKM Universal Dashboard MVUZ]',
     dashboardPath: 'apps/dashboard-universal/index.html',
     dashboardUrlGlobal: 'PKM_UNIVERSAL_DASHBOARD_URL',

@@ -47,6 +47,38 @@ const DefaultSettings = {
     enableBattlePortraitMode: false,
     enableEnemyStrategicSwitching: true
 };
+let dashboardDomReady = false;
+let dashboardInitialized = false;
+
+function isHostedBridgeMode() {
+    if (window.PKM_DASHBOARD_STANDALONE === true) return false;
+    try {
+        const params = new URLSearchParams(window.location.search || '');
+        if (params.get('bridge') === '1') return true;
+    } catch (e) {}
+    try {
+        if (window.parent && window.parent !== window) return true;
+    } catch (e) {}
+    try {
+        if (window.opener) return true;
+    } catch (e) {}
+    return false;
+}
+
+function bootstrapDashboard(reason = 'bridge') {
+    if (dashboardInitialized || !db) return false;
+    ensureSettingsDefaults();
+    if (typeof syncDashboardPerformanceMode === 'function') syncDashboardPerformanceMode(db);
+    initStickyStatusBar();
+    renderDashboard();
+    renderPartyList();
+    renderSocialList();
+    renderSettings();
+    renderBoxPage();
+    dashboardInitialized = true;
+    console.log('[PKM] ✓ Dashboard initialized', reason, db.player?.name || null);
+    return true;
+}
 
 function getPkmBridgePayload(eventData) {
     if (!eventData || !eventData.type) return null;
@@ -62,6 +94,9 @@ function applyPkmBridgeData(payload, reason = 'message') {
     window.pkmBridgeData = payload;
     if (typeof syncDashboardPerformanceMode === 'function') syncDashboardPerformanceMode(db);
     console.log('[PKM] ✓ 桥接数据已更新', reason, db.player?.name);
+    if (dashboardDomReady && !dashboardInitialized) {
+        bootstrapDashboard(`bridge:${reason}`);
+    }
     return true;
 }
 
@@ -132,6 +167,15 @@ function handleRefreshDebounced(eventData) {
     // 延迟 100ms 执行，合并快速连续的刷新请求
     refreshDebounceTimer = setTimeout(() => {
         console.log('[PKM] 执行防抖刷新...');
+        if (!db) {
+            refreshDebounceTimer = null;
+            return;
+        }
+        if (!dashboardInitialized) {
+            bootstrapDashboard(`refresh:${eventData?.type || 'stateChanged'}`);
+            refreshDebounceTimer = null;
+            return;
+        }
         
         if (typeof ensureSettingsDefaults === 'function') ensureSettingsDefaults();
         if (typeof syncDashboardPerformanceMode === 'function') syncDashboardPerformanceMode(db);
@@ -151,47 +195,51 @@ function handleRefreshDebounced(eventData) {
 // 加载 MVU 桥接数据到 db（从父窗口推送的 window.pkmBridgeData 获取）
 function loadBridgeData() {
     console.log('[PKM] 正在加载 MVU 桥接数据...');
-    
+    const hosted = isHostedBridgeMode();
     const bridgeData = window.pkmBridgeData;
     if (bridgeData && bridgeData.player) {
-        db = bridgeData;
+        applyPkmBridgeData(bridgeData, 'initial');
         console.log('[PKM] ✓ MVU 桥接数据加载成功', db.player?.name);
         return true;
-    } else {
-        console.warn('[PKM] 桥接数据暂未到达，使用空白占位并请求状态推送');
+    }
+    if (hosted) {
+        console.warn('[PKM] Hosted dashboard waiting for PKM_STATE_PUSH');
         notifyPkmBridgeReady();
-        db = {
-            player: {
-                name: 'Trainer',
-                bonds: {},
-                unlocks: {},
-                party: {
-                    slot1: { slot: 1, name: null },
-                    slot2: { slot: 2, name: null },
-                    slot3: { slot: 3, name: null },
-                    slot4: { slot: 4, name: null },
-                    slot5: { slot: 5, name: null },
-                    slot6: { slot: 6, name: null }
-                },
-                box: {}
-            },
-            world: {
-                location: { region: '', location: '' },
-                time: { period: 'morning' },
-            },
-            npcs: {
-                records: {}
-            },
-            settings: {}
-        };
         return false;
     }
+    console.warn('[PKM] 桥接数据暂未到达，使用本地占位数据');
+    db = {
+        player: {
+            name: 'Trainer',
+            bonds: {},
+            unlocks: {},
+            party: {
+                slot1: { slot: 1, name: null },
+                slot2: { slot: 2, name: null },
+                slot3: { slot: 3, name: null },
+                slot4: { slot: 4, name: null },
+                slot5: { slot: 5, name: null },
+                slot6: { slot: 6, name: null }
+            },
+            box: {}
+        },
+        world: {
+            location: { region: '', location: '' },
+            time: { period: 'morning' }
+        },
+        npcs: {
+            records: {}
+        },
+        settings: {}
+    };
+    return true;
 }
 
 /* ============================================================
    RENDER CONTROLLER
    ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
+    dashboardDomReady = true;
     initApp();
     notifyPkmBridgeReady();
     setTimeout(notifyPkmBridgeReady, 250);
@@ -200,20 +248,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initApp() {
-    // 先加载 MVU bridge 数据
-    loadBridgeData();
-    ensureSettingsDefaults();
-    if (typeof syncDashboardPerformanceMode === 'function') syncDashboardPerformanceMode(db);
-
-    // 初始化悬浮状态栏
-    initStickyStatusBar();
-
-    // 然后渲染 UI
-    renderDashboard();
-    renderPartyList();
-    renderSocialList();
-    renderSettings();
-    renderBoxPage();
+    if (loadBridgeData()) {
+        bootstrapDashboard('DOMContentLoaded');
+    }
 }
 
 /* ============================================================

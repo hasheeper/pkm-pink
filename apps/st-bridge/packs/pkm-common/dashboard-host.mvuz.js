@@ -64,13 +64,36 @@
       return typeof value === 'string' ? value.trim().replace(/\/+$/, '') : '';
     }
 
+    function appendQueryParams(url, params = {}) {
+      const entries = Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '');
+      if (!entries.length || typeof url !== 'string' || !url.trim()) return url;
+      try {
+        const absolute = /^https?:\/\//i.test(url);
+        const parsed = absolute ? new URL(url) : new URL(url, 'https://pkm.local');
+        entries.forEach(([key, value]) => parsed.searchParams.set(key, String(value)));
+        return absolute
+          ? parsed.toString()
+          : `${parsed.pathname}${parsed.search}${parsed.hash}`;
+      } catch (_) {
+        const separator = url.includes('?') ? '&' : '?';
+        return `${url}${separator}${entries
+          .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+          .join('&')}`;
+      }
+    }
+
     function resolveDashboardUrl() {
       const globalName = String(config.dashboardUrlGlobal || '').trim();
-      if (globalName && typeof ROOT[globalName] === 'string' && ROOT[globalName].trim()) {
-        return ROOT[globalName].trim();
-      }
-      const appBase = trimTrailingSlash(ROOT.PKM_APP_BASE_URL || DEFAULT_APP_BASE_URL);
-      return appBase ? `${appBase}/${dashboardPath}` : DEFAULT_DASHBOARD_URL;
+      const rawUrl = globalName && typeof ROOT[globalName] === 'string' && ROOT[globalName].trim()
+        ? ROOT[globalName].trim()
+        : (() => {
+            const appBase = trimTrailingSlash(ROOT.PKM_APP_BASE_URL || DEFAULT_APP_BASE_URL);
+            return appBase ? `${appBase}/${dashboardPath}` : DEFAULT_DASHBOARD_URL;
+          })();
+      return appendQueryParams(rawUrl, {
+        bridge: '1',
+        v: VERSION
+      });
     }
 
     const PKM_URL = resolveDashboardUrl();
