@@ -1,14 +1,15 @@
+(function(root) {
 /**
  * Pokemon Showdown Pokedex Data
  * 自动生成，请勿手动编辑
  * 来源: https://github.com/smogon/pokemon-showdown/blob/master/data/pokedex.ts
  * 
  * 使用方法:
- *   ES Module: import { POKEDEX } from './pokedex-data.js';
- *   Script:    <script src="pokedex-data.js"></script>
+ *   Script: <script src="../shared/pokedex-data.js"></script>
+ *   Module side effect: import '../shared/pokedex-data.js';
  */
 
-export const POKEDEX = {
+var POKEDEX = {
 	bulbasaur: {
 		num: 1,
 		name: "Bulbasaur",
@@ -4744,6 +4745,7 @@ export const POKEDEX = {
 		heightm: 0.6,
 		weightkg: 32.5,
 		color: "Red",
+		tags: ["Artificial"],
 		prevo: "Porygon",
 		evoType: "trade",
 		evoItem: "Up-Grade",
@@ -20970,7 +20972,172 @@ export const POKEDEX = {
 	},
 };
 
-// 向后兼容：挂载到 window
-if (typeof window !== 'undefined') {
-    window.POKEDEX = POKEDEX;
+// ============================================
+// 统一标签映射 (Engine Tags)
+// 用于 Chronal Rift 等机制的宝可梦分类
+// ============================================
+
+/**
+ * 人造/机械类宝可梦 ID 列表
+ * 在时空裂隙中触发【技能黑箱】效果
+ */
+const ARTIFICIAL_POKEMON = [
+    // 数字化与人造生命 (Digital & Artificial)
+    'porygon', 'porygon2', 'porygonz',
+    'castform', 'castformsunny', 'castformrainy', 'castformsnowy',
+    'ditto',
+    
+    // 工业机械与磁力 (Industrial & Magnetic)
+    'magnemite', 'magneton', 'magnezone',
+    'voltorb', 'electrode',
+    'klink', 'klang', 'klinklang',
+    'beldum', 'metang', 'metagross',
+    'varoom', 'revavroom',
+    'duraludon', 'archaludon',
+    'melmetal', 'meltan',
+    
+    // 生化改造与嵌合兽 (Bio-Engineered / Cyborg)
+    'mewtwo', 'mewtwomegax', 'mewtwomegay',
+    'genesect', 'genesectburn', 'genesectchill', 'genesectdouse', 'genesectshock',
+    'typenull', 'silvally',
+    'volcanion',
+    
+    // 古代机关与人偶 (Ancient Automata)
+    'baltoy', 'claydol',
+    'golett', 'golurk',
+    'magearna', 'magearnaoriginal',
+    'bronzor', 'bronzong',
+    
+    // 洛托姆家电系列 (Rotom Appliances)
+    'rotom', 'rotomheat', 'rotomwash', 'rotomfrost', 'rotomfan', 'rotommow'
+];
+
+/**
+ * 洗翠形态宝可梦 ID 列表
+ * 在时空裂隙中享受【起源共鸣】加成（古武无惩罚）
+ */
+const HISUIAN_POKEMON = [
+    // 洗翠御三家
+    'decidueyehisui', 'typhlosionhisui', 'samurotthisui',
+    
+    // 洗翠地区形态
+    'growlithehisui', 'arcaninehisui',
+    'voltorbhisui', 'electrodehisui',
+    'sneaselhisui',
+    'zoruahisui', 'zoroarkhisui',
+    'braviaryhisui',
+    'sliggoohisui', 'goodrahisui',
+    'avalugghisui',
+    'lilliganthisui',
+    'qwilfishhisui',
+    
+    // 洗翠专属进化
+    'wyrdeer', 'kleavor', 'ursaluna', 'ursalunabloodmoon',
+    'basculegion', 'basculegionf',
+    'sneasler', 'overqwil',
+    'enamorus', 'enamorustherian'
+];
+
+/**
+ * 起源形态宝可梦 ID 列表
+ * 在时空裂隙中享受【起源共鸣】加成
+ */
+const ORIGIN_POKEMON = [
+    'giratinaorigin',
+    'dialgaorigin',
+    'palkiaorigin'
+];
+
+/**
+ * 究极异兽 ID 列表 (已有 tags: ["Ultra Beast"])
+ * 在时空裂隙中获得【异兽气场】伤害减免
+ */
+const ULTRA_BEAST_POKEMON = [
+    'nihilego', 'buzzwole', 'pheromosa', 'xurkitree',
+    'celesteela', 'kartana', 'guzzlord',
+    'poipole', 'naganadel',
+    'stakataka', 'blacephalon',
+    'necrozma', 'necrozmaduskmane', 'necrozmadawnwings', 'necrozmaultra'
+];
+
+/**
+ * 古代悖谬种 ID 列表 (已有 tags: ["Paradox"])
+ * 拥有 Protosynthesis 特性
+ */
+const PARADOX_PAST_POKEMON = [
+    'greattusk', 'screamtail', 'brutebonnet', 'fluttermane',
+    'slitherwing', 'sandyshocks', 'roaringmoon',
+    'walkingwake', 'gougingfire', 'ragingbolt',
+    'koraidon'
+];
+
+/**
+ * 未来悖谬种 ID 列表 (已有 tags: ["Paradox"])
+ * 拥有 Quark Drive 特性，在时空裂隙中也触发【技能黑箱】
+ */
+const PARADOX_FUTURE_POKEMON = [
+    'irontreads', 'ironbundle', 'ironhands', 'ironjugulis',
+    'ironmoth', 'ironthorns', 'ironvaliant',
+    'ironleaves', 'ironboulder', 'ironcrown',
+    'miraidon'
+];
+
+/**
+ * 检查宝可梦是否属于指定分类
+ * @param {string} pokemonId 宝可梦 ID
+ * @param {string} category 分类名称
+ * @returns {boolean}
+ */
+function isPokemonInCategory(pokemonId, category) {
+    const id = (pokemonId || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    switch (category) {
+        case 'artificial':
+            return ARTIFICIAL_POKEMON.includes(id);
+        case 'hisuian':
+            return HISUIAN_POKEMON.includes(id) || id.includes('hisui');
+        case 'origin':
+            return ORIGIN_POKEMON.includes(id) || id.includes('origin');
+        case 'ultrabeast':
+            return ULTRA_BEAST_POKEMON.includes(id);
+        case 'paradox_past':
+            return PARADOX_PAST_POKEMON.includes(id);
+        case 'paradox_future':
+            return PARADOX_FUTURE_POKEMON.includes(id);
+        case 'paradox':
+            return PARADOX_PAST_POKEMON.includes(id) || PARADOX_FUTURE_POKEMON.includes(id);
+        default:
+            return false;
+    }
 }
+
+/**
+ * 获取宝可梦的所有引擎标签
+ * @param {string} pokemonId 宝可梦 ID
+ * @returns {string[]} 标签数组
+ */
+function getPokemonEngineTags(pokemonId) {
+    const tags = [];
+    const id = (pokemonId || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    if (ARTIFICIAL_POKEMON.includes(id)) tags.push('Artificial');
+    if (HISUIAN_POKEMON.includes(id) || id.includes('hisui')) tags.push('Hisuian');
+    if (ORIGIN_POKEMON.includes(id) || id.includes('origin')) tags.push('Origin');
+    if (ULTRA_BEAST_POKEMON.includes(id)) tags.push('Ultra Beast');
+    if (PARADOX_PAST_POKEMON.includes(id)) tags.push('Paradox', 'Paradox Past');
+    if (PARADOX_FUTURE_POKEMON.includes(id)) tags.push('Paradox', 'Paradox Future');
+    
+    return tags;
+}
+
+root.POKEDEX = POKEDEX;
+root.POKEMON_CATEGORIES = {
+        ARTIFICIAL: ARTIFICIAL_POKEMON,
+        HISUIAN: HISUIAN_POKEMON,
+        ORIGIN: ORIGIN_POKEMON,
+        ULTRA_BEAST: ULTRA_BEAST_POKEMON,
+        PARADOX_PAST: PARADOX_PAST_POKEMON,
+        PARADOX_FUTURE: PARADOX_FUTURE_POKEMON,
+        isPokemonInCategory,
+        getPokemonEngineTags
+};
+})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));

@@ -1,0 +1,337 @@
+pkm:
+  player:
+    name: "{{user}}"
+    trainerProficiency: 0
+    proficiency: 0
+    unlocks:
+      enable_bond: false
+      enable_styles: false
+      enable_insight: false
+      enable_mega: false
+      enable_z_move: false
+      enable_dynamax: false
+      enable_tera: false
+      enable_proficiency_cap: false
+    bonds: {}
+  party:
+    slots:
+      - slot: 1
+        name: null
+        nickname: null
+        species: null
+        gender: null
+        lv: null
+        quality: null
+        nature: null
+        ability: null
+        shiny: false
+        item: null
+        mechanic: null
+        teraType: null
+        isAce: false
+        isLead: false
+        friendship:
+          avs:
+            trust: 0
+            passion: 0
+            insight: 0
+            devotion: 0
+        moves:
+          - null
+          - null
+          - null
+          - null
+        stats_meta:
+          ivs:
+            hp: null
+            atk: null
+            def: null
+            spa: null
+            spd: null
+            spe: null
+          ev_level: 0
+        notes: null
+      - slot: 2
+        name: null
+        nickname: null
+        species: null
+        gender: null
+        lv: null
+        quality: null
+        nature: null
+        ability: null
+        shiny: false
+        item: null
+        mechanic: null
+        teraType: null
+        isAce: false
+        isLead: false
+        friendship:
+          avs:
+            trust: 0
+            passion: 0
+            insight: 0
+            devotion: 0
+        moves:
+          - null
+          - null
+          - null
+          - null
+        stats_meta:
+          ivs:
+            hp: null
+            atk: null
+            def: null
+            spa: null
+            spd: null
+            spe: null
+          ev_level: 0
+        notes: null
+      - slot: 3
+        name: null
+        nickname: null
+        species: null
+        gender: null
+        lv: null
+        quality: null
+        nature: null
+        ability: null
+        shiny: false
+        item: null
+        mechanic: null
+        teraType: null
+        isAce: false
+        isLead: false
+        friendship:
+          avs:
+            trust: 0
+            passion: 0
+            insight: 0
+            devotion: 0
+        moves:
+          - null
+          - null
+          - null
+          - null
+        stats_meta:
+          ivs:
+            hp: null
+            atk: null
+            def: null
+            spa: null
+            spd: null
+            spe: null
+          ev_level: 0
+        notes: null
+      - slot: 4
+        name: null
+        nickname: null
+        species: null
+        gender: null
+        lv: null
+        quality: null
+        nature: null
+        ability: null
+        shiny: false
+        item: null
+        mechanic: null
+        teraType: null
+        isAce: false
+        isLead: false
+        friendship:
+          avs:
+            trust: 0
+            passion: 0
+            insight: 0
+            devotion: 0
+        moves:
+          - null
+          - null
+          - null
+          - null
+        stats_meta:
+          ivs:
+            hp: null
+            atk: null
+            def: null
+            spa: null
+            spd: null
+            spe: null
+          ev_level: 0
+        notes: null
+      - slot: 5
+        name: null
+        nickname: null
+        species: null
+        gender: null
+        lv: null
+        quality: null
+        nature: null
+        ability: null
+        shiny: false
+        item: null
+        mechanic: null
+        teraType: null
+        isAce: false
+        isLead: false
+        friendship:
+          avs:
+            trust: 0
+            passion: 0
+            insight: 0
+            devotion: 0
+        moves:
+          - null
+          - null
+          - null
+          - null
+        stats_meta:
+          ivs:
+            hp: null
+            atk: null
+            def: null
+            spa: null
+            spd: null
+            spe: null
+          ev_level: 0
+        notes: null
+      - slot: 6
+        name: null
+        nickname: null
+        species: null
+        gender: null
+        lv: null
+        quality: null
+        nature: null
+        ability: null
+        shiny: false
+        item: null
+        mechanic: null
+        teraType: null
+        isAce: false
+        isLead: false
+        friendship:
+          avs:
+            trust: 0
+            passion: 0
+            insight: 0
+            devotion: 0
+        moves:
+          - null
+          - null
+          - null
+          - null
+        stats_meta:
+          ivs:
+            hp: null
+            atk: null
+            def: null
+            spa: null
+            spd: null
+            spe: null
+          ev_level: 0
+        notes: null
+    transferBuffer: null
+  box:
+    boxes:
+      - id: box_01
+        name: Box 1
+        slots: []
+    indexes: {}
+  world:
+    location:
+      region: ""
+      location: ""
+      x: -4
+      y: -5
+    time:
+      day: 1
+      period: morning
+      derived:
+        year: 1
+        dayOfYear: 1
+        month: 1
+        dayOfMonth: 1
+        week: 1
+        dayOfWeek: 0
+      day_advance: null
+      period_set: null
+    weatherGrid: {}
+    pokemonSpawns: {}
+    phenomenon:
+      active_type: clear
+      active_region: none
+  npcs:
+    records:
+      gloria:
+        love: 0
+      rosa:
+        love: 0
+      dawn:
+        love: 0
+      akari:
+        love: 0
+      serena:
+        love: 0
+      may:
+        love: 0
+      selene:
+        love: 0
+      juliana:
+        love: 0
+      lusamine:
+        love: 0
+      lillie:
+        love: 0
+      mallow:
+        love: 0
+      lana:
+        love: 0
+      irida:
+        love: 0
+      lacey:
+        love: 0
+      misty:
+        love: 0
+      sonia:
+        love: 0
+      hex:
+        love: 0
+      roxie:
+        love: 0
+      iono:
+        love: 0
+      erika:
+        love: 0
+      nessa:
+        love: 0
+      marnie:
+        love: 0
+      acerola:
+        love: 0
+      bea:
+        love: 0
+      skyla:
+        love: 0
+      iris:
+        love: 0
+      nemona:
+        love: 0
+      cynthia:
+        love: 0
+  battle:
+    lastConfig: null
+    lastResult: null
+    pendingNarrative: null
+  settings:
+    enableAVS: true
+    enableCommander: true
+    enableEVO: true
+    enableBGM: true
+    enableSFX: true
+    enableClash: false
+    enableEnvironment: true
+    enableBattleEnvironment: true
+    enableBattlePerformanceMode: false
+    enableBattlePortraitMode: false
+    enableEnemyStrategicSwitching: true

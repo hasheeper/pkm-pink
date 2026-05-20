@@ -9,7 +9,8 @@
 // ============================================
 // 数据层导入
 // ============================================
-import { POKEDEX } from '../data/pokedex-data.js';
+import '../../shared/pokedex-data.js';
+const POKEDEX = globalThis.POKEDEX;
 import { MOVES } from '../data/moves-data.js';
 import {
     TRAPPING_MOVES,

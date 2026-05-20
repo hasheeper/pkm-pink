@@ -29,7 +29,7 @@
 操作约定
 - `replace`: 写入最终值；用于名字、等级、道具、机制、设置、地点摘要、时间指令、首发状态、NPC 好感度。
 - `delta`: 仅用于数字增减；优先用于 `/pkm/player/proficiency`、`/pkm/party/slots/*/stats_meta/ev_level`、`/pkm/party/slots/*/bonds`。
-- `add`: 用于数组尾部追加 `/pkm/box/boxes/0/slots/-`，或创建新的 `/pkm/npcs/records/<npcKey>`。队伍空槽新增通常用 `replace` 写整个槽位对象。
+- `insert`: 用于创建新的 `/pkm/npcs/records/<npcKey>`，或插入明确的数组项。队伍空槽新增通常用 `replace` 写整个槽位对象。
 - 不新增未声明路径，不整段替换 `/pkm`、`/pkm/player`、`/pkm/party`、`/pkm/world`、`/pkm/npcs`。
 - 无变量变化则不输出 `<UpdateVariable>`
 
@@ -78,8 +78,8 @@
 
 NPC 好感度
 - `pkm.npcs.records` 是动态 NPC 关系表，key 必须使用稳定英文名字 ID，优先小写 ASCII；例如 `ash`、`giovanni`、`misty`、`cynthia`、`hex`。不要用中文/日文名，不要包含 `/`
-- 新 NPC 首次进入关系网时，`add` `/pkm/npcs/records/<npcKey>`，值只包含 `{ "love": 0-255 }`；无明确关系不创建记录，中立初识可写 96 左右
-- 已存在 NPC 的关系变化时，只用 `replace` 写最终值：
+- 新 NPC 首次进入关系网时，`insert` `/pkm/npcs/records/<npcKey>`，值只包含 `{ "love": 0-255 }`；无明确关系不创建记录
+- 已存在 NPC 的关系变化时，用 `replace` 写最终值：
   - `/pkm/npcs/records/<npcKey>/love`: 0~255，低值表示冲突/疏远，高值表示亲近/信赖
 
 训练家熟练度

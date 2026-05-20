@@ -198,9 +198,9 @@ function buildPerformanceConfig(settings = {}) {
     return {
         enabled,
         disableScreenFilters: enabled,
-        disableBlur: false,
-        disableShadows: false,
-        disableDecorativeAnimations: false,
+        disableBlur: enabled,
+        disableShadows: enabled,
+        disableDecorativeAnimations: enabled,
         disableBattleVFX: enabled,
         disableWeatherParticles: enabled,
         reduceSpriteFilters: enabled,

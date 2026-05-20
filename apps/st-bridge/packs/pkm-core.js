@@ -12,6 +12,7 @@
   const DEFAULT_STATE_ROOT = 'stat_data';
   const DEFAULT_STATE_KEY = 'pkm';
   const MAX_PARTY_SIZE = 6;
+  const STAT_KEYS = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'];
 
   if (ROOT.PKMPackCore?.version) return;
 
@@ -35,9 +36,11 @@
       enableBGM: true,
       enableSFX: true,
       enableClash: false,
+      enableEnvironment: true,
       enableBattleEnvironment: true,
       enableBattlePerformanceMode: false,
-      enableBattlePortraitMode: false
+      enableBattlePortraitMode: false,
+      enableEnemyStrategicSwitching: true
     }
   };
 
@@ -106,12 +109,126 @@
   function normalizeIvs(ivs) {
     const src = isObject(ivs) ? ivs : {};
     const next = {};
-    for (const key of ['hp', 'atk', 'def', 'spa', 'spd', 'spe']) {
+    for (const key of STAT_KEYS) {
       next[key] = src[key] === null || src[key] === undefined
         ? null
         : clampNumber(src[key], 0, 31, null);
     }
     return next;
+  }
+
+  function isValidIvs(ivs) {
+    return isObject(ivs) && STAT_KEYS.every((key) => (
+      typeof ivs[key] === 'number' && ivs[key] >= 0 && ivs[key] <= 31
+    ));
+  }
+
+  function generateIvsByQuality(quality) {
+    const normalized = normalizeString(quality, 'low').toLowerCase();
+    if (normalized === 'perfect') {
+      return { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 };
+    }
+
+    const targets = { low: 90, medium: 120, high: 150, perfect: 186 };
+    const targetSum = targets[normalized] || targets.low;
+    const ivs = {};
+    let remaining = targetSum;
+
+    for (let i = 0; i < STAT_KEYS.length; i += 1) {
+      const stat = STAT_KEYS[i];
+      if (i === STAT_KEYS.length - 1) {
+        ivs[stat] = Math.min(31, Math.max(0, remaining));
+        break;
+      }
+      const maxForThis = Math.min(31, remaining);
+      const minForThis = Math.max(0, remaining - (STAT_KEYS.length - i - 1) * 31);
+      ivs[stat] = Math.floor(Math.random() * (maxForThis - minForThis + 1)) + minForThis;
+      remaining -= ivs[stat];
+    }
+
+    return ivs;
+  }
+
+  function randomIvQuality() {
+    const roll = Math.random();
+    if (roll < 0.30) return 'low';
+    if (roll < 0.70) return 'medium';
+    if (roll < 0.95) return 'high';
+    return 'perfect';
+  }
+
+  function normalizeStatsMeta(statsMeta, pokemon) {
+    const src = isObject(statsMeta) ? clone(statsMeta, {}) : {};
+    const hasPokemon = isObject(pokemon) && Boolean(pokemon.name || pokemon.species || pokemon.nickname);
+    const lv = clampNumber(pokemon?.lv ?? pokemon?.level, 1, 100, 5);
+    const calculatedEv = hasPokemon ? Math.min(252, Math.floor(lv * 2.5)) : 0;
+    const evLevel = isObject(src.ev_level)
+      ? clone(src.ev_level, {})
+      : (src.ev_level === null || src.ev_level === undefined
+        ? calculatedEv
+        : Math.max(clampNumber(src.ev_level, 0, 252, 0), calculatedEv));
+    const quality = normalizeString(pokemon?.quality, '').toLowerCase();
+    const normalizedIvs = normalizeIvs(src.ivs);
+    const validQualities = ['low', 'medium', 'high', 'perfect'];
+    const generatedQuality = hasPokemon && !isValidIvs(normalizedIvs)
+      ? (validQualities.includes(quality) ? quality : randomIvQuality())
+      : '';
+    const shouldGenerateIvs = Boolean(generatedQuality);
+    const next = {
+      ...src,
+      ivs: shouldGenerateIvs ? generateIvsByQuality(generatedQuality) : normalizedIvs,
+      ev_level: evLevel
+    };
+    delete next.iv_quality;
+    return next;
+  }
+
+  function autofillPokemonStatsPatches(patches) {
+    if (!Array.isArray(patches)) return [];
+    const added = [];
+    const seen = new Set();
+    const hasStatsPatch = (basePath) => patches.some((patch) => {
+      const path = String(patch?.path || '');
+      return path === `${basePath}/stats_meta` || path.startsWith(`${basePath}/stats_meta/`);
+    });
+
+    for (const patch of patches) {
+      const op = String(patch?.op || '').toLowerCase();
+      const path = String(patch?.path || '');
+      const basePath = /^\/pkm\/party\/slots\/\d+$/.test(path) || path === '/pkm/party/transferBuffer'
+        ? path
+        : '';
+      if ((op !== 'add' && op !== 'replace') || !basePath || seen.has(basePath) || hasStatsPatch(basePath)) continue;
+      if (!isObject(patch.value) || !(patch.value.name || patch.value.species || patch.value.nickname)) continue;
+      if (isValidIvs(patch.value.stats_meta?.ivs)) continue;
+      const statsMeta = normalizeStatsMeta(patch.value.stats_meta, patch.value);
+      if (!isValidIvs(statsMeta.ivs)) continue;
+      added.push({ op: 'add', path: `${basePath}/stats_meta`, value: statsMeta });
+      seen.add(basePath);
+    }
+    return added;
+  }
+
+  function autofillPokemonStatsInText(content) {
+    const source = String(content || '');
+    let changed = false;
+    const nextContent = source.replace(/<UpdateVariable\b[\s\S]*?<\/UpdateVariable>/gi, (block) => {
+      const match = block.match(/<JSONPatch>([\s\S]*?)<\/JSONPatch>/i);
+      if (!match) return block;
+      try {
+        const patches = JSON.parse(match[1].trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, ''));
+        const added = autofillPokemonStatsPatches(patches);
+        if (!added.length) return block;
+        changed = true;
+        return block.slice(0, match.index)
+          + `<JSONPatch>${JSON.stringify(patches.concat(added))}</JSONPatch>`
+          + block.slice(match.index + match[0].length);
+      } catch (error) {
+        console.warn(`${CORE_NAME} stats autofill skipped:`, error);
+        return block;
+      }
+    });
+    return { changed, content: nextContent };
   }
 
   function createEmptySlot(slot, options = {}) {
@@ -267,6 +384,12 @@
     normalizeMovesArray,
     normalizeMovesObject,
     normalizeIvs,
+    isValidIvs,
+    generateIvsByQuality,
+    randomIvQuality,
+    normalizeStatsMeta,
+    autofillPokemonStatsPatches,
+    autofillPokemonStatsInText,
     createEmptySlot,
     legacyDashboardShape,
     mvu: {

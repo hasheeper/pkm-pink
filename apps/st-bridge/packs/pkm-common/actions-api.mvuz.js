@@ -1,14 +1,14 @@
 /**
- * PKM Universal dashboard action API runtime.
+ * PKM common dashboard action API runtime.
  */
 (function () {
   'use strict';
 
   const ROOT = typeof window !== 'undefined' ? window : globalThis;
-  const RUNTIME = ROOT.PKMUniversalPluginRuntime || {};
-  ROOT.PKMUniversalPluginRuntime = RUNTIME;
+  const COMMON = ROOT.PKMCommonRuntime || {};
+  ROOT.PKMCommonRuntime = COMMON;
 
-  RUNTIME.createActionsApi = function createActionsApi(ctx, stateService) {
+  COMMON.createActionsApi = function createActionsApi(ctx, stateService, options = {}) {
     const {
       DEFAULT_SETTINGS,
       DEFAULT_UNLOCKS,
@@ -29,19 +29,19 @@
       saveState
     } = stateService;
 
-    function actionWriteOptions(action, options = {}, paths = ['/pkm'], operationKey = '') {
+    function actionWriteOptions(action, writeOptions = {}, paths = ['/pkm'], operationKey = '') {
       const suffix = operationKey ? `:${operationKey}` : '';
       return {
-        floorKey: options.floorKey,
-        messageId: options.messageId ?? options.message_id,
-        operationId: options.operationId || `action:${action}${suffix}`,
+        floorKey: writeOptions.floorKey,
+        messageId: writeOptions.messageId ?? writeOptions.message_id,
+        operationId: writeOptions.operationId || `action:${action}${suffix}`,
         paths: Array.isArray(paths) && paths.length ? paths : ['/pkm']
       };
     }
 
     function actionObjectKeySuffix(value, fallback = 'state') {
       if (!isObject(value)) return fallback;
-      const keys = Object.keys(value).sort();
+      const keys = Object.keys(value).filter((key) => value[key] !== undefined).sort();
       return keys.length ? keys.map(escapeJsonPointerPart).join('.') : fallback;
     }
 
@@ -50,7 +50,30 @@
       return isObject(world.location) ? world.location : null;
     }
 
-    async function dispatchAction(action, payload = {}, options = {}) {
+    function parseSlotNumber(value, fallback = 1) {
+      if (typeof value === 'string') {
+        const match = value.trim().match(/^slot\s*(\d+)$/i);
+        if (match) return clampNumber(match[1], 1, MAX_PARTY_SIZE, fallback);
+      }
+      return clampNumber(value, 1, MAX_PARTY_SIZE, fallback);
+    }
+
+    const helpers = {
+      patchState,
+      saveState,
+      actionWriteOptions,
+      actionObjectKeySuffix,
+      parseSlotNumber
+    };
+    const extensions = typeof options.extensions === 'function'
+      ? options.extensions(ctx, stateService, helpers)
+      : (isObject(options.extensions) ? options.extensions : {});
+
+    async function dispatchAction(action, payload = {}, writeOptions = {}) {
+      if (typeof extensions[action] === 'function') {
+        return extensions[action](payload, writeOptions, helpers);
+      }
+
       switch (action) {
         case 'greeting.configure':
           {
@@ -69,17 +92,19 @@
               if (locationPayload) {
                 state.world = isObject(state.world) ? state.world : {};
                 state.world.location = {
-                  region: normalizeString(locationPayload.region, ''),
-                  location: normalizeString(locationPayload.location, '')
+                  ...(isObject(state.world.location) ? state.world.location : {}),
+                  ...locationPayload,
+                  region: normalizeString(locationPayload.region, state.world.location?.region || ''),
+                  location: normalizeString(locationPayload.location, state.world.location?.location || '')
                 };
               }
               return state;
-            }, actionWriteOptions(action, options, [
+            }, actionWriteOptions(action, writeOptions, [
               ...(isObject(payload.unlocks) ? ['/pkm/player/unlocks'] : []),
               ...(isObject(payload.settings)
                 ? Object.keys(payload.settings).map((key) => `/pkm/settings/${escapeJsonPointerPart(key)}`)
                 : []),
-              ...(locationPayload ? ['/pkm/world/location/region', '/pkm/world/location/location'] : [])
+              ...(locationPayload ? ['/pkm/world/location'] : [])
             ], [
               isObject(payload.unlocks) ? `unlocks.${actionObjectKeySuffix(payload.unlocks)}` : '',
               isObject(payload.settings) ? `settings.${actionObjectKeySuffix(payload.settings)}` : '',
@@ -88,45 +113,50 @@
           }
         case 'party.setLead':
           return patchState((state) => {
-            const slot = clampNumber(payload.slot ?? payload.targetSlot, 1, MAX_PARTY_SIZE, 1);
+            const slot = parseSlotNumber(payload.slot ?? payload.targetSlot, 1);
             state.party.slots.forEach((pokemon, index) => {
               pokemon.isLead = Boolean(pokemon.name) && index + 1 === slot;
             });
             return state;
-          }, actionWriteOptions(action, options, ['/pkm/party/slots']));
+          }, actionWriteOptions(action, writeOptions, ['/pkm/party/slots']));
         case 'settings.update':
           return patchState((state) => {
             state.settings = { ...state.settings, ...(isObject(payload) ? payload : {}) };
             return state;
-          }, actionWriteOptions(action, options, isObject(payload)
+          }, actionWriteOptions(action, writeOptions, isObject(payload)
             ? Object.keys(payload).map((key) => `/pkm/settings/${escapeJsonPointerPart(key)}`)
             : ['/pkm/settings'], actionObjectKeySuffix(payload, 'settings')));
         case 'party.updateMove':
           {
-            const slotNumber = clampNumber(payload.slot, 1, MAX_PARTY_SIZE, 1);
+            const slotNumber = parseSlotNumber(payload.slot ?? payload.slotKey ?? payload.targetSlot, 1);
             return patchState((state) => {
               const slot = slotNumber - 1;
+              if (!state.party.slots[slot]) return state;
+              if (Array.isArray(payload.moves) || isObject(payload.moves)) {
+                state.party.slots[slot].moves = normalizeMoves(payload.moves);
+                return state;
+              }
               const moveIndex = clampNumber(payload.moveIndex ?? payload.index, 1, 4, 1) - 1;
               const moves = normalizeMoves(state.party.slots[slot]?.moves);
               moves[moveIndex] = payload.move || null;
               state.party.slots[slot].moves = moves;
               return state;
             }, actionWriteOptions(action, {
-              ...options,
-              operationId: options.operationId || `action:party.moves:slot${slotNumber}`
+              ...writeOptions,
+              operationId: writeOptions.operationId || `action:party.moves:slot${slotNumber}`
             }, [`/pkm/party/slots/${slotNumber - 1}/moves`]));
           }
         case 'party.updateMoves':
           {
-            const slotNumber = clampNumber(payload.slot, 1, MAX_PARTY_SIZE, 1);
+            const slotNumber = parseSlotNumber(payload.slot ?? payload.slotKey ?? payload.targetSlot, 1);
             return patchState((state) => {
               const slot = slotNumber - 1;
               if (!state.party.slots[slot]) return state;
               state.party.slots[slot].moves = normalizeMoves(payload.moves);
               return state;
             }, actionWriteOptions(action, {
-              ...options,
-              operationId: options.operationId || `action:party.moves:slot${slotNumber}`
+              ...writeOptions,
+              operationId: writeOptions.operationId || `action:party.moves:slot${slotNumber}`
             }, [`/pkm/party/slots/${slotNumber - 1}/moves`]));
           }
         case 'box.depositTransferBuffer':
@@ -137,7 +167,7 @@
             state.box.boxes[0].slots.push(pokemon);
             state.party.transferBuffer = null;
             return state;
-          }, actionWriteOptions(action, options, ['/pkm/party/transferBuffer', '/pkm/box/boxes/0/slots']));
+          }, actionWriteOptions(action, writeOptions, ['/pkm/party/transferBuffer', '/pkm/box/boxes/0/slots']));
         case 'box.applyTransferMutation':
           return patchState((state) => {
             const box = state.box.boxes?.[0] || { id: 'box_01', name: 'Box 1', slots: [] };
@@ -181,9 +211,9 @@
 
             state.party.slots = normalizePartySlots(state.party.slots);
             return state;
-          }, actionWriteOptions(action, options, ['/pkm/party/slots', '/pkm/box/boxes/0/slots']));
+          }, actionWriteOptions(action, writeOptions, ['/pkm/party/slots', '/pkm/box/boxes/0/slots']));
         case 'state.replace':
-          return saveState(payload?.state || payload, actionWriteOptions(action, options, ['/pkm']));
+          return saveState(payload?.state || payload, actionWriteOptions(action, writeOptions, ['/pkm']));
         default:
           throw new Error(`Unknown PKM action: ${action}`);
       }

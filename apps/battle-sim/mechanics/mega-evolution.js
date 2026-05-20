@@ -10,7 +10,7 @@
  * - Mega 进化执行
  * - 非官方 Mega 检测
  * 
- * 依赖: pokedex-data.js, battle-engine.js (Pokemon, calcStats, getPokemonData)
+ * 依赖: 共享 POKEDEX, battle-engine.js (Pokemon, calcStats, getPokemonData)
  */
 
 /* ==========================================================

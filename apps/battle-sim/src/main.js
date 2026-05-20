@@ -39,7 +39,7 @@ import '../ui/ui-menus.js';
 // ============================================
 // 4. 系统模块
 // ============================================
-import '../systems/translations.js';
+import '../../shared/translations.js';
 import '../systems/environment-overlay.js';  // 环境图层系统 (需在 data-loader 之前)
 import '../systems/data-loader.js';
 import '../systems/catch-system.js';

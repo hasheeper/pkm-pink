@@ -933,3 +933,45 @@ i[class*="ri-"] {
     vertical-align: middle;
     font-style: normal;
 }
+
+/* Dashboard Performance Mode: the map iframe has its own document,
+   so it needs its own low-cost overrides. */
+html.dashboard-perf-mode *,
+html.dashboard-perf-mode *::before,
+html.dashboard-perf-mode *::after,
+body.dashboard-perf-mode *,
+body.dashboard-perf-mode *::before,
+body.dashboard-perf-mode *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+}
+
+html.dashboard-perf-mode :is(
+    .map-branding,
+    #layer-panel-content,
+    .map-btn,
+    .info-card,
+    .action-btn,
+    #tooltip,
+    #journey-panel,
+    .encounter-btn,
+    .relocate-btn,
+    .tavern-input-notification
+),
+body.dashboard-perf-mode :is(
+    .map-branding,
+    #layer-panel-content,
+    .map-btn,
+    .info-card,
+    .action-btn,
+    #tooltip,
+    #journey-panel,
+    .encounter-btn,
+    .relocate-btn,
+    .tavern-input-notification
+) {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+}

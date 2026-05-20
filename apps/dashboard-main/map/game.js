@@ -82,7 +82,7 @@ let playerState = {
 };
 window.playerState = playerState; // 暴露给其他模块
 
-// --- 坐标接口暴露 (供 app.js / ERA 系统使用) ---
+// --- 坐标接口暴露 (供 app.js / main map runtime 使用) ---
 // 回调函数：当玩家位置变化时触发
 window.onPlayerLocationChange = null;
 
@@ -110,7 +110,7 @@ function notifyLocationChange() {
 }
 
 /**
- * 从外部设置玩家位置（用于从 ERA 变量初始化）
+ * 从外部设置玩家位置（用于从 main map state 初始化）
  * @param {{ x: number, y: number, quadrant?: string }} displayCoords - 显示坐标
  */
 window.setPlayerPosition = function(displayCoords) {
@@ -136,9 +136,27 @@ window.setPlayerPosition = function(displayCoords) {
 // 地图加载完成后的回调（供外部使用）
 window.onMapReady = null;
 
-// ========== 接收酒馆 ERA 数据（宝可梦刷新等）==========
+// ========== 接收 main map state（宝可梦刷新等）==========
 // 防抖定时器，避免频繁刷新导致卡顿
-let eraRefreshDebounceTimer = null;
+let mapStateRefreshDebounceTimer = null;
+window.isDashboardPerformanceMode = false;
+const MAP_PERF_FRAME_DELAY_MS = 33;
+window.MAP_PERF_FRAME_DELAY_MS = MAP_PERF_FRAME_DELAY_MS;
+
+function setMapDashboardPerformanceMode(enabled) {
+    window.isDashboardPerformanceMode = enabled === true;
+    document.documentElement.classList.toggle('dashboard-perf-mode', window.isDashboardPerformanceMode);
+    document.body?.classList.toggle('dashboard-perf-mode', window.isDashboardPerformanceMode);
+}
+
+function scheduleMapRenderLoop() {
+    if (isGlobalRenderPaused) return;
+    if (window.isDashboardPerformanceMode) {
+        setTimeout(() => requestAnimationFrame(renderLoop), MAP_PERF_FRAME_DELAY_MS);
+        return;
+    }
+    requestAnimationFrame(renderLoop);
+}
 
 // ========== 异变系统状态 ==========
 window.phenomenonState = {
@@ -147,6 +165,11 @@ window.phenomenonState = {
 };
 
 window.addEventListener('message', function(event) {
+    if (event.data && event.data.type === 'PKM_DASHBOARD_PERFORMANCE_MODE') {
+        setMapDashboardPerformanceMode(event.data.enabled === true);
+        return;
+    }
+
     // 处理全屏切换时的 resize 消息
     if (event.data && event.data.type === 'MAP_RESIZE') {
         console.log('[MAP] 收到 resize 消息，重新调整画布大小');
@@ -154,41 +177,43 @@ window.addEventListener('message', function(event) {
         return;
     }
     
-    // 处理 PKM_ERA_DATA（初始化）和 PKM_REFRESH（刷新）
-    if (event.data && (event.data.type === 'PKM_ERA_DATA' || event.data.type === 'PKM_REFRESH')) {
-        const eraData = event.data.data;
-        const isRefresh = event.data.type === 'PKM_REFRESH';
+    if (event.data && event.data.type === 'PKM_MAP_STATE') {
+        const mapState = event.data.data || {};
+        const isRefresh = event.data.reason !== 'mapIframeLoad';
         
-        console.log('[MAP] 收到 ERA 数据:', event.data.type, eraData);
-        
-        // 更新宝可梦缓存（从 ERA 读取）- 这个可以立即执行
-        if (window.PokemonSpawnCache && eraData?.world_state?.pokemon_spawns) {
-            window.PokemonSpawnCache.updateFromEra(eraData);
+        console.log('[MAP] 收到 main map state:', mapState);
+        if (typeof mapState.performanceMode === 'boolean') {
+            setMapDashboardPerformanceMode(mapState.performanceMode);
         }
         
-        // 更新天气数据（从 ERA 读取）
-        if (eraData?.world_state?.weather_grid) {
-            window.weatherGridData = eraData.world_state.weather_grid;
+        // 更新宝可梦缓存（从 main map state 读取）- 这个可以立即执行
+        if (window.PokemonSpawnCache && mapState?.pokemonSpawns) {
+            window.PokemonSpawnCache.updateFromMapState(mapState);
+        }
+        
+        // 更新天气数据（从 main map state 读取）
+        if (mapState?.weatherGrid) {
+            window.weatherGridData = mapState.weatherGrid;
             console.log('[MAP] 天气数据已更新:', Object.keys(window.weatherGridData).length, '个格子');
         }
         
         // 更新异变状态
-        if (eraData?.world_state?.phenomenon) {
-            updatePhenomenonState(eraData.world_state.phenomenon);
+        if (mapState?.phenomenon) {
+            updatePhenomenonState(mapState.phenomenon);
         }
         
         // 对于刷新消息，使用防抖避免频繁更新位置和渲染
         if (isRefresh) {
-            if (eraRefreshDebounceTimer) {
-                clearTimeout(eraRefreshDebounceTimer);
+            if (mapStateRefreshDebounceTimer) {
+                clearTimeout(mapStateRefreshDebounceTimer);
             }
-            eraRefreshDebounceTimer = setTimeout(() => {
-                updatePlayerFromEra(eraData);
-                eraRefreshDebounceTimer = null;
+            mapStateRefreshDebounceTimer = setTimeout(() => {
+                updatePlayerFromMapState(mapState);
+                mapStateRefreshDebounceTimer = null;
             }, 200); // 200ms 防抖
         } else {
             // 初始化消息立即执行
-            updatePlayerFromEra(eraData);
+            updatePlayerFromMapState(mapState);
         }
     }
 });
@@ -273,10 +298,10 @@ window.shouldShowPhenomenonEntity = function(entityType, entityValue) {
     return false;
 };
 
-// 从 ERA 数据更新玩家位置
-function updatePlayerFromEra(eraData) {
-    if (eraData?.world_state?.location) {
-        const loc = eraData.world_state.location;
+// 从 main map state 更新玩家位置
+function updatePlayerFromMapState(mapState) {
+    if (mapState?.location) {
+        const loc = mapState.location;
         if (typeof loc.x === 'number' && typeof loc.y === 'number') {
             window.setPlayerPosition({ x: loc.x, y: loc.y });
             
@@ -432,7 +457,7 @@ async function loadMapData() {
         if(!res.ok) throw new Error("File error");
         mapRawData = await res.json();
         
-        // 加载mapinfo.json用于位置上下文
+        // 加载 mapinfo.json 供地图展示模块使用
         try {
             let mapInfoData = null;
             
@@ -449,16 +474,10 @@ async function loadMapData() {
             }
             
             if (mapInfoData) {
-                // 保存到全局以供其他模块使用
                 window.mapInfoData = mapInfoData;
-                
-                if (window.LocationContextGenerator) {
-                    window.LocationContextGenerator.init(mapInfoData);
-                    console.log('[LocationContext] Initialized with mapinfo data');
-                }
             }
         } catch(e) {
-            console.warn('[LocationContext] Failed to load mapinfo.json:', e);
+            console.warn('[MAP] Failed to load mapinfo.json:', e);
         }
         
         setupGame();
@@ -502,7 +521,7 @@ function setupGame() {
     if(playerControls) playerControls.style.display = 'flex';
 
     // 6. Loop
-    requestAnimationFrame(renderLoop);
+    scheduleMapRenderLoop();
     
     // 7. 触发地图加载完成回调
     console.log('[MAP] ✓ 地图加载完成');
@@ -608,7 +627,7 @@ function renderLoop() {
     if(hoveredTarget) drawFocusBox();
 
     ctx.restore();
-    requestAnimationFrame(renderLoop);
+    scheduleMapRenderLoop();
 }
 
 function preProcessTerrain(layer) {
@@ -913,7 +932,7 @@ function drawPlayerPawn() {
 
     ctx.save();
 
-    const spinSpeed = Date.now() / 3000;
+    const spinSpeed = window.isDashboardPerformanceMode ? 0 : Date.now() / 3000;
     const radius = 5 * gridSize;
 
     ctx.translate(centerX, centerY);
@@ -1013,7 +1032,8 @@ function drawModernPin(ent) {
     ctx.fill();
 
     const color = ent.__smartColor || "#fff";
-    ctx.translate(0, -Math.sin(Date.now()/300) * 2);
+    const pinFloatY = window.isDashboardPerformanceMode ? 0 : -Math.sin(Date.now()/300) * 2;
+    ctx.translate(0, pinFloatY);
 
     if(ent.__identifier === "NPC_Actor") {
         ctx.fillStyle = color;
@@ -1060,7 +1080,7 @@ function drawPhenomenonPin(ent, x, y, layerName) {
     }
     
     const color = PHENOMENON_MAP_COLORS[phenomenonType] || PHENOMENON_MAP_COLORS.ancient;
-    const pulse = Math.sin(Date.now() / 400) * 0.3 + 0.7;
+    const pulse = window.isDashboardPerformanceMode ? 1 : Math.sin(Date.now() / 400) * 0.3 + 0.7;
     
     ctx.save();
     
@@ -1079,7 +1099,7 @@ function drawPhenomenonPin(ent, x, y, layerName) {
     ctx.globalAlpha = 1;
     
     // 浮动效果
-    const floatY = -Math.sin(Date.now()/300) * 3;
+    const floatY = window.isDashboardPerformanceMode ? 0 : -Math.sin(Date.now()/300) * 3;
     ctx.translate(0, floatY);
     
     if(layerName === "Ultra_Wormhole") {
@@ -1283,7 +1303,7 @@ function bindEvents() {
             isDragging = true; 
             lastMouse = {x:e.clientX, y:e.clientY}; 
         }
-        // 右键移动玩家功能已禁用，坐标由 ERA 变量控制
+        // 右键移动玩家功能已禁用，坐标由 main map runtime 控制
         // if(e.button === 2) {
         //     handlePlayerMove(e.clientX, e.clientY);
         // }
@@ -1677,7 +1697,7 @@ function exitPlayerTactical() {
     resizeCanvas();
     centerCameraOnPlayer();
     isGlobalRenderPaused = false;
-    requestAnimationFrame(renderLoop);
+    scheduleMapRenderLoop();
 }
 
 function centerCameraOnPlayer() {
@@ -1922,7 +1942,16 @@ const RouteSystem = {
         if(this.markers.length < 2) return;
         
         const journeyText = this.generateJourneyNarrative();
-        this.copyToClipboard(journeyText);
+        const destination = this.markers[this.markers.length - 1];
+        const destDisplay = toDisplayCoords(destination.gx, destination.gy);
+        window.parent?.postMessage({
+            type: 'PKM_MAP_JOURNEY_CONFIRM',
+            text: journeyText,
+            location: {
+                x: destDisplay.x,
+                y: destDisplay.y
+            }
+        }, '*');
         this.showJourneyNotification();
         
         console.log('[RouteSystem] 旅途叙事已生成:');
@@ -1935,15 +1964,9 @@ const RouteSystem = {
         const destination = this.markers[this.markers.length - 1];
         const destDisplay = toDisplayCoords(destination.gx, destination.gy);
         
-        // VariableEdit 部分 - 终点坐标
-        lines.push('<VariableEdit>');
-        lines.push(`"world_state": {`);
-        lines.push(`    "location": {`);
-        lines.push(`        "x": ${destDisplay.x},`);
-        lines.push(`        "y": ${destDisplay.y}`);
-        lines.push(`    }`);
-        lines.push(`}`);
-        lines.push('</VariableEdit>');
+        lines.push('[System Event: Map journey confirmed]');
+        lines.push('Variables have already been updated in the current message MVU state (stat_data.pkm) by the dashboard.');
+        lines.push('Do not output any variable update block.');
         lines.push('');
         
         // 旅途标题
@@ -2174,40 +2197,9 @@ const RouteSystem = {
         return { name: zoneKey, exterior: null };
     },
     
-    // 复制到剪贴板
-    copyToClipboard(text) {
-        if(navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(() => {
-                console.log('[RouteSystem] 已复制到剪贴板');
-            }).catch(err => {
-                console.error('[RouteSystem] 复制失败:', err);
-                this.fallbackCopy(text);
-            });
-        } else {
-            this.fallbackCopy(text);
-        }
-    },
-    
-    // 备用复制方法
-    fallbackCopy(text) {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        try {
-            document.execCommand('copy');
-            console.log('[RouteSystem] 备用复制成功');
-        } catch(err) {
-            console.error('[RouteSystem] 备用复制失败:', err);
-        }
-        document.body.removeChild(textarea);
-    },
-    
     // 显示旅途通知
     showJourneyNotification() {
-        const old = document.querySelector('.copy-notification');
+        const old = document.querySelector('.tavern-input-notification');
         if(old) old.remove();
         
         const legCount = this.markers.length - 1;
@@ -2216,18 +2208,18 @@ const RouteSystem = {
         const destName = this.getLocationName(this.markers.length - 1);
         
         const notification = document.createElement('div');
-        notification.className = 'copy-notification';
+        notification.className = 'tavern-input-notification';
         notification.innerHTML = `
-            <div class="copy-notif-internal">
-                <div class="copy-notif-icon">
+            <div class="tavern-input-notif-internal">
+                <div class="tavern-input-notif-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="24" height="24">
                         <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
                 </div>
-                <div class="copy-notif-text">
-                    <div class="copy-notif-title">JOURNEY CONFIRMED</div>
-                    <div class="copy-notif-desc">${legCount} 段行程 · 目的地: ${destName}</div>
-                    <div class="copy-notif-desc" style="margin-top: 4px; opacity: 0.8;">[${destDisplay.x}, ${destDisplay.y}]</div>
+                <div class="tavern-input-notif-text">
+                    <div class="tavern-input-notif-title">JOURNEY READY</div>
+                    <div class="tavern-input-notif-desc">${legCount} 段行程 · 目的地: ${destName}</div>
+                    <div class="tavern-input-notif-desc" style="margin-top: 4px; opacity: 0.8;">[${destDisplay.x}, ${destDisplay.y}]</div>
                 </div>
             </div>
         `;

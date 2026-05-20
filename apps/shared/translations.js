@@ -1,3 +1,4 @@
+(function(root) {
 /**
  * ===========================================
  * TRANSLATIONS.JS - 汉化数据库
@@ -3286,6 +3287,207 @@ var translations={
 };
 
 /**
+ * 地区/生态区/点位名称汉化映射
+ */
+const MAP_TRANSLATIONS = {
+    // 五大区域
+    "Region_Zenith": "中枢区",
+    "Region_Neon": "霓虹区", 
+    "Region_Bloom": "盛放区",
+    "Region_Shadow": "暗影区",
+    "Region_Apex": "极诣区",
+    "ZENITH": "中枢区",
+    "NEON": "霓虹区",
+    "BLOOM": "盛放区", 
+    "SHADOW": "暗影区",
+    "APEX": "极诣区",
+    
+    // 人文区域 (region_zones)
+    "Aether_Admin_Zone": "以太行政区",
+    "Royal_Academy": "皇家学院",
+    "Living_Quarter": "居住区",
+    "Lusamine_Gardens": "露莎米奈花园",
+    "Eco_Subject_Delta": "生态实验区Δ",
+    "Academic_Plaza": "学术广场",
+    "Iono_Stream_Tower": "奇树直播塔",
+    "Toxic_Industrial_Park": "毒系工业园",
+    "Cyber_Shopping_District": "电子商业区",
+    "Port_Logistics_Area": "港口物流区",
+    "Glitch_Arcade_Lane": "故障街机巷",
+    "Skyline_Residences": "天际住宅区",
+    "Synth_Promenade": "合成步道",
+    "Pearl_Resort": "珍珠度假镇",
+    "Sunflora_Farmsteads": "向日花农场",
+    "Marina_Port_Town": "码头港镇",
+    "Grim_Borough": "铁灰市",
+    "Venom_Refinery": "毒液精炼厂",
+    "Frost_Smoke_City": "霜烟市",
+    "Requiem_Grounds": "安魂墓地",
+    "Canal_Ruins_Post": "运河遗迹哨站",
+    "Kamunagi_Hollow": "神阖之空洞",
+    "Crimson_Forge_City": "红莲锻造市",
+    "Titan_Mining_site": "泰坦矿坑",
+    "Dune_Watcher_Post": "沙丘守望哨",
+    "Ruins_of_Giants": "巨人遗迹",
+    
+    // 生态区 (biome_flavor)
+    "Arcadia_Lawns": "阿卡迪亚草坪",
+    "Sapphire_Strand": "蓝宝石海岸",
+    "Hermit_Sands": "隐士沙洲",
+    "Aroma_Meadow": "芳香草甸",
+    "Jade_Canopy": "翡翠天冠",
+    "Deep_Root_Hollow": "深根空洞",
+    "Silt_Delta": "淤积三角洲",
+    "Breeze_Woodlands": "微风林地",
+    "Golden_Horizon": "黄金地平线",
+    "Radiant_Plains": "光辉平原",
+    "Savanna_Outlands": "野蛮荒地",
+    "Scorched_Dunes": "焦痕沙丘",
+    "Obsidian_Beach": "黑曜石滩",
+    "Inferno_Crater": "炼狱火山口",
+    "Crimson_Badlands": "深红恶地",
+    "Frostbite_Slope": "霜咬坡地",
+    "Cinder_Moor": "余烬荒原",
+    "Twilight_Copse": "暮光灌丛",
+    "Crimson_Peat": "深红泥炭地",
+    "Spirit_Plateau": "镇魂高地",
+    "Ginkgo_Grove": "银杏之森",
+    "Silent_Tundra": "沉寂冻土",
+    "Zero_Halo_Moat": "零光护城河",
+    "Mirror_Lotis_Lake": "镜面莲花湖",
+    "Emerald_Vein_River": "翡翠脉络河",
+    "Crystal_Lagoon": "晶体泻湖",
+    "Twin_Destiny_Basin": "双命定盆地",
+    "Chrome_Canal": "铬色运河",
+    "Ferro_Straits": "钢铁海峡",
+    "Mercury_Stream": "水银溪",
+    "Frigid_Floe": "寒冷浮冰",
+    "Mist_Veil_Sound": "雾幕海湾",
+    "Prism_Bay": "棱镜海湾",
+    "Cerulean_Reef": "蔚蓝珊瑚海",
+    "Basalt_Shoals": "玄武岩浅滩",
+    "Equatorial_Dark_Zone": "赤道暗区",
+    "Titan_Trough": "泰坦海槽",
+    "Chrome_Abyss": "铬色深渊",
+    "Boreal_Trench": "北境海沟",
+    
+    // 地表类型 (Surface/Terrain)
+    "Deep_Sea": "深海",
+    "Shallow_Sea": "浅海",
+    "Fresh_Water": "淡水",
+    "Glacial_Water": "冰川水域",
+    "Sewage": "污水区",
+    "Swamp": "沼泽",
+    "Standard_Grass": "草地",
+    "High_Grass": "高草丛",
+    "Light_Forest": "疏林",
+    "Deep_Jungle": "密林",
+    "Flower_Field": "花田",
+    "Withered_Grass": "枯草地",
+    "Coastal_Sand": "海岸沙滩",
+    "Desert_Sand": "沙漠",
+    "Wet_Soil": "湿土",
+    "Scorched_Earth": "焦土",
+    "Waste": "废土",
+    "Pavement": "铺装路面",
+    "Slum_Pavement": "旧街道",
+    "Synthetic_Turf": "人工草坪",
+    "Industrial": "工业区",
+    "High_Voltage": "高压区",
+    "Ancient_Timber": "木栈道",
+    "Rocky_Mountain": "岩山",
+    "Magma": "熔岩",
+    "Snowfield": "雪原",
+    "Wall_Block": "障碍",
+    "VOID": "虚空",
+    "PATH": "通道",
+    "NONE": "无",
+    
+    // 服务设施 (service)
+    "Wares_General": "友好商店",
+    "Shop_Special_Z": "皇冠精品店",
+    "Shop_Special_N": "得文科技店",
+    "Shop_Special_B": "芳香草药屋",
+    "Shop_Special_S": "地下黑市",
+    "Shop_Special_A": "极诣补给站",
+    "Shop_Ginkgo_Cart": "银杏商会",
+    "CP_Zenith_Main": "中枢宝可梦中心",
+    "CP_Neon_Central": "霓虹宝可梦中心",
+    "CP_Bloom_Port": "海滨宝可梦中心",
+    "CP_Shadow_Slum": "铁灰宝可梦中心",
+    "CP_Apex_Base": "前线宝可梦中心",
+    "Bed_Rest": "住宿点",
+    "Player_s_Room": "玩家房间",
+    "PC_Terminal": "终端塔",
+    "Police_Box_Z": "Z区安保站",
+    "Police_Box_N": "N区巡逻亭",
+    "Police_Box_B": "海岸警卫站",
+    "Police_Box_S": "S区岗哨",
+    "Police_Box_A": "巡护员基地",
+    
+    // 地点锚点 (place_anchor)
+    "Cafe": "咖啡厅",
+    "Bar": "酒吧",
+    "Diner": "餐厅",
+    "Shop_Browsk": "商店",
+    "Arcade": "游戏厅",
+    "Relax": "休息区",
+    "Viewpoint": "观景点",
+    "Plaza": "广场",
+    "Nature_Spot": "自然景点",
+    "Study": "学习区",
+    
+    // 传送系统 (system_warps)
+    "Sewer": "下水道",
+    "Cave": "洞穴",
+    "Gate": "闸口",
+    
+    // 交通设施 (transit_infrastructure)
+    "Central_Hub": "中央枢纽站",
+    "Electro_Avenue": "电子大道站",
+    "Seaside_Terminal": "海滨终点站",
+    "District_S": "S区地铁站",
+    "Frontier_Outpost": "前线货运站",
+    "Neon_Cargo_Terminal": "霓虹货运码头",
+    "Sapphire_Marina": "蓝宝石码头",
+    "Restricted_Dock": "限制港口",
+    "Northern_Cemetery_Pad": "北部墓地停机坪",
+    "Summit_Dojo_Point": "山巅道场降落点",
+    "Zenith_HQ_Helipad": "中枢总部直升机坪",
+    "Lift_Station_Lower": "缆车下站",
+    "Lift_Station_Upper": "缆车上站",
+    
+    // NPC场所 (npc_actor_context)
+    "Gloria_Camp_Curry": "咖喱营地",
+    "Rosa_PokeStar_Studios": "宝可梦影城",
+    "Dawn_VIP_Beach_Villa_01": "海滨别墅",
+    "Akari_Jubilife_Survey_Barracks": "调查队宿舍",
+    "Serena_Boutique_Serena_Style": "时装工作室",
+    "Selene_Jungle_Treehouse": "丛林树屋",
+    "Juliana_Int_l_Dorm_Rm_303": "国际宿舍303",
+    "May_Secret_Base": "秘密基地",
+    "Iris_Zenith_Air_Attic": "空中阁楼",
+    "Nemona_Suite": "妮莫套房",
+    "Cynthia_Study_Room": "竹兰研究室",
+    "Lusamine_Exec_Private_Penthouse": "露莎米奈私人公馆",
+    "Lillie_Staff_Dormitory_Room_201": "职工宿舍201",
+    "Mallow_Lana_Alola_Breeze_Diner_Room": "玛奥水莲阿罗拉餐厅",
+    "Irida_Pearl_Clan_Sanctuary": "珍珠队圣所",
+    "Misty_Lifeguard_Tower": "救生塔",
+    "Lacey_Committee_Office": "委员会办公室",
+    "Sonia_Rhodia_Central_Lab": "中央实验室",
+    "Roxie_Venom_Core_Live_House": "猛毒演出场",
+    "Iono_Levincia_Guild_Tower": "奇树直播塔",
+    "Marnie_Spikemuth_Relief_Center": "尖钉镇据点",
+    "Hex_Curio_Shop_Seance": "古董杂货铺",
+    "Bea_Iron_Will_Dojo": "钢铁意志道场",
+    "Erika_Celadon_Spa": "芳疗庭院",
+    "Nessa_The_Infinity_Poolside_Lounge": "无边泳池休息厅",
+    "Acerola_Abandoned_Library": "废弃图书馆",
+    "Skyla_Hangar_04": "4号机库"
+};
+
+/**
  * ===========================================
  * LOCALE UTILITY - 汉化工具函数
  * ===========================================
@@ -3319,132 +3521,156 @@ function getNormalizedTranslationValue(key) {
     return translationLookupCache.normalizedMap[normalizeTranslationKey(key)] || null;
 }
 
-if (typeof window !== 'undefined') {
-    window.Locale = {
-        // 缓存翻译结果，提升性能
-        _cache: {},
+function getTranslationValue(key) {
+    if (!key || typeof translations === 'undefined') return null;
+    const cleanKey = String(key).trim();
+    if (Object.prototype.hasOwnProperty.call(translations, cleanKey)) {
+        return translations[cleanKey];
+    }
 
-        /**
-         * 获取汉化名称（增强版：支持智能后缀解析）
-         * @param {string} key 英文原名 (如 "Thunderbolt", "Pikachu", "Zoroark-Hisui")
-         * @param {string} fallback 找不到时返回的默认值，默认返回原英文
-         * @returns {string} 中文名称或原名
-         */
-        get: function(key, fallback) {
-            if (!key) return "";
-            const cleanKey = String(key).trim();
-            
-            // 1. 查缓存
-            if (this._cache[cleanKey]) {
-                return this._cache[cleanKey];
-            }
-            
-            // 2. 直接全词匹配
-            if (translations[cleanKey]) {
-                return this._updateCache(cleanKey, translations[cleanKey]);
-            }
-            
-            // 3. 大小写不敏感查找
-            const lowerKey = cleanKey.toLowerCase();
-            for (const k in translations) {
-                if (k.toLowerCase() === lowerKey) {
-                    return this._updateCache(cleanKey, translations[k]);
-                }
-            }
-
-            // 3.5 归一化匹配（忽略空格/符号差异）
-            const normalizedResult = getNormalizedTranslationValue(cleanKey);
-            if (normalizedResult) {
-                return this._updateCache(cleanKey, normalizedResult);
-            }
-            
-            // 4. 智能后缀解析 - 处理 "Zoroark-Hisui" 这类形态
-            if (cleanKey.includes('-')) {
-                const parts = cleanKey.split('-');
-                const baseName = parts[0];
-                const suffixPart = parts.slice(1).join('-');
-                
-                // 尝试翻译基础名
-                const cnBase = translations[baseName];
-                
-                if (cnBase) {
-                    // 基础名找到了，尝试翻译后缀
-                    const cnSuffix = translations[suffixPart];
-                    
-                    if (cnSuffix) {
-                        // 后缀也找到了，组合返回
-                        const result = cnBase + '-' + cnSuffix;
-                        return this._updateCache(cleanKey, result);
-                    } else {
-                        // 后缀没找到，只返回基础名（比如 Koraidon-Apex -> 故勒顿）
-                        return this._updateCache(cleanKey, cnBase);
-                    }
-                }
-            }
-            
-            // 5. 找不到，返回原名
-            const result = fallback !== undefined ? fallback : cleanKey;
-            return this._updateCache(cleanKey, result);
-        },
-
-        /**
-         * 更新缓存
-         * @private
-         */
-        _updateCache: function(key, value) {
-            this._cache[key] = value;
-            return value;
-        },
-
-        /**
-         * 更新宝可梦对象的中文名属性（增强版）
-         * @param {Object} pokemon 宝可梦对象
-         */
-        localizePokemon: function(pokemon) {
-            if (!pokemon) return;
-            
-            // 使用智能翻译
-            let cnName = this.get(pokemon.name);
-            
-            // 如果还是英文且包含横杠，尝试只用基础名
-            if (cnName === pokemon.name && pokemon.name.includes('-')) {
-                const baseName = pokemon.name.split('-')[0];
-                const cnBase = this.get(baseName);
-                if (cnBase !== baseName) {
-                    cnName = cnBase;
-                }
-            }
-            
-            pokemon.cnName = cnName;
-        },
-
-        /**
-         * 批量翻译数组中的名称
-         * @param {Array<string>} names 英文名称数组
-         * @returns {Array<string>} 中文名称数组
-         */
-        translateArray: function(names) {
-            if (!Array.isArray(names)) return [];
-            return names.map(name => this.get(name));
-        },
-
-        /**
-         * 检查是否有某个key的翻译
-         * @param {string} key 要检查的key
-         * @returns {boolean}
-         */
-        has: function(key) {
-            return !!translations[key];
-        },
-
-        /**
-         * 清除缓存（调试用）
-         */
-        clearCache: function() {
-            this._cache = {};
-            console.log('[Locale] Cache cleared');
+    const lowerKey = cleanKey.toLowerCase();
+    for (const originalKey in translations) {
+        if (originalKey.toLowerCase() === lowerKey) {
+            return translations[originalKey];
         }
-    };
+    }
 
+    return getNormalizedTranslationValue(cleanKey);
+}
+
+function capitalizeNameParts(value, separator) {
+    return String(value || '')
+        .split(separator)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .join(separator);
+}
+
+function translateMapValue(name) {
+    if (!name) return '未知';
+    const normalizedName = String(name).trim();
+    if (MAP_TRANSLATIONS[normalizedName]) return MAP_TRANSLATIONS[normalizedName];
+
+    const underscoreName = normalizedName.replace(/\s+/g, '_');
+    if (MAP_TRANSLATIONS[underscoreName]) return MAP_TRANSLATIONS[underscoreName];
+
+    const upperName = normalizedName.toUpperCase();
+    if (MAP_TRANSLATIONS[upperName]) return MAP_TRANSLATIONS[upperName];
+
+    const lowerName = normalizedName.toLowerCase();
+    for (const key in MAP_TRANSLATIONS) {
+        const lowerKey = key.toLowerCase();
+        if (lowerKey.includes(lowerName) || lowerName.includes(lowerKey)) {
+            return MAP_TRANSLATIONS[key];
+        }
+    }
+
+    return normalizedName.replace(/_/g, ' ');
+}
+
+const Locale = {
+    _cache: {},
+
+    get: function(key, fallback) {
+        if (key === null || key === undefined || key === '') {
+            return fallback !== undefined ? fallback : '';
+        }
+
+        const cleanKey = String(key).trim();
+        if (Object.prototype.hasOwnProperty.call(this._cache, cleanKey)) {
+            return this._cache[cleanKey];
+        }
+
+        const directValue = getTranslationValue(cleanKey);
+        if (directValue) {
+            return this._updateCache(cleanKey, directValue);
+        }
+
+        if (cleanKey.includes('-')) {
+            const parts = cleanKey.split('-');
+            const baseName = parts[0];
+            const suffixPart = parts.slice(1).join('-');
+            const cnBase = getTranslationValue(baseName);
+            if (cnBase) {
+                const cnSuffix = getTranslationValue(suffixPart);
+                return this._updateCache(cleanKey, cnSuffix ? cnBase + '-' + cnSuffix : cnBase);
+            }
+        }
+
+        return this._updateCache(cleanKey, fallback !== undefined ? fallback : cleanKey);
+    },
+
+    move: function(name) {
+        if (!name) return '—';
+        const cleanName = String(name).trim();
+        const spacedName = cleanName.replace(/[-_]/g, ' ');
+        return this.get(cleanName, this.get(spacedName, cleanName));
+    },
+
+    pokemon: function(id) {
+        if (!id) return '???';
+        const normalizedId = String(id).trim();
+        const directValue = getTranslationValue(normalizedId);
+        if (directValue) return directValue;
+
+        const hyphenName = capitalizeNameParts(normalizedId.replace(/_/g, '-'), '-');
+        const hyphenValue = getTranslationValue(hyphenName);
+        if (hyphenValue) return hyphenValue;
+
+        const baseName = normalizedId.split(/[-_]/)[0];
+        const baseValue = getTranslationValue(baseName);
+        if (baseValue) {
+            const suffix = normalizedId.includes('-')
+                ? normalizedId.split('-').slice(1).join('-')
+                : normalizedId.includes('_')
+                    ? normalizedId.split('_').slice(1).join('-')
+                    : '';
+            return suffix ? baseValue + '-' + suffix.toUpperCase() : baseValue;
+        }
+
+        return normalizedId.replace(/[-_]/g, ' ');
+    },
+
+    map: function(name) {
+        return translateMapValue(name);
+    },
+
+    _updateCache: function(key, value) {
+        this._cache[key] = value;
+        return value;
+    },
+
+    localizePokemon: function(pokemon) {
+        if (!pokemon) return;
+        pokemon.cnName = this.pokemon(pokemon.name || pokemon.species || pokemon.id);
+    },
+
+    translateArray: function(names) {
+        if (!Array.isArray(names)) return [];
+        return names.map(name => this.get(name));
+    },
+
+    has: function(key) {
+        if (!key) return false;
+        return !!getTranslationValue(key) || translateMapValue(key) !== String(key).trim().replace(/_/g, ' ');
+    },
+
+    clearCache: function() {
+        this._cache = {};
+        translationLookupCache.normalizedMap = null;
+        if (typeof console !== 'undefined') console.log('[Locale] Cache cleared');
+    }
+};
+
+root.translations = translations;
+root.MAP_TRANSLATIONS = MAP_TRANSLATIONS;
+root.Locale = Locale;
+root.normalizeTranslationKey = normalizeTranslationKey;
+root.getNormalizedTranslationValue = getNormalizedTranslationValue;
+root.translateMoveName = function(name) { return Locale.move(name); };
+root.translatePokemonName = function(id) { return Locale.pokemon(id); };
+root.translateMapName = function(name) { return Locale.map(name); };
+
+if (typeof console !== 'undefined') {
     console.log('[Locale] Translation system initialized with', Object.keys(translations).length, 'entries');
 }
+})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));

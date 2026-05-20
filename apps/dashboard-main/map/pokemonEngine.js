@@ -561,12 +561,12 @@ const PokemonSpawnEngine = {
 window.PokemonSpawnEngine = PokemonSpawnEngine;
 
 // =====================================================
-// 第4部分：宝可梦数据缓存管理（从 ERA 读取）
+// 第4部分：宝可梦数据缓存管理（从 main map state 读取）
 // =====================================================
 
 const PokemonSpawnCache = {
-    // ERA 数据缓存
-    eraSpawns: {},
+    // main map state 数据缓存
+    mapSpawns: {},
     
     // 当前位置的宝可梦列表
     currentList: [],
@@ -581,26 +581,26 @@ const PokemonSpawnCache = {
     },
     
     /**
-     * 从 ERA 数据更新缓存
-     * @param {Object} eraData - 从酒馆接收的 ERA 数据
+     * 从 main map state 更新缓存
+     * @param {Object} mapState - 从 dashboard 接收的 main map state
      */
-    updateFromEra(eraData) {
-        if (eraData?.world_state?.pokemon_spawns) {
-            this.eraSpawns = eraData.world_state.pokemon_spawns;
-            console.log('[Pokemon] ✓ 已从 ERA 更新宝可梦数据:', Object.keys(this.eraSpawns).length, '个区域');
+    updateFromMapState(mapState) {
+        if (mapState?.pokemonSpawns) {
+            this.mapSpawns = mapState.pokemonSpawns;
+            console.log('[Pokemon] ✓ 已从 main map state 更新宝可梦数据:', Object.keys(this.mapSpawns).length, '个区域');
         }
     },
     
     /**
-     * 获取当前位置的宝可梦（从 ERA 数据读取）
+     * 获取当前位置的宝可梦（从 main map state 读取）
      */
     getForLocation(locationInfo) {
         if (!locationInfo) return [];
         
         const key = this.getLocationKey(locationInfo);
-        const gridData = this.eraSpawns[key];
+        const gridData = this.mapSpawns[key];
         
-        // 从 ERA 数据读取（对象结构 p1, p2, p3...）
+        // 从 main map state 读取（对象结构 p1, p2, p3...）
         if (gridData && typeof gridData === 'object') {
             // 转换为数组
             const result = [];
@@ -617,10 +617,10 @@ const PokemonSpawnCache = {
             return this.currentList;
         }
         
-        // ERA 中没有该位置的数据，返回空（等待酒馆注入）
+        // main map state 中没有该位置的数据，返回空（等待 host 刷新）
         // 防止日志刷屏：只在位置变化时打印一次
         if (this.currentLocationKey !== key) {
-            console.log('[Pokemon] 位置', key, '暂无 ERA 数据，等待酒馆注入');
+            console.log('[Pokemon] 位置', key, '暂无 main map state 数据，等待 host 刷新');
         }
         this.currentLocationKey = key;
         this.currentList = [];
@@ -628,7 +628,7 @@ const PokemonSpawnCache = {
     },
     
     /**
-     * 强制刷新 - 现在只是重新从 ERA 读取
+     * 强制刷新 - 现在只是重新从 main map state 读取
      */
     refresh(locationInfo) {
         if (!locationInfo) {
@@ -641,7 +641,7 @@ const PokemonSpawnCache = {
      * 清除所有缓存
      */
     clearAll() {
-        this.eraSpawns = {};
+        this.mapSpawns = {};
         this.currentList = [];
         this.currentLocationKey = null;
     }

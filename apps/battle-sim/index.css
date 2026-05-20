@@ -5889,6 +5889,65 @@ body {
     filter: none !important;
 }
 
+.battle-perf-mode .party-card-modern,
+.battle-perf-mode .cmd-btn,
+.battle-perf-mode .move-btn .clash-badge,
+.battle-perf-mode .vs-shockwave,
+.battle-perf-mode .result-comic-bubble,
+.battle-perf-mode .style-dna-ring,
+.battle-perf-mode .bio-evo-core,
+.battle-perf-mode .bond-aura,
+.battle-perf-mode .dynamax-aura,
+.battle-perf-mode .z-aura,
+.battle-perf-mode .max-aura,
+.battle-perf-mode .tera-sheen,
+.battle-perf-mode .tera-crown,
+.battle-perf-mode .insight-indicator,
+.battle-perf-mode .hud-pulse,
+.battle-perf-mode .selection-pulse,
+.battle-perf-mode .status-badge {
+    animation: none !important;
+}
+
+.battle-perf-mode .party-card-modern,
+.battle-perf-mode .cmd-btn {
+    opacity: 1 !important;
+}
+
+.battle-perf-mode .battle-stage,
+.battle-perf-mode .battle-card,
+.battle-perf-mode .pokemon-card,
+.battle-perf-mode .party-card-modern,
+.battle-perf-mode .move-btn,
+.battle-perf-mode .cmd-btn,
+.battle-perf-mode .modal-content,
+.battle-perf-mode .dialog-panel,
+.battle-perf-mode .hud-panel {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+}
+
+.battle-perf-mode .cmd-btn,
+.battle-perf-mode .move-btn,
+.battle-perf-mode .party-card-modern,
+.battle-perf-mode .battle-card,
+.battle-perf-mode .pokemon-card,
+.battle-perf-mode .hp-fill,
+.battle-perf-mode .pp-fill {
+    transition-duration: 0.08s !important;
+}
+
+.battle-perf-mode .cmd-btn::before,
+.battle-perf-mode .cmd-btn::after,
+.battle-perf-mode .move-btn::before,
+.battle-perf-mode .move-btn::after,
+.battle-perf-mode .battle-stage::before,
+.battle-perf-mode .battle-stage::after {
+    animation: none !important;
+    filter: none !important;
+}
+
 /* ========================================================== END PERFORMANCE MODE ========================================================== */
 
 /* ==========================================================

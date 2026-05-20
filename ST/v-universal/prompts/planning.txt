@@ -116,7 +116,7 @@ E.【语言协议锁】
      * [HIJACK UNIT] -> 检测通过 (Name: XXX, Lv: Y)。
    - 判定: **务必检查当前队伍数量** (参照 pkm_team_summary)。
      * [分支 A: 入队]: 队伍 (Slot1-6) **未满** 且 剧情未指定传送 -> 锁定目标为最早的空 `slotX`。
-     * [分支 B: 缓冲]: 队伍 **已满 (6只)** 或 剧情明确描述 **“传送到盒子/发给博士”** -> 锁定目标为 `transfer_buffer`。
+     * [分支 B: 缓冲]: 队伍 **已满 (6只)** 或 剧情明确描述 **“传送到盒子/发给博士”** -> 锁定目标为 `transferBuffer`。
    - 基本构建：填入空 对象，完整构建必要的 name/lv/gender(F/M/N)/quality/moves, 以及nature, ability选填。
    - 机制审查：`mechanic` 字段，是否有机制
 
@@ -134,7 +134,7 @@ E.【语言协议锁】
      * 招式习得: 特殊：LOG不会说明这部分内容，请你自行决策和变量更新，事后结算和更新！ 请调用口袋百科(Gen9)数据逻辑推演：
       若发生【进化】或【等级跃升】，必须检查关键技能或者更新剧情中提到的技能
       操作: 若有强力新技，主动填入空位；若槽位已满，主动替换掉低级技能
-     * 努力值 (EVs): 只要经历战斗/特训，必须给予 `stats_meta.ev_up` (推荐: 普通战斗+1~3, Boss战+5~10)。
+     * 努力值 (EVs): 只要经历战斗/特训，必须对 `/pkm/party/slots/<0-5>/stats_meta/ev_level` 使用 `delta` (推荐: 普通战斗+1~3, Boss战+5~10)。
      * 形态变更: 是否满足进化条件？ -> Update `name`, `ability`
    - 机制变更:
      * 道具: `item` 是否因剧情变动？
@@ -143,13 +143,13 @@ E.【语言协议锁】
 
 4. [宝可梦好感度变化]
    - 触发信号：交互/战斗/剧情。
-   - 填入 (bonds_up Delta)
+   - 对 `/pkm/party/slots/<0-5>/bonds` 使用 `delta` 写本轮真实增减。
 
 5. [NPC好感度变化]
    - 触发信号：与 NPC 发生有意义的对话、帮助、冲突、胜负、承诺或关系转折。
    - `npcKey` 必须用稳定英文名字 ID，优先小写 ASCII，例如 `ash`、`misty`、`cynthia`。
-   - 首次记录：`add` `/pkm/npcs/records/<npcKey>`，value 只包含 `{ "love": 0-255 }`；无明确关系不创建记录。
-   - 已存在记录：只用 `replace` 写最终 `love`。
+   - 首次记录：`insert` `/pkm/npcs/records/<npcKey>`，value 只包含 `{ "love": 0-255 }`；无明确关系不创建记录。
+   - 已存在记录：用 `replace` 写最终 `love`。
    - 无明确关系变化则跳过。
 
 6. [训练家熟练度变化]
@@ -162,10 +162,11 @@ E.【语言协议锁】
    - 若无变化 → Skipping，不输出 UpdateVariable
    - 若有变化 → 输出 `<UpdateVariable>`，包含 `<Analysis>` 与 `<JSONPatch>`
    - 不要整段覆写对象
+   - JSONPatch op 只使用 `replace`、`insert`、`delta`、`remove`
 </Analysis>
 <JSONPatch>
 [
-  { "op": "delta/replace"…………  },
+  { "op": "delta|replace|insert|remove", "path": "/pkm/...", "value": ... },
   ………………
 ]
 </JSONPatch>

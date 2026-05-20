@@ -6,7 +6,7 @@
  * references ./src/main.js (module) instead. Verify if this file
  * is still needed; if not, delete it.
  *
- * 依赖: pokedex-data.js, moves-data.js, battle-engine.js
+ * 依赖: 共享 POKEDEX, moves-data.js, battle-engine.js
  * 
  * 职责:
  * - UI 渲染 (血条、精灵图、按钮)
@@ -3695,12 +3695,12 @@ function renderSwitchMenu(allowCancel = true) {
 
         // =========================================================
         // 数据驱动的 Sprite URL 生成
-        // 使用 pokedex-data.js 中的 forme 字段判断形态类型
+        // 使用共享 POKEDEX 中的 forme 字段判断形态类型
         // =========================================================
         const seedIdWithHyphen = pm.name.toLowerCase().replace(/[^a-z0-9-]/g, '');
         const seedIdCompact = pm.name.toLowerCase().replace(/[^a-z0-9]/g, '');
         
-        // 从 pokedex-data.js 获取宝可梦数据
+        // 从共享 POKEDEX 获取宝可梦数据
         const pokeData = (typeof POKEDEX !== 'undefined' && POKEDEX[seedIdCompact]) 
             ? POKEDEX[seedIdCompact] : null;
         const forme = pokeData?.forme || '';

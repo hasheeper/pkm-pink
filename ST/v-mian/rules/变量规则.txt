@@ -1,0 +1,78 @@
+<variable_rule>
+变量指令规则
+只在本轮剧情确实改变变量时输出 `<UpdateVariable><JSONPatch>`；没有变化就不输出。
+禁止整段覆写，只写发生变化的最小路径。
+
+格式
+```xml
+<UpdateVariable>
+<Analysis>One short sentence.</Analysis>
+<JSONPatch>
+[
+  { "op": "replace|delta|remove", "path": "/pkm/...", "value": ... }
+]
+</JSONPatch>
+</UpdateVariable>
+```
+
+操作
+- `replace`: 写最终值或完整槽位对象。
+- `delta`: 数字增减，只用于熟练度、EV、AVS、NPC love；正数增加，负数减少。
+- `remove`: 删除明确离队/移除的对象。
+
+队伍
+- 槽位索引是 0~5，对应显示的 slot1~slot6。
+- 新宝可梦入队：找最早空槽，`replace` `/pkm/party/slots/<0-5>`。
+- 队伍已满或剧情明确传送：`replace` `/pkm/party/transferBuffer`。
+- 不把已有槽位写成 `null`。
+- 切换首发：目标 `/isLead` 写 true，其他已有宝可梦槽写 false。
+- 宝可梦对象只写已确定字段；未知字段用 `null`，不要编造。
+- 常用字段：`slot`, `name`, `species`, `gender`, `lv`, `quality`, `nature`, `ability`, `shiny`, `item`, `mechanic`, `teraType`, `isAce`, `isLead`, `moves`, `friendship`, `stats_meta`, `notes`。
+- `quality` 为 `low|medium|high|perfect`，决定初始 IV 档位。
+- `moves` 是 4 项数组。
+- 宝可梦好感使用 `friendship.avs` 四维：`trust`, `passion`, `insight`, `devotion`。
+
+成长
+- 升级：`replace` `/pkm/party/slots/<i>/lv`。
+- 进化：`replace` `/pkm/party/slots/<i>/name` 和 `/species`，必要时改 `ability`、`moves`。
+- 道具/特性变化：`replace` `/pkm/party/slots/<i>/item`、`/ability`。
+- EV：`delta` `/pkm/party/slots/<i>/stats_meta/ev_level`。
+- AVS：`delta` `/pkm/party/slots/<i>/friendship/avs/<trust|passion|insight|devotion>`。
+- 熟练度：`delta` `/pkm/player/trainerProficiency`。
+- 机制：Mega/Z 写 `mechanic` 和 `item`；Tera 写 `mechanic` 和 `teraType`。
+
+世界
+- 位置变化：`replace` `/pkm/world/location/x`、`/y`。
+- 坐标方向：东 x+，西 x-，北 y+，南 y-；方向或距离不明确则不写坐标。
+- 时间推进：`replace` `/pkm/world/time/day_advance`，值如 `next_period`, `nextday`, `skip_to_night`, `1day`, `3days_morning`, `1week_night`。
+- 直接指定时段：`replace` `/pkm/world/time/period_set`，值为 `dawn|morning|noon|afternoon|evening|night|midnight`。
+
+NPC
+- NPC key 使用固定小写英文 ID。
+- NPC 好感只写 `delta` `/pkm/npcs/records/<npcKey>/love`，value 是本轮变化量。
+- 固定 NPC 关系记录由初始化提供，不创建或重写 `/pkm/npcs/records/<npcKey>` 对象。
+- love 范围 -100~100；0 是中立，负数是疏远，正数是亲近。
+- 不写 NPC stage。
+- 羁绊解锁：同时 `replace` `/pkm/player/bonds/<unlockKey>` 与 `/pkm/player/unlocks/<unlockKey>` 为 true。
+
+限制
+- 只使用本规则里的格式和路径。
+- 数值成长直接 `delta` 到主字段。
+
+示例
+```xml
+<UpdateVariable>
+<Analysis>Party state changed.</Analysis>
+<JSONPatch>
+[
+  { "op": "delta", "path": "/pkm/player/trainerProficiency", "value": 5 },
+  { "op": "replace", "path": "/pkm/party/slots/0/lv", "value": 21 },
+  { "op": "delta", "path": "/pkm/party/slots/0/stats_meta/ev_level", "value": 2 },
+  { "op": "delta", "path": "/pkm/party/slots/0/friendship/avs/trust", "value": 1 },
+  { "op": "delta", "path": "/pkm/npcs/records/sonia/love", "value": 3 },
+  { "op": "replace", "path": "/pkm/world/time/day_advance", "value": "next_period" }
+]
+</JSONPatch>
+</UpdateVariable>
+```
+</variable_rule>

@@ -12,7 +12,7 @@
  * - 多段攻击
  * - 特性/道具修正
  * 
- * 依赖: pokedex-data.js, moves-data.js, ability-handlers.js, items-data.js
+ * 依赖: 共享 POKEDEX, moves-data.js, ability-handlers.js, items-data.js
  */
 
 /**

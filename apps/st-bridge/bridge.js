@@ -323,7 +323,8 @@
     return {
       env,
       appBaseUrl,
-      universalDashboardUrl: `${appBaseUrl}/apps/dashboard-universal/index.html`
+      universalDashboardUrl: `${appBaseUrl}/apps/dashboard-universal/index.html`,
+      mainDashboardUrl: `${appBaseUrl}/apps/dashboard-main/index.html`
     };
   }
 
@@ -373,6 +374,9 @@
     if (key === 'dashboard-universal' || key === 'universal-dashboard' || key === 'pkm-universal') {
       return `${appBaseUrl}/apps/dashboard-universal/index.html`;
     }
+    if (key === 'dashboard-main' || key === 'main-dashboard' || key === 'pkm-main') {
+      return `${appBaseUrl}/apps/dashboard-main/index.html`;
+    }
     throw new Error(`Unknown PKM app "${app}"`);
   }
 
@@ -382,6 +386,8 @@
     ROOT.ST_BRIDGE_ENV = profile.env;
     ROOT.PKM_APP_BASE_URL = profile.appBaseUrl;
     ROOT.PKM_UNIVERSAL_DASHBOARD_URL = resolveAppUrl('dashboard-universal', profile);
+    ROOT.PKM_MAIN_DASHBOARD_URL = resolveAppUrl('dashboard-main', profile);
+    ROOT.PKM_MVUZ_DASHBOARD_URL = resolveAppUrl(pack.product === 'main' ? 'dashboard-main' : 'dashboard-universal', profile);
     if (pack.globals && typeof pack.globals === 'object') {
       Object.entries(pack.globals).forEach(([key, value]) => {
         ROOT[key] = value;
@@ -523,7 +529,8 @@
         bridgeRoot: bridgeRoot.href,
         env: state?.env || bridgeProfile.env,
         appBaseUrl: state?.appBaseUrl || bridgeProfile.appBaseUrl,
-        universalDashboardUrl: state?.universalDashboardUrl || bridgeProfile.universalDashboardUrl
+        universalDashboardUrl: state?.universalDashboardUrl || bridgeProfile.universalDashboardUrl,
+        mainDashboardUrl: state?.mainDashboardUrl || bridgeProfile.mainDashboardUrl
       },
       mvu: {
         readVariables,
@@ -587,6 +594,7 @@
       env: bridgeProfile.env,
       appBaseUrl: bridgeProfile.appBaseUrl,
       universalDashboardUrl: bridgeProfile.universalDashboardUrl,
+      mainDashboardUrl: bridgeProfile.mainDashboardUrl,
       loaded: [],
       failedOptional: [],
       loadedAt: new Date().toISOString()

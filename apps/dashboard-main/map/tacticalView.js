@@ -80,305 +80,6 @@ const AVATAR_FIXES = {
     "mallow": "mallow"
 };
 
-/**
- * 翻译宝可梦名称为中文
- * @param {string} pokemonId - 宝可梦英文ID (如 "pikachu", "bulbasaur-galar")
- * @returns {string} - 中文名称，如果没有翻译则返回格式化的英文名
- */
-/**
- * 地区/生态区/点位名称汉化映射
- */
-const MAP_TRANSLATIONS = {
-    // 五大区域
-    "Region_Zenith": "中枢区",
-    "Region_Neon": "霓虹区", 
-    "Region_Bloom": "盛放区",
-    "Region_Shadow": "暗影区",
-    "Region_Apex": "极诣区",
-    "ZENITH": "中枢区",
-    "NEON": "霓虹区",
-    "BLOOM": "盛放区", 
-    "SHADOW": "暗影区",
-    "APEX": "极诣区",
-    
-    // 人文区域 (region_zones)
-    "Aether_Admin_Zone": "以太行政区",
-    "Royal_Academy": "皇家学院",
-    "Living_Quarter": "居住区",
-    "Lusamine_Gardens": "露莎米奈花园",
-    "Eco_Subject_Delta": "生态实验区Δ",
-    "Academic_Plaza": "学术广场",
-    "Iono_Stream_Tower": "奇树直播塔",
-    "Toxic_Industrial_Park": "毒系工业园",
-    "Cyber_Shopping_District": "电子商业区",
-    "Port_Logistics_Area": "港口物流区",
-    "Glitch_Arcade_Lane": "故障街机巷",
-    "Skyline_Residences": "天际住宅区",
-    "Synth_Promenade": "合成步道",
-    "Pearl_Resort": "珍珠度假镇",
-    "Sunflora_Farmsteads": "向日花农场",
-    "Marina_Port_Town": "码头港镇",
-    "Grim_Borough": "铁灰市",
-    "Venom_Refinery": "毒液精炼厂",
-    "Frost_Smoke_City": "霜烟市",
-    "Requiem_Grounds": "安魂墓地",
-    "Canal_Ruins_Post": "运河遗迹哨站",
-    "Kamunagi_Hollow": "神阖之空洞",
-    "Crimson_Forge_City": "红莲锻造市",
-    "Titan_Mining_site": "泰坦矿坑",
-    "Dune_Watcher_Post": "沙丘守望哨",
-    "Ruins_of_Giants": "巨人遗迹",
-    
-    // 生态区 (biome_flavor)
-    "Arcadia_Lawns": "阿卡迪亚草坪",
-    "Sapphire_Strand": "蓝宝石海岸",
-    "Hermit_Sands": "隐士沙洲",
-    "Aroma_Meadow": "芳香草甸",
-    "Jade_Canopy": "翡翠天冠",
-    "Deep_Root_Hollow": "深根空洞",
-    "Silt_Delta": "淤积三角洲",
-    "Breeze_Woodlands": "微风林地",
-    "Golden_Horizon": "黄金地平线",
-    "Radiant_Plains": "光辉平原",
-    "Savanna_Outlands": "野蛮荒地",
-    "Scorched_Dunes": "焦痕沙丘",
-    "Obsidian_Beach": "黑曜石滩",
-    "Inferno_Crater": "炼狱火山口",
-    "Crimson_Badlands": "深红恶地",
-    "Frostbite_Slope": "霜咬坡地",
-    "Cinder_Moor": "余烬荒原",
-    "Twilight_Copse": "暮光灌丛",
-    "Crimson_Peat": "深红泥炭地",
-    "Spirit_Plateau": "镇魂高地",
-    "Ginkgo_Grove": "银杏之森",
-    "Silent_Tundra": "沉寂冻土",
-    "Zero_Halo_Moat": "零光护城河",
-    "Mirror_Lotis_Lake": "镜面莲花湖",
-    "Emerald_Vein_River": "翡翠脉络河",
-    "Crystal_Lagoon": "晶体泻湖",
-    "Twin_Destiny_Basin": "双命定盆地",
-    "Chrome_Canal": "铬色运河",
-    "Ferro_Straits": "钢铁海峡",
-    "Mercury_Stream": "水银溪",
-    "Frigid_Floe": "寒冷浮冰",
-    "Mist_Veil_Sound": "雾幕海湾",
-    "Prism_Bay": "棱镜海湾",
-    "Cerulean_Reef": "蔚蓝珊瑚海",
-    "Basalt_Shoals": "玄武岩浅滩",
-    "Equatorial_Dark_Zone": "赤道暗区",
-    "Titan_Trough": "泰坦海槽",
-    "Chrome_Abyss": "铬色深渊",
-    "Boreal_Trench": "北境海沟",
-    
-    // 地表类型 (Surface/Terrain)
-    "Deep_Sea": "深海",
-    "Shallow_Sea": "浅海",
-    "Fresh_Water": "淡水",
-    "Glacial_Water": "冰川水域",
-    "Sewage": "污水区",
-    "Swamp": "沼泽",
-    "Standard_Grass": "草地",
-    "High_Grass": "高草丛",
-    "Light_Forest": "疏林",
-    "Deep_Jungle": "密林",
-    "Flower_Field": "花田",
-    "Withered_Grass": "枯草地",
-    "Coastal_Sand": "海岸沙滩",
-    "Desert_Sand": "沙漠",
-    "Wet_Soil": "湿土",
-    "Scorched_Earth": "焦土",
-    "Waste": "废土",
-    "Pavement": "铺装路面",
-    "Slum_Pavement": "旧街道",
-    "Synthetic_Turf": "人工草坪",
-    "Industrial": "工业区",
-    "High_Voltage": "高压区",
-    "Ancient_Timber": "木栈道",
-    "Rocky_Mountain": "岩山",
-    "Magma": "熔岩",
-    "Snowfield": "雪原",
-    "Wall_Block": "障碍",
-    "VOID": "虚空",
-    "PATH": "通道",
-    "NONE": "无",
-    
-    // 服务设施 (service)
-    "Wares_General": "友好商店",
-    "Shop_Special_Z": "皇冠精品店",
-    "Shop_Special_N": "得文科技店",
-    "Shop_Special_B": "芳香草药屋",
-    "Shop_Special_S": "地下黑市",
-    "Shop_Special_A": "极诣补给站",
-    "Shop_Ginkgo_Cart": "银杏商会",
-    "CP_Zenith_Main": "中枢宝可梦中心",
-    "CP_Neon_Central": "霓虹宝可梦中心",
-    "CP_Bloom_Port": "海滨宝可梦中心",
-    "CP_Shadow_Slum": "铁灰宝可梦中心",
-    "CP_Apex_Base": "前线宝可梦中心",
-    "Bed_Rest": "住宿点",
-    "Player_s_Room": "玩家房间",
-    "PC_Terminal": "终端塔",
-    "Police_Box_Z": "Z区安保站",
-    "Police_Box_N": "N区巡逻亭",
-    "Police_Box_B": "海岸警卫站",
-    "Police_Box_S": "S区岗哨",
-    "Police_Box_A": "巡护员基地",
-    
-    // 地点锚点 (place_anchor)
-    "Cafe": "咖啡厅",
-    "Bar": "酒吧",
-    "Diner": "餐厅",
-    "Shop_Browsk": "商店",
-    "Arcade": "游戏厅",
-    "Relax": "休息区",
-    "Viewpoint": "观景点",
-    "Plaza": "广场",
-    "Nature_Spot": "自然景点",
-    "Study": "学习区",
-    
-    // 传送系统 (system_warps)
-    "Sewer": "下水道",
-    "Cave": "洞穴",
-    "Gate": "闸口",
-    
-    // 交通设施 (transit_infrastructure)
-    "Central_Hub": "中央枢纽站",
-    "Electro_Avenue": "电子大道站",
-    "Seaside_Terminal": "海滨终点站",
-    "District_S": "S区地铁站",
-    "Frontier_Outpost": "前线货运站",
-    "Neon_Cargo_Terminal": "霓虹货运码头",
-    "Sapphire_Marina": "蓝宝石码头",
-    "Restricted_Dock": "限制港口",
-    "Northern_Cemetery_Pad": "北部墓地停机坪",
-    "Summit_Dojo_Point": "山巅道场降落点",
-    "Zenith_HQ_Helipad": "中枢总部直升机坪",
-    "Lift_Station_Lower": "缆车下站",
-    "Lift_Station_Upper": "缆车上站",
-    
-    // NPC场所 (npc_actor_context)
-    "Gloria_Camp_Curry": "咖喱营地",
-    "Rosa_PokeStar_Studios": "宝可梦影城",
-    "Dawn_VIP_Beach_Villa_01": "海滨别墅",
-    "Akari_Jubilife_Survey_Barracks": "调查队宿舍",
-    "Serena_Boutique_Serena_Style": "时装工作室",
-    "Selene_Jungle_Treehouse": "丛林树屋",
-    "Juliana_Int_l_Dorm_Rm_303": "国际宿舍303",
-    "May_Secret_Base": "秘密基地",
-    "Iris_Zenith_Air_Attic": "空中阁楼",
-    "Nemona_Suite": "妮莫套房",
-    "Cynthia_Study_Room": "竹兰研究室",
-    "Lusamine_Exec_Private_Penthouse": "露莎米奈私人公馆",
-    "Lillie_Staff_Dormitory_Room_201": "职工宿舍201",
-    "Mallow_Lana_Alola_Breeze_Diner_Room": "玛奥水莲阿罗拉餐厅",
-    "Irida_Pearl_Clan_Sanctuary": "珍珠队圣所",
-    "Misty_Lifeguard_Tower": "救生塔",
-    "Lacey_Committee_Office": "委员会办公室",
-    "Sonia_Rhodia_Central_Lab": "中央实验室",
-    "Roxie_Venom_Core_Live_House": "猛毒演出场",
-    "Iono_Levincia_Guild_Tower": "奇树直播塔",
-    "Marnie_Spikemuth_Relief_Center": "尖钉镇据点",
-    "Hex_Curio_Shop_Seance": "古董杂货铺",
-    "Bea_Iron_Will_Dojo": "钢铁意志道场",
-    "Erika_Celadon_Spa": "芳疗庭院",
-    "Nessa_The_Infinity_Poolside_Lounge": "无边泳池休息厅",
-    "Acerola_Abandoned_Library": "废弃图书馆",
-    "Skyla_Hangar_04": "4号机库"
-};
-
-/**
- * 翻译地图名称为中文
- * @param {string} name - 英文名称
- * @returns {string} - 中文名称，如果没有翻译则返回格式化的英文名
- */
-function translateMapName(name) {
-    if (!name) return '未知';
-    
-    // 去除空格和下划线的标准化
-    const normalizedName = name.trim();
-    
-    // 直接匹配
-    if (MAP_TRANSLATIONS[normalizedName]) {
-        return MAP_TRANSLATIONS[normalizedName];
-    }
-    
-    // 尝试下划线格式
-    const underscoreName = normalizedName.replace(/\s+/g, '_');
-    if (MAP_TRANSLATIONS[underscoreName]) {
-        return MAP_TRANSLATIONS[underscoreName];
-    }
-    
-    // 尝试大写格式
-    const upperName = normalizedName.toUpperCase();
-    if (MAP_TRANSLATIONS[upperName]) {
-        return MAP_TRANSLATIONS[upperName];
-    }
-    
-    // 尝试部分匹配
-    for (const key in MAP_TRANSLATIONS) {
-        if (key.toLowerCase().includes(normalizedName.toLowerCase()) ||
-            normalizedName.toLowerCase().includes(key.toLowerCase())) {
-            return MAP_TRANSLATIONS[key];
-        }
-    }
-    
-    // 没有翻译，返回格式化的英文名
-    return normalizedName.replace(/_/g, ' ');
-}
-
-// 暴露为全局函数，供 game.js 使用
-window.translateMapName = translateMapName;
-
-function translatePokemonName(pokemonId) {
-    if (!pokemonId) return '???';
-    
-    // 标准化ID格式
-    let normalizedId = pokemonId.trim();
-    
-    // 尝试多种格式匹配翻译
-    if (typeof translations !== 'undefined') {
-        // 1. 直接匹配 (首字母大写)
-        const capitalizedId = normalizedId.charAt(0).toUpperCase() + normalizedId.slice(1).toLowerCase();
-        if (translations[capitalizedId]) {
-            return translations[capitalizedId];
-        }
-        
-        // 2. 处理带连字符的形态 (如 pikachu-gmax -> Pikachu-Gmax)
-        if (normalizedId.includes('-')) {
-            const parts = normalizedId.split('-');
-            const formattedId = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join('-');
-            if (translations[formattedId]) {
-                return translations[formattedId];
-            }
-        }
-        
-        // 3. 处理下划线格式 (如 pikachu_gmax)
-        if (normalizedId.includes('_')) {
-            const parts = normalizedId.split('_');
-            const formattedId = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join('-');
-            if (translations[formattedId]) {
-                return translations[formattedId];
-            }
-        }
-        
-        // 4. 尝试只匹配基础名称 (去除形态后缀)
-        const baseName = normalizedId.split(/[-_]/)[0];
-        const capitalizedBase = baseName.charAt(0).toUpperCase() + baseName.slice(1).toLowerCase();
-        if (translations[capitalizedBase]) {
-            // 如果有形态后缀，附加上去
-            const suffix = normalizedId.includes('-') ? normalizedId.split('-').slice(1).join('-') : 
-                          normalizedId.includes('_') ? normalizedId.split('_').slice(1).join('-') : '';
-            if (suffix) {
-                return translations[capitalizedBase] + '-' + suffix.toUpperCase();
-            }
-            return translations[capitalizedBase];
-        }
-    }
-    
-    // 没有翻译，返回格式化的英文名
-    return normalizedId.replace(/[-_]/g, ' ').toUpperCase();
-}
-
 const THREAT_MAP = {
     0: { label: "NULL",  color: "#bdc3c7", alert: false },
     6: { label: "PEACE", color: "#2ecc71", alert: false },
@@ -803,7 +504,12 @@ const TacticalSystem = {
 
         if(this.hoverData) this.drawSidePanel(ctx);
 
-        requestAnimationFrame(() => this._doRender());
+        const renderNext = () => requestAnimationFrame(() => this._doRender());
+        if (window.isDashboardPerformanceMode) {
+            setTimeout(renderNext, window.MAP_PERF_FRAME_DELAY_MS || 33);
+        } else {
+            renderNext();
+        }
     },
 
     // 🏆 Draw Tile UI (核心: 每一个方块就是一个仪表盘)
@@ -1068,7 +774,7 @@ const TacticalSystem = {
         const info = THREAT_MAP[val] || THREAT_MAP[0];
         const cx = x + realS - 16;
         const cy = y + 16;
-        const pulse = 1 + Math.sin(Date.now() / 300) * 0.2;
+        const pulse = window.isDashboardPerformanceMode ? 1 : 1 + Math.sin(Date.now() / 300) * 0.2;
         const radius = info.alert && val >= 4 ? 4 * pulse : 4;
 
         ctx.save();
@@ -1090,9 +796,9 @@ const TacticalSystem = {
         
         const key = `${gx}_${gy}`;
         const weatherData = weatherGrid[key];
-        if (!weatherData || !weatherData.weather || weatherData.weather === 'clear') return;
+        const weatherType = typeof weatherData === 'string' ? weatherData : weatherData?.weather;
+        if (!weatherType || weatherType === 'clear') return;
         
-        const weatherType = weatherData.weather;
         const icon = WEATHER_Icons[weatherType];
         const color = WEATHER_COLORS[weatherType];
         if (!icon || !color) return;
@@ -1218,7 +924,7 @@ const TacticalSystem = {
 
             const drawX = (gx - this.anchor.x) * S;
             const drawY = (gy - this.anchor.y) * S;
-            const driftBase = Math.sin(Date.now() / 600 + gx * gy) * 3;
+            const driftBase = window.isDashboardPerformanceMode ? 0 : Math.sin(Date.now() / 600 + gx * gy) * 3;
 
             const totalContentH = stackList.length * SPACING;
             let currentY = drawY - (S * 0.25) - (totalContentH * 0.5);
@@ -1298,7 +1004,7 @@ const TacticalSystem = {
         const by = y - badgeH - 10;
         
         // 脉冲动画
-        const pulse = Math.sin(Date.now() / 300) * 0.15 + 0.85;
+        const pulse = window.isDashboardPerformanceMode ? 1 : Math.sin(Date.now() / 300) * 0.15 + 0.85;
         
         // 连接线
         ctx.strokeStyle = badgeColor;
@@ -2133,21 +1839,12 @@ const TacticalSystem = {
     // 生成移动变更文本
     _generateMoveChangeText: function(fromInfo, toInfo) {
         const lines = [];
-        
-        // VariableEdit 部分 - 使用正确的 ERA 格式（必须有外部 {} 闭合）
-        lines.push('<VariableEdit>');
-        lines.push(`{`);
-        lines.push(`  "world_state": {`);
-        lines.push(`    "location": {`);
-        lines.push(`      "x": ${toInfo.displayX},`);
-        lines.push(`      "y": ${toInfo.displayY}`);
-        lines.push(`    }`);
-        lines.push(`  }`);
-        lines.push(`}`);
-        lines.push('</VariableEdit>');
+
+        lines.push('[System Event: Tactical relocation confirmed]');
+        lines.push('Variables have already been updated in the current message MVU state (stat_data.pkm) by the dashboard.');
+        lines.push('Do not output any variable update block.');
         lines.push('');
-        
-        // 位置变更信息 - AI 提示词部分
+        lines.push('[Narrative Request]');
         lines.push(`【位置移动】玩家从 [${fromInfo.displayX}, ${fromInfo.displayY}] 移动到了 [${toInfo.displayX}, ${toInfo.displayY}]。`);
         
         // 检查是否有变更
@@ -2189,8 +1886,8 @@ const TacticalSystem = {
         if (weatherGrid) {
             const fromWeatherData = weatherGrid[`${fromInfo.gx}_${fromInfo.gy}`];
             const toWeatherData = weatherGrid[`${toInfo.gx}_${toInfo.gy}`];
-            const fromWeather = fromWeatherData?.weather || 'clear';
-            const toWeather = toWeatherData?.weather || 'clear';
+            const fromWeather = (typeof fromWeatherData === 'string' ? fromWeatherData : fromWeatherData?.weather) || 'clear';
+            const toWeather = (typeof toWeatherData === 'string' ? toWeatherData : toWeatherData?.weather) || 'clear';
             if (fromWeather !== toWeather) {
                 changes.push(`★ 天气变化: 从「${fromWeather}」变为「${toWeather}」`);
             }
@@ -2306,34 +2003,40 @@ const TacticalSystem = {
         return pokemonList;
     },
     
-    // 复制到剪贴板
-    _copyToClipboard: function(text) {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(() => {
-                console.log('[Tactical] 已复制到剪贴板');
-            }).catch(err => {
-                console.error('[Tactical] 复制失败:', err);
-                this._fallbackCopy(text);
-            });
-        } else {
-            this._fallbackCopy(text);
+    _postDashboardMessage: function(message) {
+        try {
+            window.parent?.postMessage(message, '*');
+            return true;
+        } catch (err) {
+            console.error('[Tactical] 发送 dashboard 消息失败:', err);
+            return false;
         }
     },
-    
-    _fallbackCopy: function(text) {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        try {
-            document.execCommand('copy');
-            console.log('[Tactical] 已复制到剪贴板 (fallback)');
-        } catch (err) {
-            console.error('[Tactical] 复制失败:', err);
-        }
-        document.body.removeChild(textarea);
+
+    _sendTavernInput: function(text, options = {}) {
+        if (!text || !String(text).trim()) return false;
+        return this._postDashboardMessage({
+            type: 'PKM_MAP_TAVERN_INPUT',
+            text,
+            source: options.source || 'dashboard-main:map-tactical',
+            noticeTitle: options.noticeTitle,
+            noticeMessage: options.noticeMessage
+        });
+    },
+
+    _sendMovementConfirm: function(text, toInfo) {
+        if (!toInfo) return false;
+        return this._postDashboardMessage({
+            type: 'PKM_MAP_JOURNEY_CONFIRM',
+            text,
+            source: 'dashboard-main:map-tactical',
+            noticeTitle: 'RELOCATION READY',
+            noticeMessage: '战术移动提示已写入酒馆输入栏',
+            location: {
+                x: toInfo.displayX,
+                y: toInfo.displayY
+            }
+        });
     },
     
     _getPokemonImageCache: function() {
@@ -2992,7 +2695,11 @@ const TacticalSystem = {
         
         // 生成遭遇战提示词
         const encounterText = this._generateEncounterPrompt(pokemon);
-        this._copyToClipboard(encounterText);
+        this._sendTavernInput(encounterText, {
+            source: 'dashboard-main:map-encounter',
+            noticeTitle: 'ENCOUNTER READY',
+            noticeMessage: '遭遇提示已写入酒馆输入栏'
+        });
         
         // 显示通知 - 使用翻译后的名称
         const pokemonName = translatePokemonName(pokemon.id || 'Unknown');
@@ -3031,14 +2738,14 @@ const TacticalSystem = {
     
     // 显示遭遇战通知
     _showEncounterNotification: function(message, isSuccess) {
-        const old = document.querySelector('.copy-notification');
+        const old = document.querySelector('.tavern-input-notification');
         if (old) old.remove();
         
         const notification = document.createElement('div');
-        notification.className = 'copy-notification';
+        notification.className = 'tavern-input-notification';
         notification.innerHTML = `
-            <div class="copy-notif-internal">
-                <div class="copy-notif-icon">
+            <div class="tavern-input-notif-internal">
+                <div class="tavern-input-notif-icon">
                     ${isSuccess ? `
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="24" height="24">
                             <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"></path>
@@ -3051,9 +2758,9 @@ const TacticalSystem = {
                         </svg>
                     `}
                 </div>
-                <div class="copy-notif-text">
-                    <div class="copy-notif-title">${isSuccess ? 'ENCOUNTER TRIGGERED' : 'NO POKEMON'}</div>
-                    <div class="copy-notif-desc">${message}</div>
+                <div class="tavern-input-notif-text">
+                    <div class="tavern-input-notif-title">${isSuccess ? 'ENCOUNTER TRIGGERED' : 'NO POKEMON'}</div>
+                    <div class="tavern-input-notif-desc">${message}</div>
                 </div>
             </div>
         `;
@@ -3075,8 +2782,8 @@ const TacticalSystem = {
         const fromInfo = this._getGridFullInfo(this.playerGrid.x, this.playerGrid.y);
         const toInfo = this._getGridFullInfo(this._movementTarget.gx, this._movementTarget.gy);
         
-        const clipboardText = this._generateMoveChangeText(fromInfo, toInfo);
-        this._copyToClipboard(clipboardText);
+        const inputText = this._generateMoveChangeText(fromInfo, toInfo);
+        this._sendMovementConfirm(inputText, toInfo);
         
         // 显示弹窗通知
         this._showMoveNotification(fromInfo, toInfo);
@@ -3085,13 +2792,13 @@ const TacticalSystem = {
         this._movementMode = false;
         this._movementTarget = null;
         
-        console.log('[Tactical] 移动确认，已复制到剪贴板');
+        console.log('[Tactical] 移动确认，已发送到 dashboard');
     },
     
     // 显示移动通知弹窗 - 使用 app.js 样式
     _showMoveNotification: function(fromInfo, toInfo) {
         // 移除旧通知
-        const old = document.querySelector('.copy-notification');
+        const old = document.querySelector('.tavern-input-notification');
         if (old) old.remove();
         
         // 检查环境变化
@@ -3104,20 +2811,20 @@ const TacticalSystem = {
         const hasChanges = changes.length > 0;
         const changeDesc = hasChanges ? changes.join(' · ') : '同区域内移动';
         
-        // 创建通知元素 - 使用 app.js 的结构
+        // 创建通知元素
         const notification = document.createElement('div');
-        notification.className = 'copy-notification';
+        notification.className = 'tavern-input-notification';
         notification.innerHTML = `
-            <div class="copy-notif-internal">
-                <div class="copy-notif-icon">
+            <div class="tavern-input-notif-internal">
+                <div class="tavern-input-notif-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="24" height="24">
                         <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
                 </div>
-                <div class="copy-notif-text">
-                    <div class="copy-notif-title">RELOCATION CONFIRMED</div>
-                    <div class="copy-notif-desc">[${fromInfo.displayX}, ${fromInfo.displayY}] → [${toInfo.displayX}, ${toInfo.displayY}]</div>
-                    ${hasChanges ? `<div class="copy-notif-desc" style="margin-top: 4px; opacity: 0.8;">${changeDesc}</div>` : ''}
+                <div class="tavern-input-notif-text">
+                    <div class="tavern-input-notif-title">RELOCATION CONFIRMED</div>
+                    <div class="tavern-input-notif-desc">[${fromInfo.displayX}, ${fromInfo.displayY}] -> [${toInfo.displayX}, ${toInfo.displayY}]</div>
+                    ${hasChanges ? `<div class="tavern-input-notif-desc" style="margin-top: 4px; opacity: 0.8;">${changeDesc}</div>` : ''}
                 </div>
             </div>
         `;

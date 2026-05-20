@@ -1,14 +1,14 @@
 /**
- * PKM Universal plugin state + MVU replay runtime.
+ * PKM common state + MVU replay runtime.
  */
 (function () {
   'use strict';
 
   const ROOT = typeof window !== 'undefined' ? window : globalThis;
-  const RUNTIME = ROOT.PKMUniversalPluginRuntime || {};
-  ROOT.PKMUniversalPluginRuntime = RUNTIME;
+  const COMMON = ROOT.PKMCommonRuntime || {};
+  ROOT.PKMCommonRuntime = COMMON;
 
-  RUNTIME.createStateReplay = function createStateReplay(ctx) {
+  COMMON.createStateReplay = function createStateReplay(ctx, options = {}) {
     const {
       ROOT: hostRoot,
       CORE,
@@ -97,6 +97,12 @@
 
     function buildPkmReplayBlock(operationId, patches) {
       const id = sanitizeReplayOperationId(operationId);
+      if (typeof options.buildReplayBlock === 'function') {
+        return options.buildReplayBlock(id, patches);
+      }
+      if (options.replayBlockFormat === 'compact') {
+        return `<UpdateVariable><Analyze>PKM_REPLAY:${id}</Analyze><JSONPatch>${JSON.stringify(patches)}</JSONPatch></UpdateVariable>`;
+      }
       return [
         '<UpdateVariable>',
         `<Analyze>PKM_REPLAY:${id}</Analyze>`,

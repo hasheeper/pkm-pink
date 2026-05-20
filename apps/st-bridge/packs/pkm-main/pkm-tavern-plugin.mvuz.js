@@ -1,659 +1,668 @@
 /**
- * PKM Tavern Plugin - MVUZ draft
- *
- * Replaces the ERA business plugin with message-variable MVUZ state.
- * This file intentionally does not create dashboard UI. The dashboard host is
- * handled by tavern-inject.mvuz.js.
+ * PKM PINK Main - MVUZ pack entry.
+ * Pack adapters and main hooks are kept here; shared implementations stay in pkm-common.
+ */
+
+/**
+ * PKM Main plugin shared adapter.
+ */
+(function () {
+  'use strict';
+
+  const ROOT = typeof window !== 'undefined' ? window : globalThis;
+  const RUNTIME = ROOT.PKMMainPluginRuntime || {};
+  ROOT.PKMMainPluginRuntime = RUNTIME;
+
+  if (typeof ROOT.PKMCommonRuntime?.createPackContext !== 'function') {
+    throw new Error('[PKM Main MVUZ] requires PKMCommonRuntime.createPackContext. Load pkm-common/context.mvuz.js before this script.');
+  }
+
+  RUNTIME.shared = {
+    createContext() {
+      return ROOT.PKMCommonRuntime.createPackContext({
+        product: 'main',
+        pluginName: '[PKM Main MVUZ]',
+        version: '0.1.0-mvuz-main',
+        schemaRuntimeName: 'PKMMainSchemaRuntime',
+        injectId: 'pkm_main_player_data_mvuz',
+        pokemonMode: 'avs'
+      });
+    }
+  };
+})();
+
+/**
+ * PKM Main state replay adapter.
+ */
+(function () {
+  'use strict';
+
+  const ROOT = typeof window !== 'undefined' ? window : globalThis;
+  const RUNTIME = ROOT.PKMMainPluginRuntime || {};
+  ROOT.PKMMainPluginRuntime = RUNTIME;
+
+  if (typeof ROOT.PKMCommonRuntime?.createStateReplay !== 'function') {
+    throw new Error('[PKM Main MVUZ] requires PKMCommonRuntime.createStateReplay. Load pkm-common/state-replay.mvuz.js before this script.');
+  }
+
+  RUNTIME.createStateReplay = function createStateReplay(ctx) {
+    return ROOT.PKMCommonRuntime.createStateReplay(ctx, {
+      replayBlockFormat: 'compact'
+    });
+  };
+})();
+
+/**
+ * PKM Main player prompt injection runtime.
+ */
+(function () {
+  'use strict';
+
+  const ROOT = typeof window !== 'undefined' ? window : globalThis;
+  const RUNTIME = ROOT.PKMMainPluginRuntime || {};
+  ROOT.PKMMainPluginRuntime = RUNTIME;
+
+  RUNTIME.createPromptInjection = function createPromptInjection(ctx, stateService) {
+    const {
+      ROOT: hostRoot,
+      PLUGIN_NAME,
+      INJECT_ID
+    } = ctx;
+    const {
+      isObject,
+      normalizeMoves
+    } = ctx.util;
+    const { loadState } = stateService;
+
+    function formatGender(gender) {
+      if (gender === 'M') return 'M';
+      if (gender === 'F') return 'F';
+      return '-';
+    }
+
+    function formatMoves(moves) {
+      return normalizeMoves(moves).map((move, index) => `move${index + 1}: ${move || '-'}`).join(' | ');
+    }
+
+    function formatIvsDisplay(ivs) {
+      const src = isObject(ivs) ? ivs : {};
+      return ['hp', 'atk', 'def', 'spa', 'spd', 'spe']
+        .map((key) => `${key.toUpperCase()}:${src[key] ?? '?'}`)
+        .join('/');
+    }
+
+    function formatAvsDisplay(friendship) {
+      const avs = isObject(friendship?.avs) ? friendship.avs : {};
+      return ['trust', 'passion', 'insight', 'devotion']
+        .map((key) => `${key}:${clampNumber(avs[key], 0, 255, 0)}`)
+        .join('/');
+    }
+
+    function formatLocationDisplay(world) {
+      const location = isObject(world?.location) ? world.location : {};
+      const region = typeof location.region === 'string' && location.region.trim() ? location.region.trim() : '';
+      const place = typeof location.location === 'string' && location.location.trim() ? location.location.trim() : '';
+      if (!region && !place) return 'Unknown';
+      return `${region || 'Unknown'} / ${place || 'Unknown'}`;
+    }
+
+    function formatTimeDisplay(world) {
+      const time = isObject(world?.time) ? world.time : {};
+      const day = clampNumber(time.day, 1, 99999, 1);
+      const period = typeof time.period === 'string' && time.period.trim() ? time.period.trim() : 'morning';
+      const derived = isObject(time.derived) ? time.derived : {};
+      const month = clampNumber(derived.month, 1, 12, 1);
+      const dayOfMonth = clampNumber(derived.dayOfMonth, 1, 30, 1);
+      const week = clampNumber(derived.week, 1, 9999, 1);
+      return `Day ${day} / ${period} (Month ${month}, Day ${dayOfMonth}, Week ${week})`;
+    }
+
+    function clampNumber(value, min, max, fallback = 0) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return fallback;
+      return Math.max(min, Math.min(max, Math.round(n)));
+    }
+
+    function buildPlayerPrompt(state) {
+      const filledSlots = state.party.slots.filter((pokemon) => pokemon?.name);
+      const locationLine = `Location: ${formatLocationDisplay(state.world)}`;
+      const timeLine = `Time: ${formatTimeDisplay(state.world)}`;
+      const proficiency = state.player.trainerProficiency ?? state.player.proficiency ?? 0;
+      const worldHint = 'If a clear coordinate move happens, update /pkm/world/location/x and /pkm/world/location/y with replace. For time passage, write /pkm/world/time/day_advance with values like "next_period", "nextday", "skip_to_night", or "3days_morning".';
+
+      const unlocks = state.player.unlocks || {};
+      const unlockLabels = [];
+      if (unlocks.enable_mega) unlockLabels.push('Mega');
+      if (unlocks.enable_z_move) unlockLabels.push('Z');
+      if (unlocks.enable_dynamax) unlockLabels.push('Dmax');
+      if (unlocks.enable_tera) unlockLabels.push('Tera');
+      if (unlocks.enable_bond) unlockLabels.push('Bond');
+      if (unlocks.enable_styles) unlockLabels.push('Style');
+      if (unlocks.enable_insight) unlockLabels.push('Insight');
+      if (unlocks.enable_proficiency_cap) unlockLabels.push('ProfCap');
+
+      const boxCount = (state.box.boxes || []).reduce((sum, box) => sum + (box.slots?.length || 0), 0);
+
+      if (!filledSlots.length) {
+        return `<pkm_team_summary>
+Player: ${state.player.name} | Proficiency: ${proficiency} | Unlocks: [${unlockLabels.join('/') || 'none'}] | Party: 0/6 | Box: ${boxCount}
+${locationLine}
+${timeLine}
+--------------------------------------------------
+The player currently has no Pokémon in their party.
+--------------------------------------------------
+Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is authoritative.
+${worldHint}
+</pkm_team_summary>`;
+      }
+
+      const lines = state.party.slots.map((pokemon, index) => {
+        const slot = index + 1;
+        if (!pokemon?.name) return `slot${slot}. -`;
+        const name = pokemon.nickname || pokemon.name;
+        const lv = pokemon.lv ?? pokemon.level ?? '??';
+        const lead = pokemon.isLead ? ' [LEAD]' : '';
+        const nature = pokemon.nature || '???';
+        const ability = pokemon.ability || '???';
+        const ev = pokemon.stats_meta?.ev_level ?? 0;
+        const ivs = formatIvsDisplay(pokemon.stats_meta?.ivs);
+        const avs = formatAvsDisplay(pokemon.friendship);
+        return `slot${slot}. ${formatGender(pokemon.gender)} ${name} (Lv.${lv})${lead}
+   [Nature: ${nature}] [Ability: ${ability}]
+   [Stats: ${ivs}] [EVs: ${ev}] [AVS: ${avs}]
+   Moves: ${formatMoves(pokemon.moves)}`;
+      }).join('\n\n');
+
+      const boxNames = (state.box.boxes || [])
+        .flatMap((box) => box.slots || [])
+        .filter((pokemon) => pokemon?.name)
+        .slice(0, 12)
+        .map((pokemon) => `${pokemon.nickname || pokemon.name}/Lv.${pokemon.lv ?? pokemon.level ?? '??'}`);
+      const boxSection = boxNames.length
+        ? `\nBox: ${boxNames.join(' | ')}${boxCount > boxNames.length ? ` | +${boxCount - boxNames.length} more` : ''}\n`
+        : '';
+      return `<pkm_team_summary>
+Player: ${state.player.name} | Proficiency: ${proficiency} | Unlocks: [${unlockLabels.join('/') || 'none'}] | Party: ${filledSlots.length}/6 | Box: ${boxCount}
+${locationLine}
+${timeLine}
+--------------------------------------------------
+${lines}
+--------------------------------------------------
+${boxSection}
+Use <PKM_BATTLE>{...}</PKM_BATTLE> to start a battle. The player party above is authoritative.
+${worldHint}
+</pkm_team_summary>`;
+    }
+
+    async function handleGenerationBefore(detail) {
+      console.log(`${PLUGIN_NAME} handleGenerationBefore fired`, { dryRun: detail?.dryRun });
+      if (detail?.dryRun) {
+        console.log(`${PLUGIN_NAME} dryRun=true, skip injection`);
+        return;
+      }
+      let state;
+      try {
+        state = await loadState({ persist: false });
+      } catch (e) {
+        console.error(`${PLUGIN_NAME} loadState failed in handleGenerationBefore`, e);
+        return;
+      }
+      console.log(`${PLUGIN_NAME} loadState ok, party names:`, state?.party?.slots?.map((p) => p?.name || null));
+      const promptContent = buildPlayerPrompt(state);
+      console.log(`${PLUGIN_NAME} buildPlayerPrompt returned length=${promptContent?.length}, type=${typeof promptContent}, injectFn=${typeof hostRoot.injectPrompts}`);
+      if (!promptContent) {
+        console.warn(`${PLUGIN_NAME} promptContent is empty, abort injection`);
+        return;
+      }
+      if (typeof hostRoot.injectPrompts !== 'function') {
+        console.warn(`${PLUGIN_NAME} ROOT.injectPrompts unavailable, abort injection`);
+        return;
+      }
+      try {
+        if (typeof hostRoot.uninjectPrompts === 'function') hostRoot.uninjectPrompts([INJECT_ID]);
+      } catch (_) {}
+      hostRoot.injectPrompts([{
+        id: INJECT_ID,
+        position: 'in_chat',
+        depth: 2,
+        role: 'system',
+        should_scan: false,
+        content: promptContent
+      }]);
+      console.log(`${PLUGIN_NAME} player prompt injected, length=${promptContent.length}`);
+    }
+
+    return {
+      buildPlayerPrompt,
+      handleGenerationBefore
+    };
+  };
+})();
+
+/**
+ * PKM Main battle frontend adapter.
+ */
+(function () {
+  'use strict';
+
+  const ROOT = typeof window !== 'undefined' ? window : globalThis;
+  const RUNTIME = ROOT.PKMMainPluginRuntime || {};
+  ROOT.PKMMainPluginRuntime = RUNTIME;
+
+  if (typeof ROOT.PKMCommonRuntime?.createBattleFrontend !== 'function') {
+    throw new Error('[PKM Main MVUZ] requires PKMCommonRuntime.createBattleFrontend. Load pkm-common/battle-frontend.mvuz.js before this script.');
+  }
+
+  function weatherCellType(value, isObject) {
+    if (typeof value === 'string') return value.trim();
+    return isObject(value) && typeof value.weather === 'string' ? value.weather.trim() : '';
+  }
+
+  function toInternalCoords(displayX, displayY) {
+    let x = Number(displayX) || 0;
+    if (x > 0) x -= 1;
+    let y = Number(displayY) || 0;
+    if (y > 0) y -= 1;
+    return {
+      gx: x + 26,
+      gy: 26 - y - 1
+    };
+  }
+
+  function isActiveWeather(value) {
+    const text = String(value || '').trim().toLowerCase();
+    return Boolean(text && text !== 'none' && text !== 'clear');
+  }
+
+  RUNTIME.createBattleFrontend = function createBattleFrontend(ctx, stateService) {
+    const { isObject, clampNumber } = ctx.util;
+
+    function lookupTrainer(name, tier) {
+      const api = ROOT.PKMMainPluginRuntime?.data?.trainer || null;
+      return typeof api?.lookupTrainer === 'function' ? api.lookupTrainer(name, tier) : null;
+    }
+
+    function resolveStateWeather(state) {
+      const location = isObject(state?.world?.location) ? state.world.location : {};
+      const weatherGrid = isObject(state?.world?.weatherGrid)
+        ? state.world.weatherGrid
+        : (isObject(state?.world?.weather_grid) ? state.world.weather_grid : {});
+      const x = Number(location.x);
+      const y = Number(location.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return '';
+      const internal = toInternalCoords(x, y);
+      return weatherCellType(weatherGrid[`${internal.gx}_${internal.gy}`], isObject);
+    }
+
+    function resolveBattleEnvironment(state, battleData, settings) {
+      if (settings?.enableBattleEnvironment === false || settings?.enableEnvironment === false) return null;
+      const aiEnv = isObject(battleData.environment) ? battleData.environment : {};
+      const finalWeather = weatherCellType(aiEnv.weather, isObject) || resolveStateWeather(state) || null;
+      const finalSuppression = aiEnv.suppression || null;
+      const activeWeather = isActiveWeather(finalWeather) ? finalWeather : null;
+      if (!activeWeather && !aiEnv.overlay && !finalSuppression) return null;
+      return {
+        weather: activeWeather,
+        weatherTurns: aiEnv.weatherTurns || 0,
+        ...(aiEnv.overlay ? { overlay: aiEnv.overlay } : {}),
+        ...(finalSuppression ? { suppression: finalSuppression } : {})
+      };
+    }
+
+    return ROOT.PKMCommonRuntime.createBattleFrontend(ctx, stateService, {
+      lookupTrainer,
+      resolveBattleEnvironment,
+      processSinglePlayerEntrant: true,
+      getStateTrainerProficiency(state) {
+        return clampNumber(state?.player?.trainerProficiency ?? state?.player?.proficiency, 0, 255, 0);
+      }
+    });
+  };
+})();
+
+/**
+ * PKM Main action API adapter.
+ */
+(function () {
+  'use strict';
+
+  const ROOT = typeof window !== 'undefined' ? window : globalThis;
+  const RUNTIME = ROOT.PKMMainPluginRuntime || {};
+  ROOT.PKMMainPluginRuntime = RUNTIME;
+
+  if (typeof ROOT.PKMCommonRuntime?.createActionsApi !== 'function') {
+    throw new Error('[PKM Main MVUZ] requires PKMCommonRuntime.createActionsApi. Load pkm-common/actions-api.mvuz.js before this script.');
+  }
+
+  RUNTIME.createActionsApi = function createActionsApi(ctx, stateService) {
+    const {
+      clone,
+      isObject,
+      normalizeString
+    } = ctx.util;
+
+    function getLocationPayload(payload) {
+      if (isObject(payload?.world?.location)) return payload.world.location;
+      if (isObject(payload?.location)) return payload.location;
+      return isObject(payload) ? payload : null;
+    }
+
+    function normalizeLocationPayload(payload, current = {}) {
+      const src = getLocationPayload(payload);
+      if (!src) return null;
+      const next = { ...(isObject(current) ? current : {}), ...src };
+      if ('x' in src) {
+        const x = Number(src.x);
+        if (Number.isFinite(x)) next.x = x;
+      }
+      if ('y' in src) {
+        const y = Number(src.y);
+        if (Number.isFinite(y)) next.y = y;
+      }
+      if ('region' in src) next.region = normalizeString(src.region, current?.region || '');
+      if ('location' in src) next.location = normalizeString(src.location, current?.location || '');
+      return next;
+    }
+
+    function normalizePhenomenonPayload(payload, current = {}) {
+      const src = isObject(payload?.phenomenon) ? payload.phenomenon : (isObject(payload) ? payload : {});
+      const currentState = isObject(current) ? current : {};
+      return {
+        active_type: normalizeString(src.active_type, currentState.active_type || 'clear'),
+        active_region: normalizeString(src.active_region, currentState.active_region || 'none')
+      };
+    }
+
+    function getMapObjectPayload(payload, camelKey, snakeKey) {
+      if (isObject(payload?.[camelKey])) return payload[camelKey];
+      if (isObject(payload?.[snakeKey])) return payload[snakeKey];
+      return null;
+    }
+
+    function normalizeWeatherGridPayload(value) {
+      if (!isObject(value)) return null;
+      const output = {};
+      Object.entries(value).forEach(([key, cell]) => {
+        if (!key) return;
+        if (typeof cell === 'string' && cell.trim()) {
+          output[key] = cell.trim();
+          return;
+        }
+        if (isObject(cell) && typeof cell.weather === 'string' && cell.weather.trim()) {
+          output[key] = cell.weather.trim();
+        }
+      });
+      return output;
+    }
+
+    function getRefreshLocationPayload(payload) {
+      if (isObject(payload?.world?.location) || isObject(payload?.location)) return getLocationPayload(payload);
+      return null;
+    }
+
+    function mergeOrReplaceObject(current, incoming, replace = false) {
+      const nextIncoming = isObject(incoming) ? clone(incoming, {}) : null;
+      if (!nextIncoming) return isObject(current) ? current : {};
+      return replace ? nextIncoming : { ...(isObject(current) ? current : {}), ...nextIncoming };
+    }
+
+    return ROOT.PKMCommonRuntime.createActionsApi(ctx, stateService, {
+      extensions(_ctx, _stateService, helpers) {
+        const { patchState, actionWriteOptions, actionObjectKeySuffix } = helpers;
+        return {
+          'world.updateLocation': (payload, options) => patchState((state) => {
+            state.world = isObject(state.world) ? state.world : {};
+            const location = normalizeLocationPayload(payload, state.world.location || {});
+            if (!location) throw new Error('world.updateLocation requires a location payload');
+            state.world.location = location;
+            return state;
+          }, actionWriteOptions('world.updateLocation', options, ['/pkm/world/location'], `location.${actionObjectKeySuffix(getLocationPayload(payload), 'state')}`)),
+          'world.setPhenomenon': (payload, options) => patchState((state) => {
+            state.world = isObject(state.world) ? state.world : {};
+            state.world.phenomenon = normalizePhenomenonPayload(payload, state.world.phenomenon || {});
+            return state;
+          }, actionWriteOptions('world.setPhenomenon', options, ['/pkm/world/phenomenon'], `phenomenon.${actionObjectKeySuffix(payload?.phenomenon || payload, 'state')}`)),
+          'world.refreshMapEnvironment': (payload, options) => patchState((state) => {
+            state.world = isObject(state.world) ? state.world : {};
+            const replaceGrids = payload?.replaceGrids === true || payload?.mode === 'replace';
+            const locationPayload = getRefreshLocationPayload(payload);
+            const location = locationPayload ? normalizeLocationPayload({ location: locationPayload }, state.world.location || {}) : null;
+            if (location) state.world.location = location;
+            if (isObject(payload?.phenomenon)) {
+              state.world.phenomenon = normalizePhenomenonPayload(payload.phenomenon, state.world.phenomenon || {});
+            }
+            const weatherGrid = getMapObjectPayload(payload, 'weatherGrid', 'weather_grid');
+            if (weatherGrid) {
+              state.world.weatherGrid = mergeOrReplaceObject(state.world.weatherGrid, normalizeWeatherGridPayload(weatherGrid), replaceGrids);
+            }
+            const pokemonSpawns = getMapObjectPayload(payload, 'pokemonSpawns', 'pokemon_spawns');
+            if (pokemonSpawns) {
+              state.world.pokemonSpawns = mergeOrReplaceObject(state.world.pokemonSpawns, pokemonSpawns, replaceGrids);
+            }
+            return state;
+          }, actionWriteOptions('world.refreshMapEnvironment', options, [
+            ...(getRefreshLocationPayload(payload) ? ['/pkm/world/location'] : []),
+            ...(isObject(payload?.phenomenon) ? ['/pkm/world/phenomenon'] : []),
+            ...(getMapObjectPayload(payload, 'weatherGrid', 'weather_grid') ? ['/pkm/world/weatherGrid'] : []),
+            ...(getMapObjectPayload(payload, 'pokemonSpawns', 'pokemon_spawns') ? ['/pkm/world/pokemonSpawns'] : [])
+          ], actionObjectKeySuffix({
+            location: getRefreshLocationPayload(payload),
+            phenomenon: payload?.phenomenon,
+            weatherGrid: getMapObjectPayload(payload, 'weatherGrid', 'weather_grid') ? true : undefined,
+            pokemonSpawns: getMapObjectPayload(payload, 'pokemonSpawns', 'pokemon_spawns') ? true : undefined
+          }, 'environment')))
+        };
+      }
+    });
+  };
+})();
+
+/**
+ * PKM Main fixed NPC relationship runtime.
+ */
+(function () {
+  'use strict';
+
+  const ROOT = typeof window !== 'undefined' ? window : globalThis;
+  const RUNTIME = ROOT.PKMMainPluginRuntime || {};
+  ROOT.PKMMainPluginRuntime = RUNTIME;
+
+  RUNTIME.createNpcRuntime = function createNpcRuntime(ctx, stateService) {
+    const {
+      ROOT: hostRoot,
+      PLUGIN_NAME
+    } = ctx;
+    const {
+      isObject
+    } = ctx.util;
+    const { loadState } = stateService;
+
+    const NPC_STATUS_INJECT_ID = 'pkm_npc_status';
+    const NPC_UNLOCK_INJECT_ID = 'pkm_unlock_events';
+
+    function getNpcDataApi() {
+      return ROOT.PKMMainPluginRuntime?.data?.npc || ROOT.PKM_MAIN_NPC_DATA || null;
+    }
+
+    function stripVariableBlocks(text) {
+      return String(text || '')
+        .replace(/<UpdateVariable>[\s\S]*?<\/UpdateVariable>/gi, '');
+    }
+
+    function recentChatText(limit = 12) {
+      if (typeof hostRoot.getChatMessages !== 'function') return '';
+      try {
+        const messages = hostRoot.getChatMessages(-limit);
+        return (Array.isArray(messages) ? messages : [])
+          .map((message) => stripVariableBlocks(message?.message || ''))
+          .join('\n');
+      } catch (_) {
+        return '';
+      }
+    }
+
+    function resolveZoneCode(state) {
+      const region = String(state?.world?.location?.region || '').trim();
+      if (/^[NBSAZ]$/i.test(region)) return region.toUpperCase();
+      const zone = String(state?.world?.location?.zone || '').trim();
+      if (/^[NBSAZ]$/i.test(zone)) return zone.toUpperCase();
+      return 'Z';
+    }
+
+    function buildNpcStatusPrompt(state) {
+      const api = getNpcDataApi();
+      if (!api) return '';
+      const zoneCode = resolveZoneCode(state);
+      const sections = [];
+      if (typeof api.generateZoneStatusCard === 'function') {
+        sections.push(api.generateZoneStatusCard(zoneCode));
+      }
+
+      const records = isObject(state?.npcs?.records) ? state.npcs.records : {};
+      const playerBonds = isObject(state?.player?.bonds) ? state.player.bonds : {};
+      const activeKeys = typeof api.scanForNpcTriggers === 'function'
+        ? api.scanForNpcTriggers(recentChatText())
+        : [];
+      const activeCards = activeKeys
+        .filter((npcId) => isObject(records[npcId]))
+        .map((npcId, index) => {
+          const card = api.formatNpcStatusCard?.(npcId, records[npcId], playerBonds);
+          return card ? `${index + 1}. ${card}` : '';
+        })
+        .filter(Boolean);
+      if (activeCards.length) {
+        sections.push(`【当前活跃/关注的主要 NPC 状态】\n${activeCards.join('\n\n')}`);
+      }
+      if (!sections.length) return '';
+      return `<npc_status_brief>\n${sections.join('\n\n')}\n</npc_status_brief>`;
+    }
+
+    function injectPrompt(id, content, options = {}) {
+      if (!content || typeof hostRoot.injectPrompts !== 'function') return false;
+      try {
+        if (typeof hostRoot.uninjectPrompts === 'function') hostRoot.uninjectPrompts([id]);
+      } catch (_) {}
+      hostRoot.injectPrompts([{
+        id,
+        position: options.position || 'after_wi_scan',
+        depth: options.depth ?? 0,
+        role: options.role || 'system',
+        should_scan: false,
+        content
+      }]);
+      return true;
+    }
+
+    function clearPrompt(id) {
+      if (typeof hostRoot.uninjectPrompts !== 'function') return false;
+      try {
+        hostRoot.uninjectPrompts([id]);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    async function injectNpcStatus(stateOverride = null) {
+      const state = stateOverride || await loadState({ persist: false });
+      const content = buildNpcStatusPrompt(state);
+      if (!content) return false;
+      return injectPrompt(NPC_STATUS_INJECT_ID, content, { position: 'after_wi_scan', depth: 0 });
+    }
+
+    async function injectUnlockEvent(stateOverride = null) {
+      const api = getNpcDataApi();
+      if (!api?.getPendingUnlockEvents || !api?.generateUnlockEventPrompt) return false;
+      const state = stateOverride || await loadState({ persist: false });
+      const event = api.getPendingUnlockEvents(state)[0] || null;
+      if (!event) {
+        clearPrompt(NPC_UNLOCK_INJECT_ID);
+        return false;
+      }
+      const content = api.generateUnlockEventPrompt(event);
+      if (!content) return false;
+      return injectPrompt(NPC_UNLOCK_INJECT_ID, content, { position: 'in_chat', depth: 0 });
+    }
+
+    async function handleGenerationBefore(detail) {
+      if (detail?.dryRun) return;
+      let state = null;
+      try {
+        state = await loadState({ persist: false });
+      } catch (error) {
+        console.warn(`${PLUGIN_NAME} NPC runtime loadState failed`, error);
+        return;
+      }
+      await injectNpcStatus(state);
+      await injectUnlockEvent(state);
+    }
+
+    function clearInjections() {
+      clearPrompt(NPC_STATUS_INJECT_ID);
+      clearPrompt(NPC_UNLOCK_INJECT_ID);
+    }
+
+    return {
+      buildNpcStatusPrompt,
+      injectNpcStatus,
+      injectUnlockEvent,
+      handleGenerationBefore,
+      clearInjections
+    };
+  };
+})();
+
+/**
+ * PKM PINK Main - MVUZ bootstrap adapter.
  */
 (async function () {
   'use strict';
 
-  const CORE = window.PKMPackCore || null;
-  const PLUGIN_NAME = '[PKM-MVUZ]';
-  const STATE_ROOT = 'stat_data';
-  const STATE_KEY = 'pkm';
-  const SCHEMA_VERSION = 1;
-  const DEFAULT_PRODUCT = 'main';
-  if (!CORE?.mvu) throw new Error(`${PLUGIN_NAME} requires PKMPackCore. Load pkm-core.js before this script.`);
-  const DEFAULT_INJECT_IDS = {
-    party: 'pkm_mvuz_party_state',
-    time: 'pkm_mvuz_time_state',
-    npc: 'pkm_mvuz_npc_state',
-    unlock: 'pkm_mvuz_unlock_events'
-  };
+  const ROOT = typeof window !== 'undefined' ? window : globalThis;
+  const RUNTIME = ROOT.PKMMainPluginRuntime || null;
 
-  const PERIODS = ['dawn', 'morning', 'noon', 'afternoon', 'evening', 'night', 'midnight'];
-  const DEFAULT_SETTINGS = CORE.getDefaultSettings('main');
-
-  const runtime = {
-    initialized: false,
-    product: DEFAULT_PRODUCT,
-    processedMessages: new Set(),
-    handlers: {},
-    lastStateSnapshot: null
-  };
-
-  function clone(value, fallback = value) {
-    if (value == null) return fallback;
-    try {
-      return JSON.parse(JSON.stringify(value));
-    } catch (_) {
-      return fallback;
-    }
+  if (typeof ROOT.PKMCommonRuntime?.startPackBootstrap !== 'function') {
+    throw new Error('[PKM Main MVUZ] requires PKMCommonRuntime.startPackBootstrap. Load pkm-common/bootstrap.mvuz.js before this script.');
   }
 
-  function nowIso() {
-    try {
-      return new Date().toISOString();
-    } catch (_) {
-      return '';
-    }
-  }
-
-  function clampNumber(value, min, max, fallback = min) {
-    const n = Number(value);
-    if (!Number.isFinite(n)) return fallback;
-    return Math.max(min, Math.min(max, Math.round(n)));
-  }
-
-  function normalizeString(value, fallback = '') {
-    return typeof value === 'string' ? value.trim() : fallback;
-  }
-
-  function makeDefaultPkmState(product = DEFAULT_PRODUCT) {
-    const at = nowIso();
-    return {
-      meta: {
-        schemaVersion: SCHEMA_VERSION,
-        product,
-        contentVersion: '0.1.0',
-        createdAt: at,
-        updatedAt: at
-      },
-      player: {
-        name: '{{user}}',
-        trainerProficiency: 0,
-        unlocks: {},
-        bonds: {}
-      },
-      party: {
-        slots: [null, null, null, null, null, null],
-        transferBuffer: null
-      },
-      box: {
-        boxes: [{ id: 'box_01', name: 'Box 1', slots: [] }],
-        indexes: {}
-      },
-      world: {
-        location: {},
-        time: { day: 1, period: 'morning', derived: calculateDerivedTime(1) },
-        weatherGrid: {},
-        pokemonSpawns: {},
-        phenomenon: { active_type: 'clear', active_region: 'none' }
-      },
-      npcs: {
-        records: {}
-      },
-      battle: {
-        lastConfig: null,
-        lastResult: null,
-        pendingNarrative: null
-      },
-      settings: { ...DEFAULT_SETTINGS },
-      runtime: {
-        migration: {},
-        caches: {},
-        flags: {}
-      }
-    };
-  }
-
-  function normalizeMoves(moves) {
-    return CORE.normalizeMovesObject(moves);
-  }
-
-  function normalizeFriendship(source) {
-    const raw = source && typeof source === 'object' ? source : {};
-    const avsRaw = raw.avs || raw;
-    const upRaw = raw.av_up || {};
-    const avs = {
-      trust: clampNumber((avsRaw.trust || 0) + (upRaw.trust || 0), 0, 255, 0),
-      passion: clampNumber((avsRaw.passion || 0) + (upRaw.passion || 0), 0, 255, 0),
-      insight: clampNumber((avsRaw.insight || 0) + (upRaw.insight || 0), 0, 255, 0),
-      devotion: clampNumber((avsRaw.devotion || 0) + (upRaw.devotion || 0), 0, 255, 0)
-    };
-    return {
-      avs,
-      av_up: { trust: 0, passion: 0, insight: 0, devotion: 0 }
-    };
-  }
-
-  function normalizeStatsMeta(source) {
-    const raw = source && typeof source === 'object' ? source : {};
-    const evLevel = typeof raw.ev_level === 'object'
-      ? clone(raw.ev_level, {})
-      : clampNumber((raw.ev_level || 0) + (raw.ev_up || 0), 0, 252, 0);
-    return {
-      ...raw,
-      ivs: raw.ivs || { hp: null, atk: null, def: null, spa: null, spd: null, spe: null },
-      ev_level: evLevel,
-      ev_up: 0
-    };
-  }
-
-  function normalizePokemon(source, index = 0) {
-    if (!source || typeof source !== 'object') return null;
-    const name = normalizeString(source.name || source.species || source.nickname, '');
-    if (!name) return null;
-    return {
-      ...clone(source, {}),
-      slot: index + 1,
-      name,
-      species: normalizeString(source.species, name),
-      nickname: source.nickname || null,
-      lv: clampNumber(source.lv ?? source.level, 1, 100, 5),
-      gender: source.gender || null,
-      nature: source.nature || null,
-      ability: source.ability || null,
-      shiny: source.shiny === true,
-      item: source.item || null,
-      mechanic: source.mechanic || null,
-      teraType: source.teraType || null,
-      isAce: source.isAce === true,
-      isLead: source.isLead === true,
-      friendship: normalizeFriendship(source.friendship || source.avs),
-      moves: normalizeMoves(source.moves),
-      stats_meta: normalizeStatsMeta(source.stats_meta),
-      notes: source.notes || null
-    };
-  }
-
-  function normalizeParty(party) {
-    const sourceSlots = Array.isArray(party?.slots)
-      ? party.slots
-      : [party?.slot1, party?.slot2, party?.slot3, party?.slot4, party?.slot5, party?.slot6];
-    const slots = sourceSlots.slice(0, 6).map((slot, index) => normalizePokemon(slot, index));
-    while (slots.length < 6) slots.push(null);
-
-    let leadSeen = false;
-    for (const slot of slots) {
-      if (!slot) continue;
-      if (slot.isLead && !leadSeen) {
-        leadSeen = true;
-      } else {
-        slot.isLead = false;
-      }
-    }
-    if (!leadSeen) {
-      const first = slots.find(Boolean);
-      if (first) first.isLead = true;
-    }
-
-    const transferRaw = party?.transferBuffer ?? party?.transfer_buffer;
-    return {
-      slots,
-      transferBuffer: normalizePokemon(transferRaw, 6)
-    };
-  }
-
-  function normalizeBox(box) {
-    if (!box || typeof box !== 'object') {
-      return { boxes: [{ id: 'box_01', name: 'Box 1', slots: [] }], indexes: {} };
-    }
-    if (Array.isArray(box.boxes)) {
-      const boxes = box.boxes.map((b, index) => ({
-        id: b.id || `box_${String(index + 1).padStart(2, '0')}`,
-        name: b.name || `Box ${index + 1}`,
-        slots: Array.isArray(b.slots) ? b.slots.map((p, i) => normalizePokemon(p, i)).filter(Boolean) : []
-      }));
-      return { boxes: boxes.length ? boxes : [{ id: 'box_01', name: 'Box 1', slots: [] }], indexes: box.indexes || {} };
-    }
-    const slots = Object.entries(box)
-      .filter(([key, value]) => key.startsWith('storage_') && value)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([, value], index) => normalizePokemon(value, index))
-      .filter(Boolean);
-    return {
-      boxes: [{ id: 'box_01', name: 'Box 1', slots }],
-      indexes: {}
-    };
-  }
-
-  function calculateDerivedTime(day) {
-    const normalizedDay = Math.max(1, Math.round(Number(day) || 1));
-    const dayOfYear = ((normalizedDay - 1) % 365) + 1;
-    return {
-      year: Math.floor((normalizedDay - 1) / 365) + 1,
-      month: Math.floor((dayOfYear - 1) / 30) + 1,
-      dayOfMonth: ((dayOfYear - 1) % 30) + 1,
-      week: Math.floor((normalizedDay - 1) / 7) + 1,
-      dayOfWeek: (normalizedDay - 1) % 7
-    };
-  }
-
-  function parseTimeAdvance(value) {
-    if (value == null || value === '') return null;
-    if (typeof value === 'number') return { days: value };
-    const text = String(value).trim().toLowerCase();
-    const periodMatch = text.match(/^(\d+)\s*periods?$/);
-    if (periodMatch) return { periods: Number(periodMatch[1]) };
-    const dayMatch = text.match(/^(\d+)\s*days?$/);
-    if (dayMatch) return { days: Number(dayMatch[1]) };
-    const skipMatch = text.match(/^skip[_\s]?to[_\s]?(\w+)$/);
-    if (skipMatch && PERIODS.includes(skipMatch[1])) return { skipTo: skipMatch[1] };
-    return null;
-  }
-
-  function applyTimeAdvance(time, advance) {
-    let day = Math.max(1, Math.round(Number(time?.day) || 1));
-    let period = PERIODS.includes(time?.period) ? time.period : 'morning';
-    if (!advance) return { day, period, derived: calculateDerivedTime(day), day_advance: null, period_set: null };
-    if (advance.days) day += Math.max(0, Math.round(advance.days));
-    if (advance.periods) {
-      const total = PERIODS.indexOf(period) + Math.max(0, Math.round(advance.periods));
-      day += Math.floor(total / PERIODS.length);
-      period = PERIODS[total % PERIODS.length];
-    }
-    if (advance.skipTo) {
-      const current = PERIODS.indexOf(period);
-      const target = PERIODS.indexOf(advance.skipTo);
-      if (target <= current) day += 1;
-      period = advance.skipTo;
-    }
-    return { day, period, derived: calculateDerivedTime(day), day_advance: null, period_set: null };
-  }
-
-  function normalizeTime(source) {
-    const raw = source && typeof source === 'object' ? source : {};
-    let next = {
-      ...raw,
-      day: Math.max(1, Math.round(Number(raw.day) || 1)),
-      period: PERIODS.includes(raw.period) ? raw.period : 'morning'
-    };
-    if (raw.day_advance) next = { ...next, ...applyTimeAdvance(next, parseTimeAdvance(raw.day_advance)) };
-    if (raw.period_set && PERIODS.includes(String(raw.period_set).toLowerCase())) {
-      next.period = String(raw.period_set).toLowerCase();
-      next.period_set = null;
-    }
-    next.derived = calculateDerivedTime(next.day);
-    next.day_advance = null;
-    next.period_set = null;
-    return next;
-  }
-
-  function normalizeNpcRecords(records, playerBonds = {}) {
-    const result = {};
-    for (const [id, record] of Object.entries(records || {})) {
-      if (!record || typeof record !== 'object') continue;
-      const love = clampNumber((record.love || 0) + (record.love_up || 0), 0, 999, 0);
-      result[id] = {
-        ...record,
-        love,
-        love_up: 0,
-        stage: clampNumber(record.stage, 0, 10, 0),
-        unlockedBond: record.unlock_key ? playerBonds[record.unlock_key] === true : record.unlockedBond === true
+  await ROOT.PKMCommonRuntime.startPackBootstrap(RUNTIME, {
+    bootstrapName: '[PKM Main MVUZ]',
+    requiredFactories: ['createNpcRuntime', 'createMapRuntime'],
+    initialLoadOptions: { persist: false },
+    createServices({ ctx, state, actions }) {
+      return {
+        npcRuntime: RUNTIME.createNpcRuntime(ctx, state, actions),
+        mapRuntime: RUNTIME.createMapRuntime(ctx, state, actions)
       };
-    }
-    return result;
-  }
-
-  function normalizePkmState(input, product = DEFAULT_PRODUCT) {
-    const base = makeDefaultPkmState(product);
-    const state = input && typeof input === 'object' ? clone(input, {}) : {};
-    const next = {
-      ...base,
-      ...state,
-      meta: {
-        ...base.meta,
-        ...(state.meta || {}),
-        schemaVersion: SCHEMA_VERSION,
-        product: state.meta?.product || product,
-        updatedAt: nowIso()
-      },
-      player: {
-        ...base.player,
-        ...(state.player || {})
-      },
-      party: normalizeParty(state.party || {}),
-      box: normalizeBox(state.box || {}),
-      world: {
-        ...base.world,
-        ...(state.world || {})
-      },
-      npcs: {
-        ...base.npcs,
-        ...(state.npcs || {})
-      },
-      battle: {
-        ...base.battle,
-        ...(state.battle || {})
-      },
-      settings: {
-        ...DEFAULT_SETTINGS,
-        ...(state.settings || {})
-      },
-      runtime: {
-        ...base.runtime,
-        ...(state.runtime || {})
-      }
-    };
-
-    next.player.trainerProficiency = clampNumber(
-      (next.player.trainerProficiency || 0) + (next.player.proficiency_up || 0),
-      0,
-      255,
-      0
-    );
-    next.player.proficiency_up = 0;
-    next.world.time = normalizeTime(next.world.time);
-    next.npcs.records = normalizeNpcRecords(next.npcs.records, next.player.bonds);
-    return next;
-  }
-
-  function migrateFromEra(eraVars, product = DEFAULT_PRODUCT) {
-    const era = eraVars && typeof eraVars === 'object' ? eraVars : {};
-    const defaultState = makeDefaultPkmState(product);
-    const player = era.player || {};
-    const worldState = era.world_state || {};
-    const migrated = {
-      ...defaultState,
-      meta: {
-        ...defaultState.meta,
-        product,
-        updatedAt: nowIso()
-      },
-      player: {
-        name: player.name || defaultState.player.name,
-        trainerProficiency: player.trainerProficiency || 0,
-        unlocks: clone(player.unlocks, {}),
-        bonds: clone(player.bonds, {})
-      },
-      party: normalizeParty(player.party || {}),
-      box: normalizeBox(player.box || {}),
-      world: {
-        ...defaultState.world,
-        location: clone(worldState.location, {}),
-        time: normalizeTime(worldState.time || {}),
-        weatherGrid: clone(worldState.weather_grid || worldState.weatherGrid, {}),
-        pokemonSpawns: clone(worldState.pokemon_spawns || worldState.pokemonSpawns, {}),
-        phenomenon: clone(worldState.phenomenon, defaultState.world.phenomenon)
-      },
-      npcs: {
-        records: normalizeNpcRecords(worldState.npcs || {}, player.bonds || {})
-      },
-      settings: {
-        ...DEFAULT_SETTINGS,
-        ...(era.settings || {})
-      },
-      runtime: {
-        ...defaultState.runtime,
-        migration: {
-          from: 'era',
-          migratedAt: nowIso()
+    },
+    pluginExtensions({ services }) {
+      const { mapRuntime, npcRuntime } = services;
+      return {
+        map: {
+          refreshEnvironment: mapRuntime.refreshEnvironment,
+          injectLocationContext: mapRuntime.injectLocationContext,
+          clearLocationContext: mapRuntime.clearLocationContext,
+          waitForData: mapRuntime.waitForData
+        },
+        npc: {
+          injectStatus: npcRuntime.injectNpcStatus,
+          injectUnlockEvent: npcRuntime.injectUnlockEvent,
+          clearInjections: npcRuntime.clearInjections
         }
-      }
-    };
-    return normalizePkmState(migrated, product);
-  }
-
-  async function loadState(options = {}) {
-    const product = options.product || runtime.product || DEFAULT_PRODUCT;
-    const existing = await CORE.mvu.readState(STATE_ROOT, STATE_KEY, { type: 'message' });
-    if (existing) return normalizePkmState(existing, product);
-
-    if (options.migrate !== false) {
-      const eraVars = await getEraVars();
-      if (eraVars && Object.keys(eraVars).length) {
-        const migrated = migrateFromEra(eraVars, product);
-        await saveState(migrated);
-        return migrated;
-      }
-    }
-    return makeDefaultPkmState(product);
-  }
-
-  async function saveState(nextState) {
-    const normalized = normalizePkmState(nextState, nextState?.meta?.product || runtime.product);
-    await CORE.mvu.writeState(STATE_ROOT, STATE_KEY, normalized, { type: 'message' });
-    runtime.lastStateSnapshot = normalized;
-    return normalized;
-  }
-
-  async function patchState(patcher) {
-    const current = await loadState();
-    const next = await patcher(clone(current, {}));
-    return saveState(next === undefined ? current : next);
-  }
-
-  async function getEraVars() {
-    return new Promise((resolve) => {
-      if (typeof eventEmit === 'undefined' || typeof eventOn === 'undefined') {
-        resolve(null);
-        return;
-      }
-      const timeout = setTimeout(() => resolve(null), 3000);
-      eventOn('era:queryResult', (detail) => {
-        if (detail?.queryType !== 'getCurrentVars') return;
-        clearTimeout(timeout);
-        resolve(detail.result?.statWithoutMeta || null);
-      }, { once: true });
-      eventEmit('era:getCurrentVars');
-    });
-  }
-
-  const actions = {
-    async 'settings.update'({ payload }) {
-      return patchState((state) => {
-        state.settings = { ...state.settings, ...(payload || {}) };
-        return state;
-      });
+      };
     },
-
-    async 'party.setLead'({ payload }) {
-      const targetSlot = typeof payload === 'string' ? payload : payload?.slot || payload?.targetSlot;
-      return patchState((state) => {
-        state.party.slots = state.party.slots.map((pokemon, index) => {
-          if (!pokemon) return null;
-          const slotKey = `slot${index + 1}`;
-          return { ...pokemon, isLead: slotKey === targetSlot || index + 1 === Number(targetSlot) };
-        });
-        return state;
-      });
+    resetRuntimeState(_reason, { services }) {
+      services.npcRuntime.clearInjections();
     },
-
-    async 'party.updateMove'({ payload }) {
-      return patchState((state) => {
-        const slot = payload?.slotKey || payload?.slot || payload?.targetSlot;
-        const index = typeof slot === 'string' && slot.startsWith('slot')
-          ? Number(slot.replace('slot', '')) - 1
-          : Number(slot) - 1;
-        if (!Number.isInteger(index) || index < 0 || index > 5 || !state.party.slots[index]) return state;
-        state.party.slots[index].moves = normalizeMoves(payload.moves);
-        return state;
-      });
-    },
-
-    async 'box.depositTransferBuffer'() {
-      return patchState((state) => {
-        const pokemon = state.party.transferBuffer;
-        if (!pokemon) return state;
-        if (!state.box.boxes.length) state.box.boxes.push({ id: 'box_01', name: 'Box 1', slots: [] });
-        state.box.boxes[0].slots.push({ ...pokemon, slot: null, isLead: false });
-        state.party.transferBuffer = null;
-        return state;
-      });
-    }
-  };
-
-  async function dispatchAction(action, payload) {
-    const handler = actions[action];
-    if (!handler) throw new Error(`Unknown PKM action: ${action}`);
-    return handler({ payload });
-  }
-
-  function stripCodeFence(text) {
-    return String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-  }
-
-  function parseTaggedJson(text, tag) {
-    const re = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i');
-    const match = String(text || '').match(re);
-    if (!match) return null;
-    try {
-      return JSON.parse(stripCodeFence(match[1]));
-    } catch (error) {
-      console.warn(`${PLUGIN_NAME} Failed to parse <${tag}>`, error);
-      return null;
-    }
-  }
-
-  async function buildCompleteBattleJson(aiBattleData) {
-    const state = await loadState();
-    return {
-      ...(aiBattleData || {}),
-      player: {
-        name: state.player.name,
-        trainerProficiency: state.player.trainerProficiency,
-        unlocks: state.player.unlocks,
-        party: state.party.slots.filter(Boolean)
-      },
-      settings: state.settings,
-      environment: state.world.phenomenon?.active_type ? {
-        phenomenon: state.world.phenomenon,
-        weatherGrid: state.world.weatherGrid
-      } : undefined
-    };
-  }
-
-  async function appendFrontendPayload(messageId, payload) {
-    if (typeof getChatMessages !== 'function' || typeof setChatMessages !== 'function') return false;
-    const messages = getChatMessages(messageId);
-    const message = messages && messages[0];
-    if (!message) return false;
-    const block = `<PKM_FRONTEND>\n${JSON.stringify(payload, null, 2)}\n</PKM_FRONTEND>`;
-    await setChatMessages([{
-      message_id: messageId,
-      message: `${String(message.message || '').trim()}\n\n${block}`
-    }], { refresh: 'affected' });
-    return true;
-  }
-
-  async function handleMessageForBattle(detail) {
-    const messageId = detail?.message_id ?? (typeof getLastMessageId === 'function' ? getLastMessageId() : null);
-    if (messageId == null || runtime.processedMessages.has(messageId)) return;
-    if (typeof getChatMessages !== 'function') return;
-    const message = getChatMessages(messageId)[0];
-    if (!message?.message || message.message.includes('<PKM_FRONTEND>')) return;
-    const battleData = parseTaggedJson(message.message, 'PKM_BATTLE');
-    if (!battleData) return;
-    const complete = await buildCompleteBattleJson(battleData);
-    await appendFrontendPayload(messageId, complete);
-    runtime.processedMessages.add(messageId);
-  }
-
-  async function injectPromptIfChanged(id, prompt) {
-    if (typeof injectPrompts !== 'function') return false;
-    try {
-      if (typeof uninjectPrompts === 'function') uninjectPrompts([id]);
-      injectPrompts([prompt], { once: true });
-      return true;
-    } catch (error) {
-      console.warn(`${PLUGIN_NAME} prompt injection failed:`, id, error);
-      return false;
-    }
-  }
-
-  async function injectGenerationContext() {
-    const state = await loadState();
-    const partyLines = state.party.slots
-      .filter(Boolean)
-      .map((pokemon, index) => `${index + 1}. ${pokemon.name} Lv.${pokemon.lv}${pokemon.isLead ? ' [LEAD]' : ''}`)
-      .join('\n');
-    await injectPromptIfChanged(DEFAULT_INJECT_IDS.party, {
-      id: DEFAULT_INJECT_IDS.party,
-      position: 'in_chat',
-      depth: 0,
-      role: 'system',
-      should_scan: false,
-      content: `<pkm_party_state>\n${partyLines || 'No party data.'}\n</pkm_party_state>`
-    });
-    const time = state.world.time;
-    await injectPromptIfChanged(DEFAULT_INJECT_IDS.time, {
-      id: DEFAULT_INJECT_IDS.time,
-      position: 'in_chat',
-      depth: 0,
-      role: 'system',
-      should_scan: false,
-      content: `<pkm_time_status>\nDAY ${time.day} / ${time.period}\n</pkm_time_status>`
-    });
-  }
-
-  async function init() {
-    if (runtime.initialized) return;
-    runtime.initialized = true;
-    runtime.product = window.PKM_MVUZ_PRODUCT || DEFAULT_PRODUCT;
-
-    await loadState({ product: runtime.product });
-
-    const onGenerationAfterCommands = async () => {
-      await loadState();
-      await injectGenerationContext();
-    };
-    const onMessageUpdated = async (detail) => handleMessageForBattle(detail);
-    const onChatChanged = () => runtime.processedMessages.clear();
-
-    runtime.handlers = { onGenerationAfterCommands, onMessageUpdated, onChatChanged };
-    if (typeof eventOn === 'function') {
-      eventOn('GENERATION_AFTER_COMMANDS', onGenerationAfterCommands);
-      eventOn('era:writeDone', onMessageUpdated);
-      eventOn('message_updated', onMessageUpdated);
-      eventOn('chat_changed', onChatChanged);
-    }
-
-    window.PKMPlugin = {
-      version: '2.0.0-mvuz-draft',
-      loadState,
-      saveState,
-      patchState,
-      dispatchAction,
-      migrateFromEra,
-      normalizePkmState,
-      makeDefaultPkmState,
-      async getPlayerParty() {
-        const state = await loadState();
-        return {
-          name: state.player.name,
-          party: state.party.slots.filter(Boolean),
-          reserve: state.box.boxes.flatMap(box => box.slots || [])
-        };
-      },
-      async setPlayerParty(mode, input) {
-        return patchState((state) => {
-          if (mode === 'custom' && Array.isArray(input)) {
-            state.party.slots = normalizeParty({ slots: input }).slots;
-          }
-          return state;
-        });
-      },
-      async triggerBattle(aiBattleData) {
-        const complete = await buildCompleteBattleJson(aiBattleData);
-        if (typeof createChatMessages === 'function') {
-          await createChatMessages([{ role: 'assistant', message: `<PKM_FRONTEND>\n${JSON.stringify(complete, null, 2)}\n</PKM_FRONTEND>` }]);
-        }
-        return complete;
-      },
-      async getTime() {
-        const state = await loadState();
-        return state.world.time;
+    afterInitialLoad({ ctx, services }) {
+      try {
+        services.mapRuntime.bindEvents();
+      } catch (error) {
+        console.warn(`${ctx.PLUGIN_NAME} map runtime binding skipped:`, error);
       }
-    };
-
-    console.log(`${PLUGIN_NAME} loaded`);
-  }
-
-  try {
-    await init();
-  } catch (error) {
-    console.error(`${PLUGIN_NAME} failed to initialize`, error);
-  }
+    },
+    async onGenerationAfterCommands(detail, { services }) {
+      await services.npcRuntime.handleGenerationBefore(detail);
+    }
+  });
 })();

@@ -7,8 +7,8 @@
  *   node convert-showdown-data.js
  * 
  * 输出：
- *   - pokedex-data.js  (宝可梦数据库)
- *   - moves-data.js    (技能数据库)
+ *   - ../../shared/pokedex-data.js  (宝可梦数据库)
+ *   - moves-data.js                 (技能数据库)
  */
 
 const fs = require('fs');
@@ -16,6 +16,154 @@ const path = require('path');
 
 const SHOWDOWN_DIR = path.join(__dirname, 'Pokemon Showdown');
 const OUTPUT_DIR = __dirname;
+const SHARED_DIR = path.resolve(__dirname, '../../shared');
+const POKEDEX_OUTPUT_PATH = path.join(SHARED_DIR, 'pokedex-data.js');
+
+const POKEDEX_RUNTIME_FOOTER = `
+
+// ============================================
+// 统一标签映射 (Engine Tags)
+// 用于 Chronal Rift 等机制的宝可梦分类
+// ============================================
+
+/**
+ * 人造/机械类宝可梦 ID 列表
+ * 在时空裂隙中触发【技能黑箱】效果
+ */
+const ARTIFICIAL_POKEMON = [
+    'porygon', 'porygon2', 'porygonz',
+    'castform', 'castformsunny', 'castformrainy', 'castformsnowy',
+    'ditto',
+    'magnemite', 'magneton', 'magnezone',
+    'voltorb', 'electrode',
+    'klink', 'klang', 'klinklang',
+    'beldum', 'metang', 'metagross',
+    'varoom', 'revavroom',
+    'duraludon', 'archaludon',
+    'melmetal', 'meltan',
+    'mewtwo', 'mewtwomegax', 'mewtwomegay',
+    'genesect', 'genesectburn', 'genesectchill', 'genesectdouse', 'genesectshock',
+    'typenull', 'silvally',
+    'volcanion',
+    'baltoy', 'claydol',
+    'golett', 'golurk',
+    'magearna', 'magearnaoriginal',
+    'bronzor', 'bronzong',
+    'rotom', 'rotomheat', 'rotomwash', 'rotomfrost', 'rotomfan', 'rotommow'
+];
+
+/**
+ * 洗翠形态宝可梦 ID 列表
+ * 在时空裂隙中享受【起源共鸣】加成（古武无惩罚）
+ */
+const HISUIAN_POKEMON = [
+    'decidueyehisui', 'typhlosionhisui', 'samurotthisui',
+    'growlithehisui', 'arcaninehisui',
+    'voltorbhisui', 'electrodehisui',
+    'sneaselhisui',
+    'zoruahisui', 'zoroarkhisui',
+    'braviaryhisui',
+    'sliggoohisui', 'goodrahisui',
+    'avalugghisui',
+    'lilliganthisui',
+    'qwilfishhisui',
+    'wyrdeer', 'kleavor', 'ursaluna', 'ursalunabloodmoon',
+    'basculegion', 'basculegionf',
+    'sneasler', 'overqwil',
+    'enamorus', 'enamorustherian'
+];
+
+/**
+ * 起源形态宝可梦 ID 列表
+ * 在时空裂隙中享受【起源共鸣】加成
+ */
+const ORIGIN_POKEMON = [
+    'giratinaorigin',
+    'dialgaorigin',
+    'palkiaorigin'
+];
+
+/**
+ * 究极异兽 ID 列表
+ * 在时空裂隙中获得【异兽气场】伤害减免
+ */
+const ULTRA_BEAST_POKEMON = [
+    'nihilego', 'buzzwole', 'pheromosa', 'xurkitree',
+    'celesteela', 'kartana', 'guzzlord',
+    'poipole', 'naganadel',
+    'stakataka', 'blacephalon',
+    'necrozma', 'necrozmaduskmane', 'necrozmadawnwings', 'necrozmaultra'
+];
+
+/**
+ * 古代悖谬种 ID 列表
+ */
+const PARADOX_PAST_POKEMON = [
+    'greattusk', 'screamtail', 'brutebonnet', 'fluttermane',
+    'slitherwing', 'sandyshocks', 'roaringmoon',
+    'walkingwake', 'gougingfire', 'ragingbolt',
+    'koraidon'
+];
+
+/**
+ * 未来悖谬种 ID 列表
+ */
+const PARADOX_FUTURE_POKEMON = [
+    'irontreads', 'ironbundle', 'ironhands', 'ironjugulis',
+    'ironmoth', 'ironthorns', 'ironvaliant',
+    'ironleaves', 'ironboulder', 'ironcrown',
+    'miraidon'
+];
+
+function isPokemonInCategory(pokemonId, category) {
+    const id = (pokemonId || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    switch (category) {
+        case 'artificial':
+            return ARTIFICIAL_POKEMON.includes(id);
+        case 'hisuian':
+            return HISUIAN_POKEMON.includes(id) || id.includes('hisui');
+        case 'origin':
+            return ORIGIN_POKEMON.includes(id) || id.includes('origin');
+        case 'ultrabeast':
+            return ULTRA_BEAST_POKEMON.includes(id);
+        case 'paradox_past':
+            return PARADOX_PAST_POKEMON.includes(id);
+        case 'paradox_future':
+            return PARADOX_FUTURE_POKEMON.includes(id);
+        case 'paradox':
+            return PARADOX_PAST_POKEMON.includes(id) || PARADOX_FUTURE_POKEMON.includes(id);
+        default:
+            return false;
+    }
+}
+
+function getPokemonEngineTags(pokemonId) {
+    const tags = [];
+    const id = (pokemonId || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    if (ARTIFICIAL_POKEMON.includes(id)) tags.push('Artificial');
+    if (HISUIAN_POKEMON.includes(id) || id.includes('hisui')) tags.push('Hisuian');
+    if (ORIGIN_POKEMON.includes(id) || id.includes('origin')) tags.push('Origin');
+    if (ULTRA_BEAST_POKEMON.includes(id)) tags.push('Ultra Beast');
+    if (PARADOX_PAST_POKEMON.includes(id)) tags.push('Paradox', 'Paradox Past');
+    if (PARADOX_FUTURE_POKEMON.includes(id)) tags.push('Paradox', 'Paradox Future');
+
+    return tags;
+}
+
+root.POKEDEX = POKEDEX;
+root.POKEMON_CATEGORIES = {
+    ARTIFICIAL: ARTIFICIAL_POKEMON,
+    HISUIAN: HISUIAN_POKEMON,
+    ORIGIN: ORIGIN_POKEMON,
+    ULTRA_BEAST: ULTRA_BEAST_POKEMON,
+    PARADOX_PAST: PARADOX_PAST_POKEMON,
+    PARADOX_FUTURE: PARADOX_FUTURE_POKEMON,
+    isPokemonInCategory,
+    getPokemonEngineTags
+};
+})(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this));
+`;
 
 // ============================================================
 // 1. 转换 Pokedex (宝可梦数据)
@@ -24,14 +172,18 @@ function convertPokedex() {
     console.log('Converting pokedex.ts...');
     
     const inputPath = path.join(SHOWDOWN_DIR, 'pokedex.ts');
-    const outputPath = path.join(OUTPUT_DIR, 'pokedex-data.js');
+    const outputPath = POKEDEX_OUTPUT_PATH;
     
     let content = fs.readFileSync(inputPath, 'utf-8');
     
     // 移除 TypeScript 类型注解
     content = content.replace(
         /^export const Pokedex:\s*import\([^)]+\)\.[^\s=]+ = /m,
-        'const POKEDEX = '
+        'var POKEDEX = '
+    );
+    content = content.replace(
+        /(\tporygon2:\s*{[\s\S]*?\n\t\tcolor: "Red",\n)(?!\t\ttags:)/,
+        '$1\t\ttags: ["Artificial"],\n'
     );
     
     // 添加文件头注释
@@ -41,14 +193,16 @@ function convertPokedex() {
  * 来源: https://github.com/smogon/pokemon-showdown/blob/master/data/pokedex.ts
  * 
  * 使用方法:
- *   <script src="pokedex-data.js"></script>
+ *   <script src="../shared/pokedex-data.js"></script>
  *   console.log(POKEDEX.pikachu.baseStats);
  */
 
+(function(root) {
 `;
     
-    content = header + content;
+    content = header + content + POKEDEX_RUNTIME_FOOTER;
     
+    fs.mkdirSync(SHARED_DIR, { recursive: true });
     fs.writeFileSync(outputPath, content, 'utf-8');
     console.log(`  -> ${outputPath}`);
     
@@ -195,7 +349,7 @@ function convertMoves() {
 function validateFiles() {
     console.log('Validating generated files...');
     
-    const pokedexPath = path.join(OUTPUT_DIR, 'pokedex-data.js');
+    const pokedexPath = POKEDEX_OUTPUT_PATH;
     const movesPath = path.join(OUTPUT_DIR, 'moves-data.js');
     
     // 验证 pokedex
@@ -248,11 +402,11 @@ function main() {
     
     console.log('='.repeat(60));
     console.log('Done! Files generated:');
-    console.log('  - pokedex-data.js');
+    console.log('  - ../../shared/pokedex-data.js');
     console.log('  - moves-data.js');
     console.log('');
     console.log('Usage in HTML:');
-    console.log('  <script src="pokedex-data.js"></script>');
+    console.log('  <script src="../../shared/pokedex-data.js"></script>');
     console.log('  <script src="moves-data.js"></script>');
     console.log('='.repeat(60));
 }

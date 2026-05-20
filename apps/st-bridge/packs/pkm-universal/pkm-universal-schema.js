@@ -58,60 +58,6 @@ function normalizeMoves(value) {
   return CORE.normalizeMovesArray(value);
 }
 
-function normalizeIvs(value) {
-  return CORE.normalizeIvs(value);
-}
-
-function isValidIvs(value) {
-  return isObject(value) && ['hp', 'atk', 'def', 'spa', 'spd', 'spe']
-    .every((key) => typeof value[key] === 'number' && value[key] >= 0 && value[key] <= 31);
-}
-
-function generateIvsByQuality(quality) {
-  const normalized = normalizeString(quality, 'low').toLowerCase();
-  const targets = { low: 90, medium: 120, high: 150, perfect: 186 };
-  if (normalized === 'perfect') {
-    return { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 };
-  }
-
-  const targetSum = targets[normalized] || targets.low;
-  const stats = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'];
-  const ivs = {};
-  let remaining = targetSum;
-  for (let i = 0; i < stats.length; i += 1) {
-    const stat = stats[i];
-    if (i === stats.length - 1) {
-      ivs[stat] = Math.min(31, Math.max(0, remaining));
-      break;
-    }
-    const maxForThis = Math.min(31, remaining);
-    const minForThis = Math.max(0, remaining - (stats.length - i - 1) * 31);
-    ivs[stat] = Math.floor(Math.random() * (maxForThis - minForThis + 1)) + minForThis;
-    remaining -= ivs[stat];
-  }
-  return ivs;
-}
-
-function normalizeStatsMeta(value, pokemon) {
-  const src = isObject(value) ? value : {};
-  const lv = clampNumber(pokemon?.lv ?? pokemon?.level, 1, 100, 5);
-  const calculatedEv = Math.min(252, Math.floor(lv * 2.5));
-  const currentEv = src.ev_level === undefined || src.ev_level === null
-    ? calculatedEv
-    : Math.max(clampNumber(src.ev_level, 0, 252, 0), calculatedEv);
-  const quality = normalizeString(pokemon?.quality || pokemon?.iv_quality, '').toLowerCase();
-  const normalizedIvs = normalizeIvs(src.ivs);
-  const shouldGenerateIvs = ['low', 'medium', 'high', 'perfect'].includes(quality)
-    && (!isValidIvs(normalizedIvs) || src.iv_quality === undefined || src.iv_quality === null || src.iv_quality !== quality);
-  const ivs = shouldGenerateIvs ? generateIvsByQuality(quality) : normalizedIvs;
-  return {
-    ...clone(src, {}),
-    ivs,
-    iv_quality: shouldGenerateIvs ? quality : (src.iv_quality || quality || null),
-    ev_level: currentEv
-  };
-}
-
 function normalizeWorld(value) {
   const src = isObject(value) ? clone(value, {}) : {};
   const location = isObject(src.location) ? src.location : {};
@@ -177,7 +123,7 @@ function normalizePokemon(raw, slot = null) {
     isLead: raw.isLead === true,
     bonds: clampNumber(raw.bonds, 0, 255, 0),
     moves: normalizeMoves(raw.moves),
-    stats_meta: normalizeStatsMeta(raw.stats_meta, raw)
+    stats_meta: CORE.normalizeStatsMeta(raw.stats_meta, raw)
   };
   if (next.lv !== null) next.lv = clampNumber(next.lv, 1, 100, 5);
   return next;

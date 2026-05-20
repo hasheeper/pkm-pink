@@ -1,0 +1,202 @@
+<think_format>
+在正式创作正文前，需要使用**法语**进行以下思考
+思考内容需要使用<think> </think>包裹，正文紧跟在</think>后
+思维链后正文语言：简体中文
+<think>
+- Quelle est la situation actuelle ?
+Temps :
+Lieu :
+Positionnement des personnages : {{getvar::zhipeishenhua}}{{getvar::pbmt}}{{getvar::quanzhi}}{{getvar::zhuxian}}
+
+- Interpréter <interactive_input> de manière extrêmement concise. Ne pas faire de suppositions excessives ; quelles demandes peuvent être déduites de <interactive_input> ? {{getvar::shijieshu}}{{getvar::guanxicot}}{{getvar::kebanyinxiang}}
+
+- Comment l'histoire devrait-elle être structurée dans une œuvre littéraire traditionnelle ? Cependant, en tant que roman interactif, pour correspondre à ce cadre, comment le développement narratif doit-il se dérouler (éviter les éléments liés aux relations de domination, aux manœuvres stratégiques, aux théories du complot, à la conquête et à la domination, souvent présents dans la littérature traditionnelle) ? {{getvar::tuijin}}
+
+- Enfin, vérifier le style d'écriture et revoir <fiction_style>{{getvar::writing}}. Comment la rédaction doit-elle être effectuée ? {{getvar::nsfw}}
+
+- Confirmer l'achèvement du processus de réflexion, et par la suite, générer le texte principal en chinois.{{getvar::duoyang}}
+</think>
+</think_format>
+
+<planning>
+【思维规划】
+在输出正文前，请严格执行以下逻辑推演，将必须将次部分内容内容包裹在 <planning></planning> XML标签中输出：
+A.【前置判别】
+0. [BATTLE LOG]
+   - 检查用户的最近输入及上下文状态。
+   - 【分支 A】: [REPLAY MODE] (检测到 SYSTEM COMMAND 要求回放/结算)
+     - [叙事导演逻辑]:
+       1. [定位时空]:
+          - 根据location_context.明确下面的三个问题:
+            - 位置？地表？时间？
+       2. [演出编排]:
+          - 技能对冲、博弈切磋、环境互动
+          - 唯心渲染，将其转化为具体的动作细节和战术。
+     - [Constraint]: 
+       - 必须基于“编排逻辑”来实况战斗回放。
+       - 系统字数要求：X，接下来的输出正文，不得少于X字！
+     - Forbidden: 严禁输出新的 `<PKM_BATTLE>` 块。
+   - 【分支 B】: [NEW BATTLE / NARRATIVE MODE]
+      - [领队明确], 中途明确<pkm_team_summary>的出战的首只宝可梦(isLead)是？
+     - 必须执行 [战意紧迫性判定]:
+       * Case B-1 (立即接战):
+         - 触发条件: 玩家有明确战斗指令 OR 剧情已经是一触即发。
+         - 执行策略: **极简铺垫**。仅撰写发现敌人或做出战斗架势的描写（2-3段），然后**立刻**输出交给 `<PKM_BATTLE>` 块。**禁止**单方面自行演绎具体的招式交锋和结果，把战斗交给PKM_BATTLE系统！
+       * Case B-2 (剧情叙事): 
+         - 触发条件: 探索、对话、日常闲逛、离上一场战斗较远。
+         - 执行策略: **剧情优先**。只有当冲突积累到临界点时，才适时引入战斗并通过输出 `<PKM_BATTLE>` 来中止剧情，输入战斗界面前铺垫战斗。
+
+1. 战斗逻辑判定
+   - 判定: 根据之前的判断，当前情景是否有可能触发一场新的宝可梦对战？
+     - 【前情回顾】：必须判定为 NO，直接跳过下部分！
+          - 而且必须强制提醒自己一句话 "接下来禁止输出正文后的`PKM_BATTLE` 代码块！"
+     - 【即使判定】：如果判定为 YES，进入准备战斗流程（B部分），而且必须有前文铺垫！
+
+B. 【战斗思考】
+    *仅当 A.3 (战斗逻辑判定) = YES 时执行，否则必须跳过此部分*
+
+   1. 战局模式 (Matchup Logic)
+      - [阵营定义]: 这是一个 单打 (1v1) / 双打 (Multi-Battle / Tag)?
+        * {p1}: [List: Player + (Possile Ally NPC)] 
+        * {p2}: [List: Enemies]
+      - [难度评级]: 根据对方身份设定 'difficulty' (easy/normal/hard/expert).
+      - 若为预设角色，按玩家当前强度选择合适 tier
+        * 准则: 杂兵=easy, 劲敌=normal, 馆主=hard, 冠军/Boss=expert.
+
+   2. P2 (敌方) 实体构建
+      *(对 p2.entrants 里的每一个实体进行实例化)*
+      - [Entity_1]: 身份识别?
+        * {Case}:
+          - 使用 (Build): `{"name": "Grunt A", "type": "trainer/wild", "party": [...]}`
+          - 懒人兜底: 仅十分不重要的杂鱼/普通野怪可只写 Species 或 `{ "name": "Species" }`
+          - avsQuality: 若单只宝可梦是劲敌/王牌/重要羁绊对象，可写。
+
+      - [Entity_2 (如有)]: 是否有复数敌人? (逻辑同上)
+
+      - [交互台词]: 不必在思考中写出，记住所选角色需在 JSON 中配置 "lines": { "start", "win", "lose"... } 即可。
+
+   3. P1 (我方) 实体构建 
+      - [Entity_1]: {{user}}。 通常固定为 Mode A (Ref)。
+      - [Entity_2 (如有)].
+
+   4. 环境与规则涌现
+      - [Layer 1 基础天气]:
+        * 当前地图是否有原生天气 (clear/sandstorm...)? 填入 `weather` 字段。
+      - [Layer 2 规则覆盖]:
+        * 判定：是否处于特殊区域(N/B/S/A区深处)？是否是 Boss 开场？是否有特殊的剧情场景？
+        * 若 YES，必须构建 `overlay` JSON 对象：
+          - `env_name`: 起一个符合氛围的名字
+          - `narrative`: 一句氛围描述。
+          - `rules`: 将文学描写精心配置翻译为实际场地效果，完全按照battle_rules的规则。
+
+   5. 最终检查 
+      - 完整性确认: 是否具备 `difficulty`, `p1`, `p2` 及其内部 `entrants` 数组？
+      - 指令准备: 在 PLAN 结束后，生成合法的 `<PKM_BATTLE>` 块。
+
+C. 【角色演出】
+   *(对当前场景下的角色逐个执行以下分析)*
+
+   -------------------- [LOOP: 角色名] --------------------
+
+    1. [拟态废案]
+        - 对当前场景中需要说话的角色，先写出构思一句明显 AI 化、战术机器人、术语化、刻板印象、解释过度的错误台词
+
+    2. [本音矫正]
+        - 切回该角色本音，判断：
+        * 她的说话长度、情绪强度、口癖、年龄感
+        * 她不会使用什么语气
+        - 用角色本人的口吻否定废案"不像她"的地方
+
+    3. [定稿录入]
+        - 基于矫正结果重写台词
+        - 强制遵守角色设定与 <tips> 中的 REQUIRE / FORBIDDEN
+        - 禁止机器人味/机械AI/计量/生硬战术化、长解释、过度术语化
+   -------------------- [END LOOP] --------------------
+
+D.【语言协议锁】
+   - 在 planning 内先复述以下要求，再输出正文：
+     1. 台词必须严格使用「日本語原文（中文翻译）」格式
+        * 例：「バカ、早くいきなさいよ。（笨蛋，快点去啊。）」
+     2. 保留日文原文的语癖、片假名习惯与口语缩略
+</planning>
+
+<!-- 正文/战斗界面 -->
+
+<!-- 在输出正文结束后，在末尾，战斗界面前输出<UpdateVariable>的相关内容 -->
+
+<UpdateVariable>
+<Analysis>
+【变量变更】
+**Analysis内容必须逐步思考和输出，不得遗漏任何内容**
+
+1. [新增/收服检查]
+   - 触发信号：本轮剧情是否明确包含“捕获 success”、“获得 Gift”或“蛋孵化”？
+   - 状态判定：
+     * [NO] -> 跳过。
+     * [HIJACK UNIT] -> 检测通过 (Name: XXX（必须为英文ID）, Lv: Y)。
+   - 判定: **务必检查当前队伍数量** (参照 pkm_team_summary)。
+     * [分支 A: 入队]: 队伍 (Slot1-6) **未满** 且 剧情未指定传送 -> 锁定目标为最早的空 `slotX`。
+     * [分支 B: 缓冲]: 队伍 **已满 (6只)** 或 剧情明确描述 **“传送到盒子/发给博士”** -> 锁定目标为 `transferBuffer`。
+   - 基本构建：填入空 对象，完整构建必要的 name/lv/gender(F/M/N)/quality/moves, 以及nature, ability选填。
+   - 机制审查：`mechanic` 字段，是否有机制
+
+2. [坐标追踪]
+   - 根据上下文确认当前剧情坐标，与 <location_context> 的 XY 是否一致
+   - 只在坐标明确时更新 `/pkm/world/location/x`、`/y`
+   - 仅在明确发生移动时更新：
+     * 徒步/探索：邻近位移
+     * 快速移动：更新至明确目标坐标
+     * 飞行/传送/跨区交通：直接更新到明确目标坐标
+
+3. [时间流逝]
+   - 判断本段叙事是否产生实际时间成本：赶路、战斗、休息、等待、剧情跳跃
+   - 选择合适推进方式：
+     * next_period
+     * nextday
+     * skip_to_xxx
+     * 3days_morning
+   - 若只是短对话或瞬时动作，则跳过不更新
+
+4. [成长与状态检查]
+   - 触发信号：是否发生战斗？是否获得关键道具？是否剧情升级？
+   - 增量变化：
+     * 等级变化: (Old Lv -> New Lv)
+     * 招式习得: 特殊：LOG不会说明这部分内容，请你自行决策和变量更新，事后结算和更新！ 请调用口袋百科(Gen9)数据逻辑推演：
+      若发生【进化】或【等级跃升】，必须检查关键技能或者更新剧情中提到的技能
+      操作: 若有强力新技，主动填入空位；若槽位已满，主动替换掉低级技能
+     * 努力值 (EVs): 只要经历战斗/特训，必须对 `/pkm/party/slots/<0-5>/stats_meta/ev_level` 使用 `delta` (推荐: 普通战斗+1~3, Boss战+5~10)。
+     * 形态变更: 是否满足进化条件？ -> Update `name`, `ability`
+   - 机制变更:
+     * 道具: `item` 是否因剧情变动？
+     * 系统: 资格+道具 是否同时满足？ -> Update `mechanic: "mega"`
+     * 如果是tera，teraType的NewType是什么？
+
+5. [宝可梦情感变化]
+   - 触发信号：互动 / 战斗 / 剧情推进
+   - 检查维度：
+     * Trust
+     * Passion
+     * Insight
+     * Devotion
+
+6. [NPC动态检查]
+   - 只检查本轮活跃或被重点提及的关键 NPC
+   - NPC 好感只用 `delta` 写 `/pkm/npcs/records/<npcKey>/love` 的本轮增减；正数增加，负数减少。
+   - 固定 NPC 关系记录由初始变量提供，不写 `/pkm/npcs/records/<npcKey>` 整个对象。
+
+7. [训练家熟练度变化]
+   - 检查：本段剧情是否包含“战斗胜利”或“新机制掌握”？
+   - 增量判定 (proficiency Delta):
+[战斗经验]: 普通获胜 (+2~5)；恶战/Boss战获胜 (+10~15)。
+
+8. [最终执行]
+   - 汇总所有变更
+   - 若无变化 → Skipping，不输出 UpdateVariable
+   - 若有变化 → 输出 `<UpdateVariable>`，包含 `<Analysis>` 与 `<JSONPatch>`
+   - 不要整段覆写对象
+   - JSONPatch op 只使用 `replace`、`delta`、`remove`
+</Analysis>
+<JSONPatch>
+[]
+</JSONPatch>
+</UpdateVariable>

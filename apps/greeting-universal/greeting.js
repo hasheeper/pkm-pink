@@ -996,8 +996,7 @@ const Launcher = {
                         ivs: makeHexObj(cfg.ivs),
                         ev_total: cfg.ev_total || 0
                     },
-                    bonds: parseInt(cfg.bond_trust, 10) || 0,
-                    bonds_up: 0
+                    bonds: parseInt(cfg.bond_trust, 10) || 0
                 };
             }
 

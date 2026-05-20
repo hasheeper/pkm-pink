@@ -1,14 +1,14 @@
 /**
- * PKM Universal battle frontend injection runtime.
+ * PKM common battle frontend injection runtime.
  */
 (function () {
   'use strict';
 
   const ROOT = typeof window !== 'undefined' ? window : globalThis;
-  const RUNTIME = ROOT.PKMUniversalPluginRuntime || {};
-  ROOT.PKMUniversalPluginRuntime = RUNTIME;
+  const COMMON = ROOT.PKMCommonRuntime || {};
+  ROOT.PKMCommonRuntime = COMMON;
 
-  RUNTIME.createBattleFrontend = function createBattleFrontend(ctx, stateService) {
+  COMMON.createBattleFrontend = function createBattleFrontend(ctx, stateService, options = {}) {
     const {
       ROOT: hostRoot,
       PLUGIN_NAME,
@@ -29,6 +29,14 @@
       normalizePokemon
     } = ctx.util;
     const { loadState } = stateService;
+    const battleOptions = {
+      includeBondsAsAvs: false,
+      processSinglePlayerEntrant: false,
+      lookupTrainer: null,
+      resolveBattleEnvironment: null,
+      getStateTrainerProficiency: null,
+      ...options
+    };
 
     function stripJsonComments(jsonStr) {
       return String(jsonStr || '')
@@ -171,12 +179,62 @@
       if (explicit === 'wild' || explicit === 'pokemon') return 'wild';
       if (explicit === 'player' || isPlayerEntrantName(entrant?.name)) return 'player';
       if (explicit === 'db_trainer') return 'db_trainer';
+      if ((!explicit || explicit === 'trainer' || explicit === 'generated_trainer') && lookupTrainerFromData(entrant?.name, entrant?.tier)) return 'db_trainer';
       return explicit || 'generated_trainer';
     }
 
     function getTierDefaultLevel(tier) {
       const normalized = clampNumber(tier, 1, 4, 2);
       return ({ 1: 25, 2: 50, 3: 75, 4: 85 })[normalized] || 50;
+    }
+
+    function lookupTrainerFromData(name, tier = 2) {
+      if (typeof battleOptions.lookupTrainer !== 'function') return null;
+      try {
+        return battleOptions.lookupTrainer(name, tier);
+      } catch (error) {
+        console.warn(`${PLUGIN_NAME} trainer DB lookup failed for ${name}`, error);
+        return null;
+      }
+    }
+
+    function normalizeBattleName(value) {
+      return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
+    function isSimplePokemonReference(value) {
+      if (typeof value === 'string') return true;
+      if (!isObject(value)) return false;
+      const keys = Object.keys(value).filter((key) => value[key] !== undefined && value[key] !== null);
+      return keys.length > 0 && keys.every((key) => ['name', 'species'].includes(key));
+    }
+
+    function findDbPokemonByName(dbParty, request) {
+      const requestedName = normalizeBattleName(typeof request === 'string' ? request : (request?.name || request?.species));
+      if (!requestedName) return null;
+      return (dbParty || []).find((pokemon) => {
+        const name = normalizeBattleName(pokemon?.name);
+        const species = normalizeBattleName(pokemon?.species);
+        return name === requestedName || species === requestedName || name.split('alola')[0] === requestedName;
+      }) || null;
+    }
+
+    function resolveDbTrainerParty(dbResult, requestedParty, tier) {
+      const dbParty = Array.isArray(dbResult?.party) ? dbResult.party : [];
+      const trainerName = dbResult?.name || dbResult?.key || 'Trainer';
+      const withTrainer = (pokemon) => isObject(pokemon) ? { ...pokemon, trainer: pokemon.trainer || trainerName } : pokemon;
+      if (!Array.isArray(requestedParty) || !requestedParty.length) {
+        return dbParty.map((pokemon) => normalizeBattlePartyEntry(withTrainer(pokemon), dbResult?.tier || tier, 'db_trainer')).filter(Boolean);
+      }
+      if (requestedParty.every(isSimplePokemonReference)) {
+        return requestedParty
+          .map((request) => withTrainer(findDbPokemonByName(dbParty, request) || request))
+          .map((pokemon) => normalizeBattlePartyEntry(pokemon, dbResult?.tier || tier, 'db_trainer'))
+          .filter(Boolean);
+      }
+      return requestedParty
+        .map((pokemon) => normalizeBattlePartyEntry(withTrainer(pokemon), dbResult?.tier || tier, 'db_trainer'))
+        .filter(Boolean);
     }
 
     const AUTO_MOVES_DEFAULT_DISABLED = [
@@ -550,7 +608,6 @@
       delete next._autoMoves;
       delete next._hasExplicitStatsMeta;
       delete next._currentPlayerParty;
-      delete next._hasExplicitBonds;
       return next;
     }
 
@@ -593,7 +650,7 @@
         _autoLevel: !hasExplicitLevel,
         _autoMoves: !hasExplicitMoves,
         _hasExplicitStatsMeta: hasExplicitStatsMeta,
-        quality: src.quality || src.iv_quality || (lv !== null
+        quality: src.quality || (lv !== null
           ? (lv >= 75 ? 'high' : lv >= 45 ? 'medium' : 'low')
           : null)
       };
@@ -626,8 +683,6 @@
       }
       delete normalized.slot;
       normalized._tier = seed._tier || tier;
-      normalized._hasExplicitBonds = seed._hasExplicitBonds === true
-        || (seed._hasExplicitBonds !== false && Object.prototype.hasOwnProperty.call(seed, 'bonds'));
       return normalized;
     }
 
@@ -657,7 +712,7 @@
         source = pokemon.friendship.avs;
       } else if (isObject(pokemon?.friendship)) {
         source = pokemon.friendship;
-      } else if (pokemon?._hasExplicitBonds && typeof pokemon?.bonds === 'number') {
+      } else if (battleOptions.includeBondsAsAvs && typeof pokemon?.bonds === 'number') {
         source = {
           trust: pokemon.bonds,
           passion: pokemon.bonds,
@@ -681,18 +736,25 @@
       const name = normalizeString(src.name, 'Unknown');
       const tier = src.tier || defaultTier;
       const trainerType = detectBattleEntrantType(src);
-      const party = Array.isArray(src.party)
-        ? src.party.map((pokemon) => normalizeBattlePartyEntry(pokemon, tier, trainerType)).filter(Boolean)
-        : [];
-      const unlocks = mergeUnlocks(src.unlocks, detectUnlocksFromParty(party));
+      const dbResult = trainerType === 'db_trainer' ? lookupTrainerFromData(name, tier) : null;
+      const party = dbResult
+        ? resolveDbTrainerParty(dbResult, src.party, tier)
+        : Array.isArray(src.party)
+          ? src.party.map((pokemon) => normalizeBattlePartyEntry(pokemon, tier, trainerType)).filter(Boolean)
+          : [];
+      const unlocks = mergeUnlocks(dbResult?.unlocks, src.unlocks, detectUnlocksFromParty(party));
 
       return {
-        name,
+        name: dbResult?.name || name,
         party,
         trainerType,
         isPlayer: trainerType === 'player' || isPlayerEntrantName(name),
-        tier,
-        trainerProficiency: clampNumber(src.trainerProficiency ?? src.proficiency, 0, 255, 0),
+        tier: dbResult?.tier || tier,
+        difficulty: src.difficulty || dbResult?.difficulty || null,
+        trainerProficiency: Math.max(
+          clampNumber(src.trainerProficiency ?? src.proficiency, 0, 255, 0),
+          clampNumber(dbResult?.trainerProficiency, 0, 255, 0)
+        ),
         unlocks,
         lines: src.lines || null
       };
@@ -720,7 +782,7 @@
 
       const normalized = {
         ...battleData,
-        difficulty: battleData.difficulty || 'normal',
+        difficulty: battleData.difficulty || null,
         battle_type: battleData.battle_type || 'double'
       };
       const defaultTier = battleData.tier || 2;
@@ -740,6 +802,21 @@
             trainerProficiency: Math.max(0, ...trainersData.map((trainer) => trainer.trainerProficiency || 0)),
             unlocks: battleData.p1.unlocks || mergeUnlocks(...trainersData.map((trainer) => trainer.unlocks))
           };
+        } else if (battleOptions.processSinglePlayerEntrant) {
+          const trainerData = processBattleEntrant(battleData.p1, defaultTier);
+          if (trainerData.isPlayer) {
+            normalized.player = battleData.p1;
+          } else {
+            normalized.player = {
+              ...battleData.p1,
+              name: trainerData.name,
+              party: trainerData.party,
+              trainerProficiency: trainerData.trainerProficiency || 0,
+              difficulty: battleData.p1.difficulty || trainerData.difficulty || null,
+              lines: battleData.p1.lines || trainerData.lines || {},
+              unlocks: battleData.p1.unlocks || trainerData.unlocks
+            };
+          }
         } else {
           normalized.player = battleData.p1;
         }
@@ -751,6 +828,7 @@
           const trainersData = p2Entrants.map((trainer) => processBattleEntrant(trainer, defaultTier));
           const merged = mergeTrainerParties(trainersData);
           const firstWithLines = trainersData.find((trainer) => trainer.lines);
+          const firstWithDifficulty = trainersData.find((trainer) => trainer.difficulty);
           normalized.enemy = {
             ...battleData.p2,
             type: trainersData.some((trainer) => trainer.trainerType === 'wild') ? 'wild' : 'trainer',
@@ -760,9 +838,11 @@
             _trainersData: trainersData,
             trainerProficiency: Math.max(0, ...trainersData.map((trainer) => trainer.trainerProficiency || 0)),
             lines: battleData.p2.lines || firstWithLines?.lines || {},
+            difficulty: battleData.p2.difficulty || firstWithDifficulty?.difficulty || null,
             unlocks: battleData.p2.unlocks || mergeUnlocks(...trainersData.map((trainer) => trainer.unlocks)),
             _allDbTrainers: trainersData.every((trainer) => trainer.trainerType === 'db_trainer')
           };
+          normalized.difficulty = battleData.difficulty || normalized.enemy.difficulty || 'normal';
         } else {
           const trainerData = processBattleEntrant(battleData.p2, defaultTier);
           normalized.enemy = {
@@ -771,11 +851,15 @@
             name: trainerData.name,
             party: trainerData.party,
             trainerProficiency: trainerData.trainerProficiency || 0,
+            difficulty: battleData.p2.difficulty || trainerData.difficulty || null,
             lines: battleData.p2.lines || trainerData.lines || {},
             unlocks: battleData.p2.unlocks || trainerData.unlocks
           };
+          normalized.difficulty = battleData.difficulty || normalized.enemy.difficulty || 'normal';
         }
       }
+
+      normalized.difficulty = normalized.difficulty || 'normal';
 
       return normalized;
     }
@@ -788,7 +872,6 @@
       delete next['friend' + 'ship'];
       delete next._needGenerate;
       delete next._tier;
-      delete next._hasExplicitBonds;
       return next;
     }
 
@@ -924,7 +1007,10 @@
       ));
     }
 
-    function resolveBattleEnvironment(state, battleData) {
+    function resolveBattleEnvironment(state, battleData, settings) {
+      if (typeof battleOptions.resolveBattleEnvironment === 'function') {
+        return battleOptions.resolveBattleEnvironment(state, battleData, settings);
+      }
       const aiEnv = isObject(battleData.environment) ? battleData.environment : {};
       const finalWeather = aiEnv.weather || null;
       const finalSuppression = aiEnv.suppression || null;
@@ -968,7 +1054,7 @@
         detectUnlocksFromParty(playerParty)
       );
       const enemyUnlocks = mergeUnlocks(aiEnemy.unlocks, detectUnlocksFromParty(enemyParty));
-      const environment = resolveBattleEnvironment(state, battleData);
+      const environment = resolveBattleEnvironment(state, battleData, settings);
 
       return {
         settings,
@@ -977,7 +1063,9 @@
           name: resolveSideName(aiPlayer, state.player.name),
           trainerProficiency: Math.max(
             clampNumber(aiPlayer.trainerProficiency ?? aiPlayer.proficiency, 0, 255, 0),
-            state.player.proficiency
+            typeof battleOptions.getStateTrainerProficiency === 'function'
+              ? battleOptions.getStateTrainerProficiency(state)
+              : (state.player.proficiency ?? 0)
           ),
           party: playerParty,
           unlocks: playerUnlocks

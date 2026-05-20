@@ -1,14 +1,12 @@
 /**
- * PKM Universal plugin shared runtime.
- *
- * Classic-script module loaded by apps/st-bridge/manifest.json.
+ * PKM common pack context helpers.
  */
 (function () {
   'use strict';
 
   const ROOT = typeof window !== 'undefined' ? window : globalThis;
-  const RUNTIME = ROOT.PKMUniversalPluginRuntime || {};
-  ROOT.PKMUniversalPluginRuntime = RUNTIME;
+  const COMMON = ROOT.PKMCommonRuntime || {};
+  ROOT.PKMCommonRuntime = COMMON;
 
   function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -65,29 +63,39 @@
     }
   }
 
-  function createContext() {
+  function createPackContext(config = {}) {
     const CORE = ROOT.PKMPackCore || null;
-    const PLUGIN_NAME = '[PKM Universal MVUZ]';
-    const PRODUCT = 'universal';
-    const VERSION = '0.1.0-mvuz-universal';
-    const STAT_KEY = 'stat_data';
-    const PKM_KEY = 'pkm';
-    const INJECT_ID = 'pkm_universal_player_data_mvuz';
-    const BATTLE_TAG = 'PKM_BATTLE';
-    const FRONTEND_TAG = 'PKM_FRONTEND';
+    const PRODUCT = config.product || 'universal';
+    const PLUGIN_NAME = config.pluginName || `[PKM ${PRODUCT} MVUZ]`;
+    const VERSION = config.version || '0.1.0-mvuz';
+    const STAT_KEY = config.statKey || 'stat_data';
+    const PKM_KEY = config.pkmKey || 'pkm';
+    const INJECT_ID = config.injectId || `pkm_${PRODUCT}_player_data_mvuz`;
+    const BATTLE_TAG = config.battleTag || 'PKM_BATTLE';
+    const FRONTEND_TAG = config.frontendTag || 'PKM_FRONTEND';
     const MAX_PARTY_SIZE = 6;
     const FRONTEND_BLOCK_RE = new RegExp(`\\n*<${FRONTEND_TAG}>[\\s\\S]*?<\\/${FRONTEND_TAG}>\\n*`, 'gi');
+    const schemaRuntime = ROOT[config.schemaRuntimeName];
+    const pokemonMode = config.pokemonMode || 'bonds';
 
     if (!CORE?.mvu) throw new Error(`${PLUGIN_NAME} requires PKMPackCore. Load pkm-core.js before this script.`);
-    if (!ROOT.PKMUniversalSchemaRuntime?.normalizePkmState) {
-      throw new Error(`${PLUGIN_NAME} requires PKMUniversalSchemaRuntime. Load pkm-universal-schema.js before this script.`);
+    if (typeof schemaRuntime?.normalizePkmState !== 'function') {
+      throw new Error(`${PLUGIN_NAME} requires ${config.schemaRuntimeName}. Load schema before plugin shared runtime.`);
     }
 
     const DEFAULT_SETTINGS = CORE.getDefaultSettings(PRODUCT);
     const DEFAULT_UNLOCKS = CORE.getDefaultUnlocks();
 
     function createEmptySlot(slot) {
-      return CORE.createEmptySlot(slot);
+      const empty = CORE.createEmptySlot(slot);
+      if (pokemonMode === 'avs') {
+        delete empty.bonds;
+        return {
+          ...empty,
+          friendship: normalizeFriendship(null)
+        };
+      }
+      return empty;
     }
 
     function isEmptyPokemon(pokemon) {
@@ -102,18 +110,21 @@
       return CORE.normalizeIvs(ivs);
     }
 
-    function normalizeStatsMeta(statsMeta, pokemon) {
-      const src = isObject(statsMeta) ? clone(statsMeta, {}) : {};
-      const lv = clampNumber(pokemon?.lv ?? pokemon?.level, 1, 100, 5);
-      const calculatedEv = Math.min(252, Math.floor(lv * 2.5));
-      const evLevel = src.ev_level === null || src.ev_level === undefined
-        ? calculatedEv
-        : Math.max(clampNumber(src.ev_level, 0, 252, 0), calculatedEv);
+    function normalizeFriendship(value) {
+      const src = isObject(value) ? value : {};
+      const avsRaw = isObject(src.avs) ? src.avs : src;
       return {
-        ...src,
-        ivs: normalizeIvs(src.ivs),
-        ev_level: evLevel
+        avs: {
+          trust: clampNumber(avsRaw.trust || 0, 0, 255, 0),
+          passion: clampNumber(avsRaw.passion || 0, 0, 255, 0),
+          insight: clampNumber(avsRaw.insight || 0, 0, 255, 0),
+          devotion: clampNumber(avsRaw.devotion || 0, 0, 255, 0)
+        }
       };
+    }
+
+    function normalizeStatsMeta(statsMeta, pokemon) {
+      return CORE.normalizeStatsMeta(statsMeta, pokemon);
     }
 
     function normalizePokemon(raw, slot = null) {
@@ -129,10 +140,15 @@
         shiny: Boolean(raw.shiny),
         isAce: true,
         isLead: Boolean(raw.isLead),
-        bonds: clampNumber(raw.bonds, 0, 255, 0),
         moves: normalizeMoves(raw.moves),
         stats_meta: normalizeStatsMeta(raw.stats_meta, raw)
       };
+      if (pokemonMode === 'avs') {
+        delete next.bonds;
+        next.friendship = normalizeFriendship(raw.friendship || raw.avs);
+      } else {
+        next.bonds = clampNumber(raw.bonds, 0, 255, 0);
+      }
       if (next.lv !== null) next.lv = clampNumber(next.lv, 1, 100, 5);
       if (!next.name) return createEmptySlot(slot || next.slot || 0);
       return next;
@@ -164,7 +180,7 @@
     }
 
     function normalizePkmState(input) {
-      return ROOT.PKMUniversalSchemaRuntime.normalizePkmState(input);
+      return schemaRuntime.normalizePkmState(input);
     }
 
     const util = {
@@ -181,6 +197,7 @@
       isEmptyPokemon,
       normalizeMoves,
       normalizeIvs,
+      normalizeFriendship,
       normalizeStatsMeta,
       normalizePokemon,
       normalizePartySlots,
@@ -211,7 +228,5 @@
     };
   }
 
-  RUNTIME.shared = {
-    createContext
-  };
+  COMMON.createPackContext = createPackContext;
 })();
