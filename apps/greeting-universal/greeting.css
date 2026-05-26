@@ -1,0 +1,3948 @@
+:root {
+    --c-bg: #f2f4f8; 
+    --c-accent: #00cec9;
+    --c-accent-dark: #00b894;
+    --c-text: #2d3436; 
+    --c-gray: #b2bec3;
+    --c-frame: #ffffff;
+    --font-ui: 'Exo 2', sans-serif;
+    --font-txt: 'M PLUS Rounded 1c', sans-serif;
+
+    --sk: -10deg;  /* 全局倾斜角度 */
+    --sk-r: 10deg; /* 反向回正 */
+}
+
+.sim-screen.theme-gen9 .sim-content-body {
+    padding-top: 12px;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;
+    font-family: var(--font-txt);
+}
+
+/* =========================================
+   [NEW] BGM FLOATING MODULE (音乐小浮窗)
+   ========================================= */
+
+.bgm-module {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(5px);
+    border: 1px solid #b2bec3;
+    border-radius: 20px;
+    font-family: var(--font-ui);
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #b2bec3;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    user-select: none;
+}
+
+.bgm-module:hover {
+    background: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+    color: var(--c-text);
+}
+
+.bgm-module.playing {
+    border-color: var(--c-accent);
+    color: var(--c-accent-dark);
+    background: #e0fcfc;
+    box-shadow: 0 0 10px rgba(0, 206, 201, 0.3);
+    padding-right: 15px;
+}
+
+#bgm-status-text {
+    transition: 0.3s;
+    min-width: 50px;
+    text-align: center;
+}
+
+.bgm-icon-wrap {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    width: 20px;
+    height: 16px;
+    gap: 2px;
+    position: relative;
+}
+
+.icon-note {
+    position: absolute;
+    top: -2px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    font-size: 1rem;
+    line-height: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: 0.2s;
+}
+
+.bgm-module.playing .icon-note {
+    opacity: 0;
+    transform: scale(0.5);
+}
+
+.eq-bar {
+    width: 3px;
+    background: var(--c-accent);
+    height: 3px;
+    border-radius: 2px;
+    opacity: 0;
+    transition: 0.2s;
+}
+
+.bgm-module.playing .eq-bar {
+    opacity: 1;
+    animation: eqJump 0.6s infinite alternate;
+}
+
+.bgm-module.playing .b1 { animation-delay: 0s; }
+.bgm-module.playing .b2 { animation-delay: 0.2s; }
+.bgm-module.playing .b3 { animation-delay: 0.4s; }
+
+@keyframes eqJump {
+    0% { height: 4px; }
+    100% { height: 14px; }
+}
+
+.sim-screen.theme-gen5 ~ .bgm-module {
+    color: #fff;
+    background: rgba(0,0,0,0.5);
+    border-color: #555;
+}
+
+/* 模拟手机/Tavern 窗口框架 */
+.launcher-frame {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    background: var(--c-bg);
+    border: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 背景装饰网格 */
+.bg-grid {
+    position: absolute; inset: 0;
+    background-image: 
+        linear-gradient(rgba(0, 184, 148, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 184, 148, 0.05) 1px, transparent 1px);
+    background-size: 20px 20px;
+    z-index: 0; pointer-events: none;
+}
+
+.greeting-inline-notice {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: 18px;
+    z-index: 300;
+    display: grid;
+    gap: 3px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(45, 52, 54, 0.14);
+    background: rgba(255, 255, 255, 0.95);
+    color: var(--c-text);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+    font-size: 0.78rem;
+    font-weight: 700;
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: none;
+}
+.greeting-inline-notice strong {
+    font-family: var(--font-ui);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+}
+.greeting-inline-notice span {
+    line-height: 1.35;
+}
+.greeting-inline-notice.is-success {
+    border-color: rgba(0, 184, 148, 0.35);
+}
+.greeting-inline-notice.is-warning {
+    border-color: rgba(253, 203, 110, 0.7);
+}
+.greeting-inline-notice.is-error {
+    border-color: rgba(255, 71, 87, 0.45);
+}
+.greeting-inline-notice.is-hiding {
+    opacity: 0;
+    transform: translateY(8px);
+}
+
+/* === 头部 HEADER === */
+.header-strip {
+    position: relative; z-index: 10;
+    padding: 20px 20px 10px;
+    background: rgba(255,255,255,0.9);
+    backdrop-filter: blur(10px);
+    border-bottom: 2px solid #dfe6e9;
+    transform: skewY(0deg); /* 保持水平 */
+}
+.header-title {
+    font-family: var(--font-ui);
+    font-weight: 900;
+    font-size: 1.5rem;
+    font-style: italic;
+    color: var(--c-text);
+    text-transform: uppercase;
+    letter-spacing: -1px;
+    line-height: 1;
+}
+.header-sub {
+    font-size: 0.7rem; color: var(--c-gray); font-weight: 700;
+    letter-spacing: 2px; text-transform: uppercase;
+}
+.header-deco-line {
+    width: 50px; height: 4px; background: var(--c-accent);
+    margin-top: 5px; transform: skewX(var(--sk));
+}
+
+/* === 主滚动区 === */
+.scroll-viewport {
+    flex: 1; overflow-y: auto; overflow-x: hidden;
+    padding: 20px 20px 100px 20px; /* 底部给按钮留空 */
+    position: relative; z-index: 5;
+    mask-image: linear-gradient(to bottom, transparent 0%, black 5%, black 95%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 5%, black 95%, transparent 100%);
+}
+.scroll-viewport::-webkit-scrollbar { display: none; }
+
+/* === 世代选择卡片 GEN CREDITS === */
+.gen-selector-row {
+    display: flex; gap: 10px;
+    overflow-x: auto; 
+    padding: 10px 15px 10px 15px;
+    scroll-behavior: smooth;
+    box-sizing: content-box;
+}
+.gen-selector-row::-webkit-scrollbar { height: 4px; }
+.gen-selector-row::-webkit-scrollbar-thumb { background: #dfe6e9; border-radius: 4px; }
+
+.gen-card {
+    flex: 0 0 100px; height: 120px;
+    background: #fff;
+    border: none;
+    transform: skewX(var(--sk));
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative; overflow: hidden;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+}
+.gen-card .gc-inner { transform: skewX(var(--sk-r)); width: 100%; text-align: center; }
+
+.gen-card:hover { background: #f0fdf9; }
+.gen-card.active { 
+    background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 10px 20px rgba(0, 184, 148, 0.3);
+    transform: skewX(var(--sk)) scale(1.05) translateY(-5px);
+}
+
+.gc-num { font-size: 2rem; font-weight: 900; font-family: var(--font-ui); font-style: italic; line-height: 1; opacity: 0.2; }
+.gen-card.active .gc-num { opacity: 0.4; }
+.gc-name { font-weight: 800; font-size: 0.9rem; margin-top: -5px; position:relative; z-index:2; text-transform: uppercase; }
+.gc-bonus { font-size: 0.6rem; margin-top: 5px; opacity: 0.7; }
+
+/* === 锁定卡片：Masters 8 === */
+.gen-card.is-locked {
+    background: #000;
+    border: 1px solid #333;
+    border-bottom: 4px solid #ffd700;
+    cursor: not-allowed;
+    position: relative;
+    overflow: hidden;
+    user-select: none;
+}
+
+.gen-card.is-locked::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(#1a1a1a 1px, transparent 1px),
+        linear-gradient(90deg, #1a1a1a 1px, transparent 1px);
+    background-size: 10px 10px;
+    opacity: 0.8;
+    z-index: 0;
+}
+
+.gen-card.is-locked .gc-inner { position: relative; z-index: 2; }
+
+.is-locked .lock-icon {
+    width: 32px;
+    height: 32px;
+    color: #ffd700;
+    margin: 0 auto 5px;
+    filter: drop-shadow(0 0 5px rgba(255, 215, 0, 0.4));
+}
+
+.locked-tag {
+    background: #ffd700;
+    color: #000;
+    font-weight: 800;
+    font-size: 0.5rem;
+    white-space: nowrap;
+    padding: 2px 6px;
+    border-radius: 2px;
+    letter-spacing: 1px;
+    margin-top: 6px;
+    display: inline-block;
+    opacity: 0.9 !important;
+}
+
+.gen-card.is-locked .gc-bonus.locked-tag {
+    font-size: 0.35rem !important;
+}
+
+.gen-card.is-locked .scan-line {
+    position: absolute;
+    top: -100%;
+    left: 0;
+    width: 100%;
+    height: 20%;
+    background: linear-gradient(180deg, transparent, rgba(255,215,0,0.4), transparent);
+    animation: scanMove 3s infinite linear;
+    z-index: 1;
+    pointer-events: none;
+}
+
+@keyframes scanMove {
+    0% { top: -20%; }
+    100% { top: 120%; }
+}
+
+.gen-card.is-locked:active {
+    border-color: #ff4757;
+}
+
+.gen-card.is-locked:active .locked-tag,
+.gen-card.is-locked:active .gc-name,
+.gen-card.is-locked:active .lock-icon {
+    color: #ff4757;
+}
+
+@keyframes accessDeniedShake {
+    0% { transform: skewX(var(--sk)) translateX(0); }
+    25% { transform: skewX(var(--sk)) translateX(-5px); }
+    50% { transform: skewX(var(--sk)) translateX(5px); }
+    75% { transform: skewX(var(--sk)) translateX(-5px); }
+    100% { transform: skewX(var(--sk)) translateX(0); }
+}
+
+.gen-card.access-denied-anim {
+    animation: accessDeniedShake 0.4s ease-in-out;
+    border-color: #ff4757;
+}
+
+/* === 详细面板 === */
+.mech-badges-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 3px;
+}
+.mb-icon {
+    width: 46px; height: 46px;
+    background: #f1f2f6;
+    border-radius: 6px;
+    color: #b2bec3;
+    display: flex; align-items: center; justify-content: center;
+    transition: 0.2s;
+    border: 1px solid #dfe6e9;
+}
+.mb-icon svg { width: 34px; height: 34px; stroke-width: 2.2; }
+.sim-screen.theme-gen6 .mech-badges-row .mb-icon { color: #ffffff; }
+.sim-screen.theme-gen7 .mech-badges-row .mb-icon { color: #9fdcff; }
+.sim-screen.theme-gen8 .mech-badges-row .mb-icon { color: #ff6b6b; }
+.sim-screen.theme-hisui .mech-badges-row .mb-icon {
+    color: #7e848c8e;
+    margin-top: 12px;
+}
+.sim-screen.theme-hisui .mech-badges-row .mb-icon svg {
+    width: 40px;
+    height: 40px;
+}
+.sim-screen.theme-gen9 .mech-badges-row .mb-icon { color: #00cfc1; }
+.mb-icon:hover {
+    color: var(--c-accent-dark);
+    background: #e0fcfc;
+    border-color: var(--c-accent-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+}
+
+.section-tag {
+    font-size: 0.7rem; color: var(--c-gray); font-weight: 800;
+    letter-spacing: 1px; margin-bottom: 10px; display: block;
+}
+
+/* 御三家展示 */
+.starter-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
+}
+.starter-btn {
+    background: #f8f9fa; border: 2px solid transparent; 
+    border-radius: 8px; padding: 10px 4px;
+    cursor: pointer; text-align: center;
+    transition: all 0.2s; position: relative;
+}
+.starter-btn:hover { background: #fff; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+.starter-btn.selected {
+    background: #fff; border-color: var(--c-accent-dark);
+    box-shadow: 0 0 0 4px rgba(0, 184, 148, 0.1);
+}
+.starter-btn.selected::after {
+    content: 'READY'; position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
+    background: var(--c-accent-dark); color: #fff; font-size: 0.6rem; padding: 2px 6px; border-radius: 4px; font-weight: 800;
+}
+
+.pk-img {
+    width: 96px;
+    height: 96px;
+    object-fit: contain;
+    filter: drop-shadow(0 3px 6px rgba(0,0,0,0.1));
+    margin-top: -12px;
+}
+.pk-name { display: block; font-size: 0.8rem; font-weight: 800; color: var(--c-text); margin-top: 5px; }
+
+/* === 模式开关 (Anime Mode) === */
+.config-block {
+    margin-top: 20px;
+    background: #2d3436; color: #fff;
+    padding: 15px 20px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: space-between;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.2);
+    position: relative; overflow: hidden;
+    transform: skewX(var(--sk));
+}
+.config-block > * { transform: skewX(var(--sk-r)); }
+
+.conf-text .ct-main { font-family: var(--font-ui); font-size: 1.1rem; font-weight: 900; font-style: italic; color: #fab1a0; }
+.conf-text .ct-sub { font-size: 0.7rem; color: #b2bec3; }
+
+.ch-box-wrap { position: relative; }
+.native-check { display: none; }
+.custom-check {
+    width: 50px; height: 26px; background: #636e72; border-radius: 13px;
+    position: relative; transition: 0.3s; cursor: pointer;
+}
+.custom-check::after {
+    content:''; position: absolute; left: 4px; top: 4px; width: 18px; height: 18px;
+    background: #fff; border-radius: 50%; transition: 0.3s cubic-bezier(0.3, 1.5, 0.7, 1);
+}
+.native-check:checked + .custom-check { background: #00cec9; }
+.native-check:checked + .custom-check::after { transform: translateX(24px); }
+
+/* === 底部按钮 START === */
+.btm-action-area {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 20px;
+    background: linear-gradient(to top, #fff 80%, transparent 100%);
+    z-index: 20;
+}
+
+.start-btn {
+    width: 100%; height: 56px; border: none;
+    background: linear-gradient(90deg, #2d3436 0%, #000 100%);
+    color: #fff; font-family: var(--font-ui); font-size: 1.2rem; font-weight: 900; font-style: italic;
+    text-transform: uppercase; letter-spacing: 2px;
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+    cursor: pointer; transition: 0.2s; position: relative; overflow: hidden;
+}
+.start-btn:hover {
+    background: #00b894; transform: translateY(-3px);
+    box-shadow: 0 10px 25px rgba(0, 184, 148, 0.4);
+}
+.start-btn:active { transform: translateY(2px); }
+.start-btn::after {
+    content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    transform: skewX(-20deg);
+    animation: lightPass 3s infinite;
+}
+
+@keyframes lightPass { 0% { left: -100%; } 20% { left: 150%; } 100% { left: 150%; } }
+/* 选中态高亮 */
+.type-badge {
+    font-size: 0.6rem; padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,0.05); color: #636e72; margin-top: 4px; display:inline-block; font-weight: 700;
+}
+
+/* 动画 */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.anim-fade { animation: fadeIn 0.3s ease-out forwards; }
+
+/* === [ADDON] 自定义模式组件样式 === */
+
+/* 输入框样式 (Input) */
+.hero-input {
+    width: 100%; box-sizing: border-box;
+    padding: 12px 15px; border-radius: 8px; border: 2px solid #dfe6e9;
+    background: #fff; font-family: var(--font-txt);
+    font-size: 1rem; color: #2d3436; font-weight: 700;
+    transition: 0.2s; outline: none; margin-bottom: 5px;
+}
+.hero-input:focus { border-color: var(--c-accent); box-shadow: 0 0 0 4px rgba(0, 206, 201, 0.1); }
+.hero-lbl {
+    font-size: 0.7rem; color: #b2bec3; font-weight: 800; text-transform: uppercase; margin: 0 0 4px 4px;
+}
+
+/* 8大功能开关网格 */
+.mech-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;
+}
+.switch-card {
+    background: #f1f2f6; border-radius: 6px; padding: 10px 12px;
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; transition: 0.2s; border: 1px solid transparent;
+    position: relative; overflow: hidden;
+}
+.switch-card:hover { background: #dfe6e9; }
+.switch-card.active {
+    background: #e0fcfc; border-color: var(--c-accent-dark);
+}
+
+.sc-label { font-size: 0.7rem; font-weight: 700; color: #636e72; line-height: 1.2; }
+.switch-card.active .sc-label { color: var(--c-accent-dark); }
+
+.sc-icon {
+    width: 24px; height: 24px; margin-right: 10px;
+    color: #b2bec3;
+    transition: 0.2s; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+}
+.switch-card.active .sc-icon {
+    color: var(--c-accent-dark);
+    transform: scale(1.1);
+}
+.sc-icon svg { width: 100%; height: 100%; stroke-width: 2; }
+
+/* 原生 checkbox 隐藏但保留功能 */
+.sc-box {
+    width: 16px; height: 16px; border: 2px solid #b2bec3;
+    border-radius: 4px; display: inline-block; position: relative;
+    transition: 0.2s; flex-shrink: 0;
+}
+.switch-card.active .sc-box { background: var(--c-accent-dark); border-color: var(--c-accent-dark); }
+/* 简单的勾选符号 */
+.switch-card.active .sc-box::after {
+    content:''; position:absolute; top:1px; left:4px;
+    width:5px; height:9px; border-right:2px solid #fff; border-bottom:2px solid #fff;
+    transform:rotate(45deg);
+}
+
+/* =========================================
+   SIMULATION SCREEN CONTAINER (画中画) - V2 (Sleek)
+   ========================================= */
+
+.sim-frame {
+    background: #ffffff;
+    border: 1px solid #b2bec3;
+    border-radius: 12px;
+    padding: 6px;
+    margin-top: 15px;
+    box-shadow:
+        0 15px 35px rgba(0,0,0,0.1),
+        0 5px 15px rgba(0,0,0,0.05);
+    position: relative;
+    transform-style: preserve-3d;
+}
+
+.sim-frame::before {
+    content: " // SIMULATION_CORE ";
+    position: absolute;
+    top: -18px;
+    right: 0px;
+    font-size: 0.6rem;
+    color: #636e72;
+    font-weight: 800;
+    opacity: 0.5;
+    letter-spacing: 1px;
+}
+
+.sim-screen {
+    background: #dae3e7;
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+    min-height: 400px;
+    border: 2px solid #2d3436;
+    box-shadow: inset 0 0 30px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+.sim-screen::after {
+    content: " ";
+    display: block;
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(0,0,0,0.03) 50%, rgba(0,0,0,0.01) 50%, rgba(255,255,255,0));
+    background-size: 100% 3px;
+    z-index: 99;
+    pointer-events: none;
+}
+
+.sim-header {
+    height: auto;
+    padding: 12px 16px;
+    background: linear-gradient(to bottom, #fff 0%, rgba(255,255,255,0.8) 100%);
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+}
+
+.sim-header div:first-child {
+    display: flex;
+    flex-direction: column;
+}
+
+.sim-region-title {
+    font-size: 1.6rem;
+    margin: 0;
+    line-height: 1;
+    font-family: var(--font-ui);
+    font-style: italic;
+    text-transform: uppercase;
+    color: #ffffff;
+    letter-spacing: -1px;
+    text-shadow: 2px 2px 0px rgba(0,0,0, 0.5);
+}
+
+.sim-header div #feature-list {
+    margin: 2px 0 0 2px !important;
+    font-size: 0.65rem !important;
+    background: #dfe6e9;
+    color: #636e72;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+    width: fit-content;
+}
+
+.sim-content-body {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    text-align: left;
+}
+
+.sim-content-body .section-tag {
+    color: #4a5559;
+    opacity: 0.6;
+    margin-bottom: 8px;
+    font-size: 0.65rem;
+}
+
+.starter-grid {
+    gap: 12px;
+}
+
+.starter-btn {
+    border: 1px solid rgba(0,0,0,0.1);
+    background: rgba(255,255,255,0.7);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+.starter-btn.selected {
+    border-color: #2d3436 !important;
+    background: #fff;
+    box-shadow: none;
+    transform: translateY(2px);
+}
+
+.starter-btn.selected::after {
+    background: #000;
+    letter-spacing: 1px;
+}
+
+#anime-options {
+    transform: none;
+    margin-top: 15px;
+    border: 1px dashed #636e72;
+    background: rgba(45, 52, 54, 0.05);
+    color: #2d3436;
+    box-shadow: none;
+}
+
+#anime-options * {
+    transform: none;
+}
+
+#anime-options .ct-main {
+    color: #00b894;
+    font-size: 0.9rem;
+}
+
+#anime-options .ct-sub {
+    color: #636e72;
+}
+
+.custom-check {
+    background: #b2bec3;
+    height: 20px;
+    width: 40px;
+}
+
+.custom-check::after {
+    width: 16px;
+    height: 16px;
+    top: 2px;
+    left: 2px;
+}
+
+.native-check:checked + .custom-check {
+    background: #2d3436;
+}
+
+/* =========================================
+   THEME: GEN 1 (RETRO CHROME / MONOCHROME)
+   ========================================= */
+
+/* 1. 屏幕背景与全局字体 */
+.sim-screen.theme-gen1 {
+    background: #fff;
+    font-family: 'Press Start 2P', cursive;
+    color: #000;
+}
+
+/* 2. 双线边框 */
+.sim-screen.theme-gen1 .starter-btn,
+.sim-screen.theme-gen1 .sim-header {
+    border: 4px double #000 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+/* 3. 头部特殊样式 */
+.sim-screen.theme-gen1 .sim-header {
+    border-bottom: 4px double #000 !important;
+    border-top: none !important;
+    border-left: none !important;
+    border-right: none !important;
+    padding: 10px;
+    align-items: flex-end;
+}
+
+.sim-screen.theme-gen1 .sim-region-title {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 1.2rem;
+    font-style: normal;
+    color: #000;
+    text-shadow: 2px 2px #ccc;
+}
+
+.sim-screen.theme-gen1 #feature-list {
+    font-size: 0.6rem !important;
+    background: none !important;
+    color: #000 !important;
+    text-transform: uppercase;
+}
+
+.sim-screen.theme-gen1 #feature-list::before {
+    content: ":L";
+}
+
+/* 4. 御三家按钮 */
+.sim-screen.theme-gen1 .starter-grid {
+    row-gap: 15px;
+}
+
+.sim-screen.theme-gen1 .starter-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 10px;
+    position: relative;
+    box-shadow: 4px 4px 0px #000 !important;
+    transition: margin 0.1s, box-shadow 0.1s;
+}
+
+.sim-screen.theme-gen1 .pk-img {
+    filter: grayscale(100%) contrast(150%) brightness(1.1);
+}
+
+.sim-screen.theme-gen1 .pk-name {
+    font-size: 0.6rem;
+    margin-top: 5px;
+    letter-spacing: -1px;
+}
+
+.sim-screen.theme-gen1 .starter-btn.selected {
+    border-color: #000 !important;
+    transform: translate(2px, 2px) !important;
+    box-shadow: 2px 2px 0px #000 !important;
+}
+
+.sim-screen.theme-gen1 .starter-btn.selected::after {
+    top: -12px;
+    background: #000;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 0.5rem;
+    padding: 4px 4px 2px 4px;
+    border-radius: 0;
+}
+
+.sim-screen.theme-gen1 .starter-btn.selected::before {
+    content: "▶";
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.8rem;
+    animation: pixelBlink 0.8s infinite steps(2, start);
+}
+
+@keyframes pixelBlink {
+    0% { opacity: 1; }
+    50% { opacity: 0; }
+    100% { opacity: 1; }
+}
+
+/* 适配黑暗/高对比主题 (比如 Gen 5/Gen 9时) 确保浮窗可见 */
+.sim-screen.theme-gen5 ~ .bgm-module { color: #fff; background: rgba(0,0,0,0.5); border-color:#555; }
+
+/* 5. Anime Mode 区块 */
+.sim-screen.theme-gen1 #anime-options {
+    background: transparent;
+    border: 4px double #000;
+    border-radius: 0 !important;
+}
+
+.sim-screen.theme-gen1 #anime-options .ct-main {
+    color: #000;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 0.7rem;
+    font-style: normal;
+}
+
+.sim-screen.theme-gen1 #anime-options .ct-sub {
+    display: none;
+}
+
+.sim-screen.theme-gen1 .custom-check {
+    background: transparent;
+    box-shadow: none;
+    width: auto;
+    height: auto;
+    border: none;
+}
+
+.sim-screen.theme-gen1 .custom-check::after {
+    display: none;
+}
+
+.sim-screen.theme-gen1 .native-check + .custom-check::before {
+    content: "OFF";
+    font-family: 'Press Start 2P', cursive;
+    font-size: 1rem;
+    color: #999;
+}
+
+.sim-screen.theme-gen1 .native-check:checked + .custom-check::before {
+    content: "ON";
+    color: #000;
+    text-decoration: underline;
+}
+
+/* =========================================
+   THEME: GEN 2 (GBC STYLE / JOHTO)
+   ========================================= */
+
+.sim-screen.theme-gen2 {
+    background: #f8f8f0;
+    font-family: 'Press Start 2P', cursive;
+    color: #222;
+}
+
+.sim-screen.theme-gen2 .sim-header {
+    background: #222;
+    color: #fff;
+    border-bottom: 2px solid #555;
+    padding: 8px 12px;
+    align-items: center;
+}
+
+.sim-screen.theme-gen2 .sim-region-title {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 1rem;
+    color: #fff;
+    text-shadow: 2px 2px #444;
+    font-style: normal;
+}
+
+.sim-screen.theme-gen2 #region-badges .mb-icon {
+    filter: sepia(100%) hue-rotate(180deg) saturate(300%);
+}
+
+.sim-screen.theme-gen2 .starter-btn {
+    border: 3px solid #222 !important;
+    border-radius: 6px !important;
+    background: #fff !important;
+    box-shadow: 4px 4px 0px rgba(0,0,0,0.15) !important;
+    position: relative;
+    padding-top: 15px;
+    transition: transform 0.1s;
+}
+
+.sim-screen.theme-gen2 .pk-img {
+    image-rendering: pixelated;
+    filter: contrast(120%) brightness(105%) saturate(50%);
+    transition: 0.2s;
+}
+
+.sim-screen.theme-gen2 .pk-name {
+    margin-top: 8px;
+    font-size: 0.55rem;
+    background: #eee;
+    width: 100%;
+    text-align: center;
+    padding: 4px 0;
+    border-top: 2px solid #222;
+}
+
+.sim-screen.theme-gen2 .starter-btn.selected {
+    transform: translateY(-2px);
+    border-color: #000 !important;
+    background: #fff !important;
+    z-index: 10;
+    box-shadow: 3px 3px 0 2px rgba(0,0,0,0.1) !important;
+}
+
+.sim-screen.theme-gen2 .starter-btn.selected .pk-img {
+    filter: contrast(120%) saturate(100%);
+    transform: scale(1.1);
+}
+
+.sim-screen.theme-gen2 .starter-btn.selected::before {
+    content: "HP: █████";
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    font-size: 0.5rem;
+    color: #222;
+    background: transparent;
+    font-family: 'Press Start 2P';
+    letter-spacing: -2px;
+}
+
+.sim-screen.theme-gen2 .starter-btn.selected::after {
+    content: "Lv 5";
+    background: #222;
+    color: #fff;
+    top: auto;
+    bottom: 33px;
+    right: 0;
+    left: auto;
+    border-radius: 4px 0 0 0;
+    font-size: 0.5rem;
+    padding: 2px 4px;
+    transform: none;
+}
+
+.sim-screen.theme-gen2 #anime-options {
+    background: #fff;
+    border: 3px solid #222;
+    border-radius: 6px !important;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.2) !important;
+    transform: none;
+}
+
+.sim-screen.theme-gen2 #anime-options .ct-main {
+    color: #222;
+    font-family: 'Press Start 2P';
+    font-size: 0.65rem;
+    font-style: normal;
+}
+
+.sim-screen.theme-gen2 .custom-check {
+    width: 32px;
+    height: 16px;
+    background: #ddd;
+    border: 2px solid #222;
+    border-radius: 8px;
+}
+
+.sim-screen.theme-gen2 .custom-check::after {
+    width: 6px;
+    height: 6px;
+    background: #222;
+    border-radius: 50%;
+    top: 3px;
+    left: 3px;
+}
+
+.sim-screen.theme-gen2 .native-check:checked + .custom-check {
+    background: #6c5ced;
+}
+
+/* =========================================
+   THEME: GEN 3 (HOENN) - HOTFIX FINAL
+   ========================================= */
+
+.sim-screen.theme-gen3 {
+    background: linear-gradient(to bottom, #effedd 0%, #bdecb6 100%);
+    font-family: 'Press Start 2P', cursive;
+    color: #3e3e3e;
+}
+
+.sim-screen.theme-gen3::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,128,0,0.1) 3px);
+}
+
+.sim-screen.theme-gen3 .sim-header {
+    background: #505058;
+    border-bottom: 4px solid #bebf7f;
+    color: #fff !important;
+    padding: 10px;
+    z-index: 5;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+}
+
+.sim-screen.theme-gen3 .sim-region-title {
+    font-family: 'Press Start 2P';
+    font-size: 1.1rem;
+    color: #fff;
+    text-shadow: 2px 2px 0 #222;
+    margin: 0;
+}
+
+.sim-screen.theme-gen3 #feature-list {
+    display: none;
+}
+
+.sim-screen.theme-gen3 .starter-btn {
+    box-sizing: border-box !important;
+    position: relative !important;
+    overflow: hidden !important;
+    background: #f8f8e0 !important;
+    border: 3px solid #484848 !important;
+    border-radius: 6px 0 16px 0 !important;
+    padding: 35px 5px 10px 5px !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.3) !important;
+    transition: none !important;
+    transform: none !important;
+    margin-top: 0 !important;
+    z-index: 1;
+}
+
+.sim-screen.theme-gen3 .starter-btn::before {
+    content: "HP";
+    position: absolute !important;
+    top: 9px !important;
+    left: 6px !important;
+    font-size: 0.6rem !important;
+    color: #bfa040 !important;
+    font-weight: 900 !important;
+    z-index: 10 !important;
+    letter-spacing: 0 !important;
+}
+
+.sim-screen.theme-gen3 .starter-btn::after {
+    content: "" !important;
+    position: absolute !important;
+    top: 9px !important;
+    left: 28px !important;
+    right: 8px !important;
+    width: auto !important;
+    height: 7px !important;
+    border-radius: 4px !important;
+    border: 1px solid #444 !important;
+    background: #505050 !important;
+    z-index: 5 !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+.sim-screen.theme-gen3 .starter-btn.selected {
+    background: #404048 !important;
+    border-color: #d05030 !important;
+    z-index: 20;
+    margin-top: -5px !important;
+    box-shadow: 6px 9px 0 rgba(0,0,0,0.3) !important;
+}
+
+.sim-screen.theme-gen3 .starter-btn.selected::before {
+    color: #fff !important;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+}
+
+.sim-screen.theme-gen3 .starter-btn.selected::after {
+    background: linear-gradient(180deg, #7be8ad 0%, #20c030 50%, #0a8a1a 100%) !important;
+    border-color: #fff !important;
+    box-shadow: 0 0 5px #40ff70 !important;
+}
+
+.sim-screen.theme-gen3 .pk-img {
+    max-width: 60%;
+    height: auto;
+    object-fit: contain;
+    filter: drop-shadow(4px 4px 0 rgba(0,0,0,0.2));
+}
+
+.sim-screen.theme-gen3 .pk-name {
+    color: #404040;
+    margin-top: 5px;
+    font-size: 0.6rem;
+}
+
+.sim-screen.theme-gen3 .starter-btn.selected .pk-name {
+    color: #fff !important;
+}
+
+.sim-screen.theme-gen3 #anime-options {
+    background: #5d6d7d;
+    border: 2px solid #fff;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.3);
+    margin-top: 20px;
+}
+
+.sim-screen.theme-gen3 .custom-check {
+    border-radius: 0;
+    background: #333;
+}
+
+.sim-screen.theme-gen3 .custom-check::after {
+    border-radius: 0;
+    background: #eeccbb;
+}
+
+/* =========================================
+   THEME: GEN 4 (SINNOH BATTLE UI)
+   ========================================= */
+
+.sim-screen.theme-gen4 {
+    background: linear-gradient(to bottom, #ffffff 0%, #e0f0ff 60%, #c0e0ff 100%);
+    font-family: 'Press Start 2P', cursive;
+    color: #333;
+    filter: contrast(1.05);
+}
+
+.sim-screen.theme-gen4::before {
+    display: none;
+}
+
+.sim-screen.theme-gen4 .sim-header {
+    background: #2b323c;
+    border: 4px solid #dec25b;
+    border-radius: 12px;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.2) !important;
+    color: #fff !important;
+    text-shadow: 2px 2px 0 #000;
+    padding: 12px 16px;
+    margin-bottom: 5px;
+    z-index: 5;
+}
+
+.sim-screen.theme-gen4 .sim-region-title {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 1rem;
+    font-style: normal;
+    color: #fff;
+    text-transform: uppercase;
+    line-height: 1.4;
+}
+
+.sim-screen.theme-gen4 #feature-list {
+    display: none;
+}
+
+.sim-screen.theme-gen4 .starter-btn {
+    box-sizing: border-box !important;
+    position: relative !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    border: 3px solid #484153 !important;
+    border-radius: 8px !important;
+    padding: 10px !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.3) !important;
+    margin-top: 0 !important;
+    transform: none !important;
+    transition: none !important;
+}
+
+.sim-screen.theme-gen4 .starter-btn::before,
+.sim-screen.theme-gen4 .starter-btn::after {
+    display: none !important;
+    content: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+.sim-screen.theme-gen4 .pk-img {
+    filter: drop-shadow(2px 2px 0 rgba(0,0,0,0.2));
+    margin-bottom: 8px;
+    transition: none;
+}
+
+.sim-screen.theme-gen4 .pk-name {
+    color: #484153;
+    font-size: 0.65rem;
+    padding: 0;
+    background: none;
+    border: none;
+    margin: 0;
+}
+
+.sim-screen.theme-gen4 .starter-btn.selected {
+    border-color: #d03e3e !important;
+    box-shadow: none !important;
+    background: #fdf0f0 !important;
+    transform: translateY(2px) !important;
+}
+
+.sim-screen.theme-gen4 .starter-btn.selected .pk-name::before {
+    content: "▶";
+    position: absolute;
+    left: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1rem;
+    color: #333;
+    animation: blinkG4 0.5s infinite;
+}
+
+@keyframes blinkG4 {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+.sim-screen.theme-gen4 #anime-options {
+    background: #2b323c;
+    border: 4px solid #dec25b;
+    border-radius: 8px;
+    box-shadow: none;
+}
+
+.sim-screen.theme-gen4 .ct-main {
+    color: #fff !important;
+    font-family: 'Press Start 2P';
+}
+
+.sim-screen.theme-gen4 .custom-check {
+    border-radius: 4px;
+    border: 2px solid #fff;
+}
+
+.sim-screen.theme-gen4 .native-check:checked + .custom-check {
+    background: #d03e3e;
+}
+
+/* =========================================
+   THEME: GEN 5 (FIXED: PIXEL TECH / GREY-GLASS)
+   ========================================= */
+
+/* 1. 屏幕背景：深岩石灰 + 微微网格 (不是死黑！) */
+.sim-screen.theme-gen5 {
+    background: #252528; /* 这是一种有质感的深灰 */
+  
+    /* 所有的字体强制回滚到像素风 */
+    font-family: 'Press Start 2P', cursive !important;
+    color: #fff;
+}
+
+/* 背景格纹装饰：浅灰线条，这种对比度看得清 */
+.sim-screen.theme-gen5::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    z-index: 0;
+    /* 细微的网格背景 */
+    background-image: 
+        linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 20px 20px;
+    opacity: 0.5;
+}
+
+/* 2. 头部：黑科技面板 (Header) */
+.sim-screen.theme-gen5 .sim-header {
+    /* 采用比背景更深一点的灰，形成层次 */
+    background: #111; 
+  
+    /* 醒目的科技白-灰渐变边框 */
+    border: 2px solid #a0a0a0;
+    border-top: 2px solid #fff; /* 定部高光 */
+  
+    /* 清除所有干扰 */
+    border-radius: 0; 
+    box-shadow: 0 4px 0 rgba(0,0,0,0.5); /* 硬朗投影 */
+  
+    padding: 12px 14px;
+    color: #fff !important;
+    text-shadow: 2px 2px 0 #000; /* 确保文字够清晰 */
+    z-index: 10;
+  
+    /* 取消之前的圆角、特殊变性 */
+    border-left: 2px solid #a0a0a0; border-right: 2px solid #a0a0a0; 
+    display: flex; justify-content: space-between; align-items: center;
+}
+
+/* 标题 */
+.sim-screen.theme-gen5 .sim-region-title {
+    font-family: 'Press Start 2P', cursive;
+    color: #fff;
+    font-size: 0.9rem; margin: 0;
+    font-style: normal;
+}
+
+/* 把它设计成 C-Gear 上的 Wifi 信号指示或者电量 */
+.sim-screen.theme-gen5 #feature-list {
+    display: block !important;
+    background: transparent !important;
+    color: #0bd !important; /* 科技蓝 */
+    border: 1px solid #0bd;
+    font-size: 0.5rem !important; padding: 2px 4px;
+    box-shadow: 0 0 5px rgba(0, 187, 221, 0.5);
+    text-shadow: none;
+}
+
+/* 3. 中间卡片：战斗指令风格 (灰黑玻璃块) */
+.sim-screen.theme-gen5 .starter-btn {
+    box-sizing: border-box !important; position: relative !important;
+    overflow: hidden !important;
+  
+    /* 灰黑色半透明玻璃块，不是死黑 */
+    background: rgba(40, 40, 45, 0.9) !important;
+  
+    /* 锋利的银白边框 */
+    border: 2px solid #999 !important;
+    /* 切两个角：左下、右上 (六边形的一半) */
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  
+    padding: 10px !important;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-end; /* 图在下 */
+
+    margin-top: 0 !important; transform: none !important; transition: none !important;
+}
+
+/* 卡片内部：清除任何伪元素，确保干净 */
+.sim-screen.theme-gen5 .starter-btn::after, 
+.sim-screen.theme-gen5 .starter-btn::before {
+    display: none !important; content: none !important;
+}
+
+/* 这代的图片：可以保留色彩，有点像全息投影 */
+.sim-screen.theme-gen5 .pk-img {
+    filter: drop-shadow(0 0 2px rgba(255,255,255,0.5));
+    transition: none;
+    margin-bottom: 5px;
+}
+
+/* 名字：加上背景框 */
+.sim-screen.theme-gen5 .pk-name {
+    width: 100%;
+    /* 深灰底白字 */
+    background: #444; color: #fff; 
+    border: 1px solid #666;
+    font-size: 0.55rem; padding: 4px 0;
+    text-align: center; margin-top: 5px;
+}
+
+/* 4. 选中态：不要移动！只变色！ */
+.sim-screen.theme-gen5 .starter-btn.selected {
+    /* 框变亮 */
+    border-color: #4ceb58 !important; /* Gen5 的特异绿 */
+    background: #111 !important; /* 按下变深 */
+    box-shadow: inset 0 0 20px rgba(76, 235, 88, 0.2) !important;
+    transform: none !important; 
+}
+
+/* 选中文字 */
+.sim-screen.theme-gen5 .starter-btn.selected .pk-name {
+    background: #4ceb58; color: #000; text-shadow: none; border-color: #fff;
+    font-weight: 900;
+}
+
+/* 选中图片：不需要动，加亮一點就行 */
+.sim-screen.theme-gen5 .starter-btn.selected .pk-img {
+    filter: drop-shadow(0 0 10px rgba(76, 235, 88, 0.6)) brightness(1.2);
+}
+
+/* 5. 开关部分：灰黑机械配 */
+.sim-screen.theme-gen5 #anime-options {
+    background: #333; border: 2px solid #aaa; box-shadow: 2px 2px 0 #000;
+}
+.sim-screen.theme-gen5 .ct-main { color: #fff !important; font-family:'Press Start 2P'; }
+.sim-screen.theme-gen5 .custom-check { border-radius: 2px; border: 1px solid #aaa; background: #111; }
+.sim-screen.theme-gen5 .native-check:checked + .custom-check { background: #4ceb58; }
+
+/* =========================================
+   THEME: GEN 6 (KALOS / 3D SKEUOMORPHISM)
+   ========================================= */
+
+/* 1. 屏幕背景：模拟 3DS 下屏 PSS 系统的气泡背景 */
+.sim-screen.theme-gen6 {
+    background: radial-gradient(circle at 50% 50%, #eff2f5 0%, #dfe4ea 100%);
+    font-family: 'Press Start 2P', cursive;
+    color: #333;
+}
+
+.sim-screen.theme-gen6::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    background: 
+        radial-gradient(circle at 10% 10%, rgba(200, 50, 50, 0.15) 0%, transparent 40%),
+        radial-gradient(circle at 90% 90%, rgba(50, 50, 200, 0.15) 0%, transparent 40%);
+    background-size: 100% 100%;
+}
+
+/* 2. 头部：战斗指令黑框 (模拟半透明黑玻璃) */
+.sim-screen.theme-gen6 .sim-header {
+    background: linear-gradient(180deg, rgba(40,40,45,0.95) 0%, rgba(20,20,25,0.95) 100%);
+    border: 3px solid #ced6e0;
+    border-radius: 8px;
+    box-shadow: 
+        0 4px 5px rgba(0,0,0,0.3),
+        inset 0 1px 0 rgba(255,255,255,0.4);
+    border-bottom: 4px solid #fff;
+    border-image: linear-gradient(to right, #e84343 0%, #3498db 100%) 1;
+    padding: 10px 15px;
+    margin-bottom: 8px;
+    z-index: 5;
+    border-left: none;
+    border-right: none;
+    border-top: 1px solid #777;
+}
+
+.sim-screen.theme-gen6 .sim-region-title {
+    font-family: 'Press Start 2P', cursive !important;
+    color: #fff !important;
+    text-shadow: 2px 2px 0 #000;
+    font-size: 0.9rem;
+    font-style: italic;
+    letter-spacing: -1px;
+}
+
+.sim-screen.theme-gen6 #feature-list {
+    background: linear-gradient(to bottom, #fff 0%, #dcdcdc 100%) !important;
+    color: #444 !important;
+    border: 1px solid #aaa;
+    border-radius: 10px;
+    box-shadow: 0 2px 2px rgba(0,0,0,0.2) !important;
+}
+
+/* 3. 御三家卡片：SKEUOMORPHIC 亮面按钮 */
+.sim-screen.theme-gen6 .starter-btn {
+    box-sizing: border-box !important; position: relative !important;
+    background: linear-gradient(to bottom, #ffffff 0%, #f1f2f6 50%, #dfe4ea 51%, #ced6e0 100%) !important;
+    border: 2px solid #bdc3c7 !important;
+    border-radius: 16px !important;
+    box-shadow: 
+        inset 0 1px 0 #fff,
+        inset 0 0 2px rgba(255,255,255,0.7),
+        0 4px 6px rgba(0,0,0,0.4) !important;
+    padding: 10px !important;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    transform: none !important; margin-top: 0 !important;
+}
+
+.sim-screen.theme-gen6 .starter-btn::after,
+.sim-screen.theme-gen6 .starter-btn::before {
+    display: none !important; content: none !important;
+}
+
+.sim-screen.theme-gen6 .pk-img {
+    filter: drop-shadow(0 4px 2px rgba(0,0,0,0.2));
+    margin-bottom: 5px; opacity: 0.9;
+}
+
+.sim-screen.theme-gen6 .pk-name {
+    color: #2f3542;
+    text-shadow: 0 1px 0 #fff;
+    margin-top: 5px;
+    font-size: 0.6rem;
+    font-weight: 800;
+}
+
+/* 4. 选中态：DNA 爆发 */
+.sim-screen.theme-gen6 .starter-btn.selected {
+    border: 3px solid #fff !important;
+    background: linear-gradient(135deg, #2c3e50 0%, #000 100%) !important;
+    box-shadow: 
+        0 0 0 2px #d63031,
+        0 0 15px rgba(52, 152, 219, 0.8),
+        inset 0 0 10px rgba(0,0,0,0.5) !important;
+}
+
+.sim-screen.theme-gen6 .starter-btn.selected .pk-name {
+    color: #fff !important;
+    text-shadow: 0 0 5px #e84343, 0 0 10px #3498db !important;
+}
+
+.sim-screen.theme-gen6 .starter-btn.selected .pk-img {
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.8));
+    opacity: 1; transform: scale(1.05);
+}
+
+/* 5. 开关部分：3DS 系统设置风格 */
+.sim-screen.theme-gen6 #anime-options {
+    background: #ecf0f1; border: 1px solid #bdc3c7; border-radius: 8px;
+    box-shadow: inset 0 1px 0 #fff;
+}
+.sim-screen.theme-gen6 .ct-main { color: #dfe6e9 !important; font-family:'Press Start 2P'; text-shadow:0 1px 0 rgba(0,0,0,0.4); }
+.sim-screen.theme-gen6 .custom-check { 
+    background: #bdc3c7; border-radius: 20px; box-shadow: inset 0 2px 3px rgba(0,0,0,0.2); 
+    border:none;
+}
+.sim-screen.theme-gen6 .custom-check::after {
+    background: radial-gradient(circle at 30% 30%, #fff, #bbb);
+    box-shadow: 0 2px 2px rgba(0,0,0,0.3); border-radius: 50%;
+}
+.sim-screen.theme-gen6 .native-check:checked + .custom-check { background: #3498db; }
+
+/* =========================================
+   THEME: GEN 7 (ALOLA / OCEAN GRADIENT)
+   ========================================= */
+
+/* 1. 屏幕背景：阳光照耀下的阿罗拉海域 */
+.sim-screen.theme-gen7 {
+    background: radial-gradient(circle at 50% 100%, #1597bb 0%, #034b75 60%, #012b45 100%);
+    font-family: 'Press Start 2P', cursive;
+    color: #fff;
+}
+
+.sim-screen.theme-gen7::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    background: 
+        radial-gradient(ellipse at 80% 20%, rgba(255,255,255,0.1) 0%, transparent 20%),
+        radial-gradient(ellipse at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 20%);
+    opacity: 0.6;
+}
+
+/* 2. 头部：气泡式长条对话框 */
+.sim-screen.theme-gen7 .sim-header {
+    background: linear-gradient(170deg, rgba(8, 77, 117, 0.9) 20%, rgba(3, 38, 59, 0.95) 100%);
+    border: none;
+    border-bottom: 3px solid rgba(48, 227, 246, 0.5);
+    border-radius: 20px 0 20px 0;
+    margin: 5px 10px 10px 10px;
+    padding: 12px 20px;
+    z-index: 10;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.sim-screen.theme-gen7 .sim-region-title {
+    font-family: 'Press Start 2P', cursive !important;
+    color: #fff !important;
+    text-shadow: 0 0 5px rgba(0, 192, 255, 0.8);
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
+.sim-screen.theme-gen7 #feature-list {
+    background: transparent !important;
+    border: 2px solid #fff;
+    border-radius: 50px;
+    color: #fff !important;
+    font-size: 0.55rem !important;
+    padding: 2px 8px;
+    box-shadow: 0 0 5px white;
+}
+
+/* 3. 御三家 UI：深海透视卡片 */
+.sim-screen.theme-gen7 .starter-btn {
+    box-sizing: border-box !important; position: relative !important;
+    overflow: hidden !important;
+    background: linear-gradient(135deg, rgba(14, 88, 126, 0.6) 0%, rgba(6, 40, 60, 0.8) 100%) !important;
+    border: 1px solid rgba(255,255,255,0.3) !important;
+    border-radius: 12px !important;
+    padding: 10px !important;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.2) !important;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+    transform: none !important; margin: 0 !important; transition: none !important;
+}
+
+.sim-screen.theme-gen7 .starter-btn::after, 
+.sim-screen.theme-gen7 .starter-btn::before {
+    display: none !important; content: none !important;
+}
+
+.sim-screen.theme-gen7 .pk-img {
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
+    margin-bottom: 5px;
+    transition: none !important;
+}
+
+.sim-screen.theme-gen7 .pk-name {
+    width: 100%;
+    background: rgba(0,0,0,0.2);
+    border-radius: 4px;
+    color: #8ed6ff;
+    font-size: 0.6rem;
+    margin-top: 5px; padding: 4px 0; text-align: center;
+}
+
+/* 4. 选中态：Z - EXPLOSION */
+.sim-screen.theme-gen7 .starter-btn.selected {
+    background: linear-gradient(135deg, #ffc800 0%, #ff8800 100%) !important;
+    border-color: #fff !important;
+    box-shadow: 
+        0 0 0 2px #fff,
+        0 0 20px rgba(255, 160, 0, 0.8) !important;
+    transform: none !important;
+}
+
+.sim-screen.theme-gen7 .starter-btn.selected .pk-name {
+    background: #fff;
+    color: #d63031;
+    font-weight: 900;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.2);
+}
+
+.sim-screen.theme-gen7 .starter-btn.selected .pk-img {
+    filter: brightness(1.1) drop-shadow(0 2px 5px rgba(0,0,0,0.3));
+}
+
+/* 5. 开关：Rotom 洛托姆图鉴风格 */
+.sim-screen.theme-gen7 #anime-options {
+    position: relative;
+    background: #d63031;
+    border: 3px solid #333;
+    border-radius: 10px;
+}
+
+.sim-screen.theme-gen7 #anime-options::after {
+    content:''; position:absolute; top:-8px; left:50%; transform:translateX(-50%);
+    width:20px; height:10px; background:#3498db; border:2px solid #333; border-radius:50%;
+}
+
+.sim-screen.theme-gen7 .ct-main { color: #fff !important; font-family:'Press Start 2P'; }
+.sim-screen.theme-gen7 .custom-check { background: #fff; border: 2px solid #333; border-radius:20px; }
+.sim-screen.theme-gen7 .native-check:checked + .custom-check { background: #3498db; }
+
+.sim-screen.theme-gen7 .sim-header .section-tag {
+    font-family: 'Press Start 2P', cursive !important;
+    color: #000 !important;
+    background: rgba(255,255,255,0.85);
+    padding: 2px 4px;
+    border-radius: 4px;
+    text-shadow: 1px 1px 0 #fff, -1px -1px 0 #fff;
+}
+
+/* =========================================
+   THEME: GEN 8 (GALAR REVISED / SHARP SPORTS UI)
+   ========================================= */
+
+.sim-screen.theme-gen8 * {
+    font-family: 'Exo 2', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    letter-spacing: 0.5px;
+}
+
+.sim-screen.theme-gen8 {
+    background: radial-gradient(circle at 50% 10%, #ffffff 0%, #f4f4f4 60%, #e0e0e0 100%);
+    color: #333;
+}
+
+.sim-screen.theme-gen8::before {
+    content: "";
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 100%;
+    background: linear-gradient(30deg, transparent 40%, rgba(224, 0, 90, 0.05) 50%, transparent 60%);
+    transform: rotate(20deg);
+    pointer-events: none;
+}
+
+.sim-screen.theme-gen8 .sim-header {
+    background: #fff;
+    border-left: 8px solid #e0005a;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    padding: 15px 20px;
+    margin-bottom: 5px;
+    border-top: none;
+    border-bottom: none;
+    border-right: none;
+    border-radius: 2px;
+}
+
+.sim-screen.theme-gen8 .sim-region-title {
+    color: #333 !important;
+    font-weight: 900;
+    font-style: italic;
+    font-size: 1.4rem;
+    text-shadow: none !important;
+    text-transform: uppercase;
+}
+
+.sim-screen.theme-gen8 #feature-list {
+    background: #333 !important;
+    color: #fff !important;
+    text-transform: uppercase;
+    font-weight: 700;
+    padding: 4px 8px;
+    font-size: 0.6rem !important;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.sim-screen.theme-gen8 .starter-btn {
+    box-sizing: border-box !important;
+    position: relative !important;
+    transition: 0.2s ease-out !important;
+    border-radius: 6px !important;
+    background: #fff !important;
+    border: 1px solid #ddd !important;
+    border-bottom: 4px solid #cc0d5d !important;
+    padding: 10px !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05) !important;
+    margin-top: 5px !important;
+    overflow: hidden !important;
+    transform: none !important;
+}
+
+.sim-screen.theme-gen8 .starter-btn::after,
+.sim-screen.theme-gen8 .starter-btn::before {
+    content: none !important;
+    display: none !important;
+}
+
+.sim-screen.theme-gen8 .pk-img {
+    filter: drop-shadow(0 5px 5px rgba(0,0,0,0.1));
+    transform: scale(0.9);
+    transition: 0.2s;
+}
+
+.sim-screen.theme-gen8 .pk-name {
+    margin-top: 5px;
+    color: #333;
+    font-size: 0.8rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    background: transparent;
+    border: none;
+    padding: 0;
+    width: 100%;
+    text-align: center;
+    font-style: italic;
+}
+
+.sim-screen.theme-gen8 .starter-btn.selected {
+    background: #222 !important;
+    border: 1px solid #333 !important;
+    border-bottom: 4px solid #fd367e !important;
+    box-shadow: 0 10px 20px rgba(224, 0, 90, 0.3) !important;
+    transform: translateY(-3px) scale(1.02) !important;
+    z-index: 10;
+}
+
+.sim-screen.theme-gen8 .starter-btn.selected .pk-name {
+    color: #fff !important;
+    text-shadow: 0 0 10px #fd367e;
+    border-bottom: 2px solid #00f0ff;
+    display: inline-block;
+    width: auto;
+}
+
+.sim-screen.theme-gen8 .starter-btn.selected .pk-img {
+    transform: scale(1.05);
+    filter: drop-shadow(0 5px 15px rgba(255, 255, 255, 0.3));
+}
+
+.sim-screen.theme-gen8 #anime-options {
+    background: #f8f8f8;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: none;
+}
+
+.sim-screen.theme-gen8 .ct-main {
+    color: #fff !important;
+    font-family: 'Exo 2', sans-serif !important;
+    font-style: italic;
+}
+
+.sim-screen.theme-gen8 .custom-check {
+    background: #ddd;
+    border-radius: 12px;
+}
+
+.sim-screen.theme-gen8 .native-check:checked + .custom-check {
+    background: #e0005a;
+}
+
+/* =========================================
+   THEME: HISUI (THE FINAL INK - MONOCHROME)
+   ========================================= */
+
+.sim-screen.theme-hisui {
+    background: #f0f0f0;
+    font-family: 'Noto Serif SC', 'Songti SC', 'SimSun', serif !important;
+    color: #111;
+}
+
+.sim-screen.theme-hisui .sim-header {
+    background: #000;
+    border: none;
+    border-bottom: 4px solid #fff;
+    padding: 14px 18px;
+    margin: 0;
+    border-radius: 0;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sim-screen.theme-hisui .sim-region-title {
+    font-family: 'Noto Serif SC', 'Songti SC', serif !important;
+    color: #fff !important;
+    font-weight: 900;
+    font-size: 1.2rem;
+    letter-spacing: 0.3em;
+    margin: 0;
+    display: inline-block;
+}
+
+.sim-screen.theme-hisui #feature-list {
+    background: #940000 !important;
+    color: #fff !important;
+    border: 2px solid #fff;
+    padding: 2px 10px;
+    font-weight: 800;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    box-shadow: 0 0 8px rgba(148,0,0,0.4);
+    display: inline-flex !important;
+    align-items: center;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+.sim-screen.theme-hisui .sim-header .section-tag {
+    color: #fff !important;
+    font-size: 1.35rem !important;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+    margin: 0;
+}
+
+.sim-screen.theme-hisui .sim-header div:first-child {
+    display: grid !important;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    grid-template-areas:
+        'tag title'
+        'badge badge';
+    column-gap: 10px;
+    row-gap: 4px;
+    align-items: center;
+}
+
+.sim-screen.theme-hisui .sim-header .section-tag {
+    grid-area: tag;
+}
+
+.sim-screen.theme-hisui .sim-header .sim-region-title {
+    grid-area: title;
+}
+
+.sim-screen.theme-hisui #feature-list {
+    grid-area: badge;
+}
+
+.sim-screen.theme-hisui .starter-btn {
+    box-sizing: border-box !important;
+    position: relative !important;
+    overflow: hidden !important;
+    background: #fff !important;
+    border: 2px solid #111 !important;
+    border-radius: 0 !important;
+    padding: 10px !important;
+    margin-top: 5px !important;
+    width: 100% !important;
+    min-height: 120px !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    box-shadow: 4px 4px 0 #ccc !important;
+    transform: none !important;
+    transition: 0.2s !important;
+}
+
+.sim-screen.theme-hisui .pk-img {
+    filter: saturate(1.15) contrast(1.05);
+    opacity: 0.8;
+    transform: scale(0.9);
+    transition: 0.3s;
+    margin-bottom: 5px;
+    position: relative;
+    z-index: 2;
+}
+
+.sim-screen.theme-hisui .pk-name {
+    font-family: 'Noto Serif SC', serif;
+    font-weight: 900;
+    color: #000;
+    margin-top: 5px;
+    border-top: 2px solid #000;
+    padding-top: 4px;
+    width: 100%;
+    text-align: center;
+    position: relative;
+    z-index: 2;
+}
+
+.sim-screen.theme-hisui .starter-btn.selected {
+    background: #111 !important;
+    border: 2px solid #111 !important;
+    outline: 2px solid #fff;
+    outline-offset: -6px;
+    box-shadow: 6px 6px 0 #999 !important;
+    transform: translateY(-2px) !important;
+}
+
+.sim-screen.theme-hisui .starter-btn.selected .pk-name {
+    color: #fff !important;
+    border-top-color: #555;
+}
+
+.sim-screen.theme-hisui .starter-btn.selected .pk-img {
+    filter: saturate(1.2) brightness(1.05) contrast(1.1) !important;
+    opacity: 1;
+    transform: scale(1.05);
+}
+
+.sim-screen.theme-hisui .starter-btn.selected::after {
+    display: block !important;
+    content: "契";
+    position: absolute;
+    bottom: -10px;
+    left: 4px;
+    font-size: 3.5rem;
+    line-height: 1;
+    font-family: 'Songti SC', 'Noto Serif SC', serif;
+    font-weight: 900;
+    color: rgba(255,255,255,0.15);
+    background: transparent;
+    border: none;
+    pointer-events: none;
+    z-index: 0 !important;
+}
+
+.sim-screen.theme-hisui .starter-btn::before {
+    display: none !important;
+}
+
+.sim-screen.theme-hisui #anime-options {
+    background: #fff;
+    border: 4px solid #000;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.sim-screen.theme-hisui .ct-main {
+    color: #fff !important;
+    font-family: 'Noto Serif SC', 'Songti SC', serif !important;
+    font-weight: 900;
+}
+
+.sim-screen.theme-hisui .custom-check {
+    background: #ccc;
+    border-radius: 0;
+    border: 1px solid #000;
+}
+
+.sim-screen.theme-hisui .native-check:checked + .custom-check {
+    background: #000;
+}
+
+/* =========================================
+   THEME: GEN 9 (PALDEA: TEAL GLASS FIX)
+   ========================================= */
+
+.sim-screen.theme-gen9 * {
+    font-family: 'Exo 2', sans-serif !important;
+    letter-spacing: 0.5px;
+}
+
+.sim-screen.theme-gen9 {
+    background: linear-gradient(180deg, #f2f9ff 0%, #ffffff 50%, #eefbf9 100%);
+    color: #333;
+}
+
+.sim-screen.theme-gen9::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+    background-image:
+        radial-gradient(#afeeee 0.8px, transparent 0.8px),
+        radial-gradient(circle at 10% 20%, rgba(0, 255, 208, 0.05) 0%, transparent 20%);
+    background-size: 20px 20px, 100% 100%;
+}
+
+ .sim-screen.theme-gen9 .sim-header {
+    background: rgba(14, 42, 53, 0.75);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 10px;
+    box-shadow: 0 10px 25px rgba(6, 40, 50, 0.15);
+    padding: 12px 20px;
+    margin: 14px 16px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: auto;
+    border-top: 1px solid rgba(255,255,255,0.3);
+    border-bottom: none;
+    border-left: none;
+    border-right: none;
+}
+
+.sim-screen.theme-gen9 .sim-region-title {
+    color: #fff !important;
+    font-weight: 800;
+    font-size: 1.1rem;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.sim-screen.theme-gen9 #feature-list {
+    background: linear-gradient(90deg, #d3fabd 0%, #00dbc5 100%) !important;
+    color: #063A40 !important;
+    font-weight: 800;
+    border: none;
+    border-radius: 20px;
+    padding: 4px 10px;
+    font-size: 0.6rem !important;
+    box-shadow: 0 0 10px rgba(0, 219, 197, 0.4);
+}
+
+.sim-screen.theme-gen9 .sim-header .section-tag {
+    color: #00dbc5 !important;
+    letter-spacing: 0.35em;
+}
+
+.sim-screen.theme-gen9 .starter-btn {
+    box-sizing: border-box !important;
+    position: relative !important;
+    overflow: visible !important;
+    background: rgba(22, 38, 48, 0.9) !important;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.25) !important;
+    border-radius: 12px !important;
+    padding: 10px !important;
+    margin-top: 5px !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important;
+    transform: none !important;
+    transition: 0.2s ease-out !important;
+}
+
+.sim-screen.theme-gen9 .starter-btn::after,
+.sim-screen.theme-gen9 .starter-btn::before {
+    content: none !important;
+    display: none !important;
+}
+
+.sim-screen.theme-gen9 .pk-name {
+    margin-top: 5px;
+    color: #fff;
+    opacity: 0.9;
+    font-weight: 700;
+    font-size: 0.8rem;
+}
+
+.sim-screen.theme-gen9 .pk-img {
+    filter: drop-shadow(0 4px 4px rgba(0,0,0,0.3));
+    transform: scale(0.9);
+    transition: 0.2s;
+}
+
+.sim-screen.theme-gen9 .starter-btn.selected {
+    transform: scale(1.02) !important;
+    border-color: #fff !important;
+    background-image:
+        repeating-linear-gradient(-45deg, transparent, transparent 10px, rgba(255,255,255,0.2) 10px, rgba(255,255,255,0.2) 20px),
+        linear-gradient(to bottom, #FFE800, #FFD500) !important;
+    background-blend-mode: overlay, normal !important;
+    box-shadow: 0 8px 25px rgba(255, 213, 0, 0.5) !important;
+    z-index: 10;
+}
+
+.sim-screen.theme-gen9 .starter-btn.selected::before {
+    content: "" !important;
+    display: block !important;
+    position: absolute;
+    top: -6px;
+    left: -5px;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 8px 8px 0 0;
+    border-color: #00FFCC transparent transparent transparent;
+    filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.2));
+    z-index: 20;
+    animation: ptrBounce 0.6s infinite alternate;
+}
+
+.sim-screen.theme-gen9 .starter-btn.selected .pk-name {
+    color: #1a2a33 !important;
+    font-weight: 900;
+}
+
+.sim-screen.theme-gen9 .starter-btn.selected .pk-img {
+    filter: none;
+    transform: scale(1.05);
+}
+
+.sim-screen.theme-gen9 #anime-options {
+    background: rgba(10, 30, 40, 0.75) !important;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-top: 1px solid rgba(255,255,255,0.3);
+    border-radius: 16px;
+    margin-top: 15px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    transform: none;
+}
+
+.sim-screen.theme-gen9 .ct-main {
+    color: #fff !important;
+    font-family: 'Exo 2', sans-serif !important;
+    font-weight: 800;
+    opacity: 0.9;
+}
+
+.sim-screen.theme-gen9 .ct-sub {
+    opacity: 0.6;
+    color: #a2ddec !important;
+}
+
+.sim-screen.theme-gen9 .custom-check {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+.sim-screen.theme-gen9 .native-check:checked + .custom-check {
+    background: #00FFCC;
+    box-shadow: 0 0 10px #00FFCC;
+}
+
+@keyframes ptrBounce {
+    from { transform: translateY(0); }
+    to { transform: translateY(-3px); }
+}
+
+/* =========================================
+   CUSTOM UI: PRECISE DATA ENTRY (改良版)
+   ========================================= */
+
+.custom-panel-frame {
+    background: rgba(255, 255, 255, 0.4);
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border-left: 4px solid var(--c-accent);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.03);
+}
+
+.custom-panel-title {
+    margin: 0 0 15px 0;
+    font-family: var(--font-ui);
+    text-transform: uppercase;
+    color: var(--c-text);
+    font-size: 1.1rem;
+    font-weight: 900;
+    font-style: italic;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.custom-panel-title::after {
+    content: '';
+    flex: 1;
+    height: 2px;
+    background: rgba(0,0,0,0.1);
+    margin-left: 10px;
+}
+
+.cust-input-group {
+    position: relative;
+    margin-bottom: 15px;
+}
+
+.cust-input-group .hero-lbl {
+    font-family: 'Exo 2', sans-serif;
+    font-size: 0.65rem;
+    color: #636e72;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+    margin-left: 2px;
+}
+
+.cust-input-group .hero-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 15px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.7);
+    border: 1px solid transparent;
+    border-bottom: 3px solid #b2bec3;
+    font-family: 'M PLUS Rounded 1c', var(--font-txt);
+    font-size: 1rem;
+    color: #2d3436;
+    font-weight: 700;
+    transition: 0.2s;
+    outline: none;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.02);
+}
+
+.cust-input-group .hero-input::placeholder {
+    color: #b2bec3;
+    font-weight: 500;
+    font-size: 0.85rem;
+}
+
+.cust-input-group .hero-input:focus {
+    background: #fff;
+    border-color: rgba(0, 206, 201, 0.2);
+    border-bottom-color: var(--c-accent);
+    box-shadow: 0 5px 15px rgba(0, 206, 201, 0.15);
+}
+
+.poke-id-row {
+    display: flex;
+    gap: 15px;
+    align-items: stretch;
+}
+
+.poke-id-row .hero-input {
+    flex: 1;
+}
+
+.img-preview-box {
+    width: 60px;
+    height: 50px;
+    background: rgba(0,0,0,0.05);
+    border-radius: 6px;
+    border: 1px dashed #b2bec3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: 0.3s;
+}
+
+.img-preview-box img {
+    height: 100%;
+    width: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 5px rgba(0,0,0,0.1));
+}
+
+.img-preview-box.has-img {
+    background: #fff;
+    border-style: solid;
+    border-color: var(--c-accent);
+}
+/* ==============================================================
+   [CRITICAL PATCH] 头部文字颜色强行修复 (HEADER TEXT VISIBILITY)
+   该部分处于最底层，具有最高优先级，确保文字绝对不隐形
+   ============================================================== */
+
+/* 1. 复位：确保所有 .sim-header 内部文字默认清晰 */
+.sim-region-title {
+    opacity: 1 !important; 
+    line-height: normal !important;
+}
+
+/* 2. GEN 1 (Pixel Retro): 唯一的一个白底黑字头部 */
+.sim-screen.theme-gen1 .sim-region-title {
+    color: #000000 !important; 
+    text-shadow: 2px 2px 0 #999 !important;
+}
+.sim-screen.theme-gen1 .sim-header {
+    border-bottom: 4px double #000 !important;
+}
+.sim-screen.theme-gen1 .sim-header .section-tag {
+    color: #000000 !important;
+}
+
+/* 3. GEN 2 (GBC): 黑底 + 白字 */
+.sim-screen.theme-gen2 .sim-region-title {
+    color: #ffffff !important;
+    text-shadow: 2px 2px 0 #000000 !important;
+}
+.sim-screen.theme-gen2 .sim-header .section-tag {
+    color: #ffffff !important;
+    opacity: 0.7 !important;
+}
+
+/* 4. GEN 3 (GBA): 深灰底 + 白字 */
+.sim-screen.theme-gen3 .sim-region-title {
+    color: #ffffff !important;
+    text-shadow: 2px 2px 0 #222222 !important;
+}
+.sim-screen.theme-gen3 .sim-header .section-tag {
+    color: #ffffff !important;
+    opacity: 0.7 !important;
+}
+
+/* 5. GEN 4 (NDS): 深蓝灰底 + 白字 */
+.sim-screen.theme-gen4 .sim-region-title {
+    color: #ffffff !important;
+    text-shadow: 2px 2px 0 #000000 !important;
+}
+.sim-screen.theme-gen4 .sim-header .section-tag {
+    color: #ffffff !important;
+    opacity: 0.7 !important;
+}
+
+/* 6. GEN 5 (BW): 科技黑底 + 指令蓝/白字 */
+.sim-screen.theme-gen5 .sim-header {
+    background: #1a1a1c !important; 
+    border-top: 2px solid #555 !important;
+    border-bottom: 2px solid #555 !important;
+}
+.sim-screen.theme-gen5 .sim-region-title {
+    color: #ffffff !important; 
+    text-shadow: 0 0 5px rgba(0, 206, 201, 0.8) !important;
+    font-family: 'Press Start 2P', cursive !important;
+}
+.sim-screen.theme-gen5 .sim-header .section-tag {
+    color: #00cec9 !important;
+    opacity: 1 !important;
+}
+.sim-screen.theme-gen5 #feature-list {
+    display: inline-block !important;
+    color: #00cec9 !important; 
+    border: 1px solid #00cec9 !important;
+    box-shadow: 0 0 4px #00cec9 !important;
+    background: transparent !important;
+}
+.sim-screen.theme-gen6 .sim-header .section-tag {
+    color: #e5e7ea !important;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.6) !important;
+}
+
+/* =========================================
+   GEN 1 STYLING: THE RETRO (GameBoy)
+   ========================================= */
+
+.gen-card.gc-style-gen1 {
+    background-color: #c4cfa1;
+    border: none;
+    font-family: 'Press Start 2P', cursive;
+    color: #4f505f;
+    position: relative;
+}
+
+.gen-card.gc-style-gen1::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(#6b7353 20%, transparent 20%);
+    background-size: 4px 4px;
+    opacity: 0.15;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.gen-card.gc-style-gen1 .gc-inner {
+    position: relative;
+    z-index: 2;
+}
+
+.gen-card.gc-style-gen1 .gc-name {
+    font-size: 0.7rem;
+    letter-spacing: -2px;
+    margin-top: 5px;
+}
+
+.gen-card.gc-style-gen1 .gc-num {
+    color: #303841;
+    opacity: 0.3;
+}
+
+.gen-card.gc-style-gen1:hover {
+    background-color: #abbb83;
+}
+
+.gen-card.gc-style-gen1.active {
+    background: #0f380f;
+    color: #9bbc0f;
+    border-color: #0f380f;
+    box-shadow: 6px 6px 0px #303841;
+    transform: skewX(var(--sk)) scale(1.05) translateY(-5px);
+}
+
+.gen-card.gc-style-gen1.active .gc-num {
+    color: #9bbc0f;
+    opacity: 0.3;
+}
+
+.gen-card.gc-style-gen1 .gc-bonus {
+    border-right: 4px solid #9bbc0f;
+    animation: blinkCursor 0.8s step-end infinite;
+    padding-right: 4px;
+    opacity: 1;
+    font-size: 0.55rem;
+}
+
+.gen-card.gc-style-gen1.active .gc-bonus {
+    border-right: 4px solid #9bbc0f;
+    animation: blinkCursor 0.8s step-end infinite;
+    padding-right: 4px;
+    opacity: 1;
+}
+
+@keyframes blinkCursor {
+    50% { border-color: transparent; }
+}
+
+/* =========================================
+   GEN 2 STYLING: THE METALLIC (Gold/Silver)
+   ========================================= */
+
+.gen-card.gc-style-gen2 {
+    background: linear-gradient(145deg, #fffcf5 0%, #eceae0 100%);
+    border: none;
+    font-family: 'Press Start 2P', cursive;
+    color: #2c3e50;
+    position: relative;
+}
+
+.gen-card.gc-style-gen2::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 2px,
+        rgba(0,0,0,0.03) 3px
+    );
+    z-index: 0;
+    pointer-events: none;
+}
+
+.gen-card.gc-style-gen2 .gc-inner {
+    position: relative;
+    z-index: 2;
+}
+
+.gen-card.gc-style-gen2 .gc-name {
+    font-size: 0.75rem;
+    margin-top: 6px;
+    letter-spacing: -1.5px;
+}
+
+.gen-card.gc-style-gen2 .gc-name::after {
+    content: '';
+    display: block;
+    width: 24px;
+    height: 3px;
+    background: linear-gradient(90deg, #f1c40f 50%, #bdc3c7 50%);
+    margin: 5px auto 0;
+    opacity: 0.6;
+}
+
+.gen-card.gc-style-gen2 .gc-bonus {
+    font-size: 0.5rem;
+}
+
+.gen-card.gc-style-gen2:hover {
+    background: #fff;
+    box-shadow: 0 5px 15px rgba(241, 196, 15, 0.15);
+}
+
+.gen-card.gc-style-gen2.active {
+    background: linear-gradient(135deg, #f1c40f 0%, #ffdd59 100%);
+    border-color: #795548;
+    color: #3e2723;
+    box-shadow:
+        inset 0 0 0 2px rgba(255,255,255,0.5),
+        0 6px 0px rgba(183, 149, 11, 0.8),
+        0 15px 10px rgba(0,0,0,0.1);
+    transform: skewX(var(--sk)) scale(1.05) translateY(-5px);
+}
+
+.gen-card.gc-style-gen2.active .gc-num {
+    opacity: 0.3;
+    color: #fff;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.1);
+}
+
+.gen-card.gc-style-gen2.active .gc-name::after {
+    background: #3e2723;
+    width: 100%;
+    height: 2px;
+}
+
+/* =========================================
+   GEN 3 STYLING: THE ADVANCED (R/S/E)
+   ========================================= */
+
+.gen-card.gc-style-gen3 {
+    background-color: #f4f6f7;
+    border: none;
+    border-top: 3px solid rgba(205, 63, 62, 0.4);
+    font-family: 'Press Start 2P', cursive;
+    color: #2c3e50;
+    position: relative;
+}
+
+.gen-card.gc-style-gen3::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+        linear-gradient(rgba(44, 62, 80, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(44, 62, 80, 0.08) 1px, transparent 1px);
+    background-size: 10px 10px;
+    z-index: 0;
+    opacity: 1;
+}
+
+.gen-card.gc-style-gen3 .gc-inner {
+    position: relative;
+    z-index: 2;
+}
+
+.gen-card.gc-style-gen3::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    background: rgba(46, 86, 163, 0.4);
+    z-index: 1;
+}
+
+.gen-card.gc-style-gen3 .gc-name {
+    font-size: 0.75rem;
+    font-weight: 900;
+    background: rgba(255,255,255,0.7);
+    padding: 2px 4px;
+    border-radius: 2px;
+}
+
+.gen-card.gc-style-gen3 .gc-bonus {
+    font-size: 0.5rem;
+}
+
+.gen-card.gc-style-gen3:hover {
+    transform: skewX(var(--sk)) translateY(-2px);
+    background-color: #fff;
+}
+
+.gen-card.gc-style-gen3.active {
+    background: linear-gradient(135deg, #2ecc71 0%, #1abc9c 100%);
+    border: 2px solid #fff;
+    border-top-width: 2px;
+    border-top-color: #fff;
+    color: #fff;
+    box-shadow:
+        6px 6px 0px rgba(22, 160, 133, 0.5),
+        0 10px 25px rgba(46, 204, 113, 0.4);
+    transform: skewX(var(--sk)) scale(1.05) translateY(-5px);
+}
+
+.gen-card.gc-style-gen3.active::after {
+    display: none;
+}
+
+.gen-card.gc-style-gen3.active .gc-num {
+    opacity: 0.4;
+    color: #000;
+    font-style: italic;
+    mix-blend-mode: overlay;
+}
+
+.gen-card.gc-style-gen3.active .gc-name {
+    background: transparent;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.2);
+    box-shadow: none;
+}
+
+/* ==============================================================
+   [CRITICAL FIX] 对齐强制修正补丁 
+   目的：不管哪个世代风格，数字和名字必须在绝对同一水平线上
+   ============================================================== */
+
+.gen-card .gc-inner {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 4px !important;
+    padding: 0 !important;
+    height: 100%;
+}
+
+.gen-card .gc-num {
+    font-family: 'Press Start 2P', cursive !important;
+    font-size: 1.4rem !important;
+    line-height: 1 !important;
+    height: 26px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex;
+    align-items: flex-end;
+    transform: none !important;
+}
+
+.gen-card .gc-name,
+.gen-card[class*="gc-style-"] .gc-name {
+    font-family: 'Press Start 2P', cursive !important;
+    font-size: 0.75rem !important;
+    line-height: 1.2 !important;
+    height: 18px !important;
+    margin: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 6px !important;
+    border: 1px solid transparent;
+}
+
+.gen-card .gc-bonus,
+.gen-card[class*="gc-style-"] .gc-bonus {
+    font-family: 'Press Start 2P', cursive !important;
+}
+
+.gen-card.gc-style-gen2 .gc-name::after {
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0 !important;
+    width: 24px;
+}
+
+.gen-card.gc-style-gen3 .gc-name {
+    background: rgba(255,255,255,0.7);
+}
+
+.gen-card .gc-bonus,
+.gen-card[class*="gc-style-"] .gc-bonus {
+    font-size: 0.5rem !important;
+}
+
+/* =========================================
+   GEN 4 STYLING: THE DUAL (Sinnoh Tech)
+   ========================================= */
+
+.gen-card.gc-style-gen4 {
+    background-color: #dcedef;
+    border: none;
+    font-family: 'Press Start 2P', cursive;
+    color: #2c3e50;
+    position: relative;
+}
+
+.gen-card.gc-style-gen4::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+        -45deg,
+        transparent,
+        transparent 6px,
+        rgba(87, 101, 116, 0.08) 6px,
+        rgba(87, 101, 116, 0.08) 12px
+    );
+    z-index: 0;
+}
+
+.gen-card.gc-style-gen4 .gc-inner {
+    position: relative;
+    z-index: 2;
+}
+
+.gen-card.gc-style-gen4::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: -5px; right: -5px; height: 1px;
+    background: rgba(255,255,255,0.7);
+    border-top: 1px dashed #a4b0be;
+    opacity: 0.15;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.gen-card.gc-style-gen4 .gc-name {
+    margin-top: 6px;
+    z-index: 3;
+}
+
+.gen-card.gc-style-gen4:hover {
+    background: #f1f2f6;
+}
+
+.gen-card.gc-style-gen4.active {
+    background: linear-gradient(160deg, #3b4f77 0%, #6a4dd6 100%);
+    border-color: #dfe6f1;
+    color: #e3f2fd;
+    box-shadow:
+        0 0 0 3px #130f40,
+        0 0 0 5px #c8d6e5,
+        0 10px 20px rgba(19, 15, 64, 0.4);
+    transform: skewX(var(--sk)) scale(1.05) translateY(-5px);
+}
+
+.gen-card.gc-style-gen4.active .gc-name {
+    color: #aef1ff;
+    text-shadow: 0 0 6px rgba(74, 222, 255, 0.8);
+    font-weight: 900;
+}
+
+.gen-card.gc-style-gen4.active .gc-num {
+    opacity: 0.25;
+    color: #f8a5c2;
+}
+
+.gen-card.gc-style-gen4.active::after {
+    display: none;
+}
+
+/* =========================================
+   GEN 5 STYLING: THE HEX (Black & White)
+   ========================================= */
+
+.gen-card.gc-style-gen5 {
+    background-color: #f5f6fa;
+    border: none;
+    font-family: 'Press Start 2P', cursive;
+    color: #2d3436;
+    position: relative;
+}
+
+.gen-card.gc-style-gen5 .gc-num {
+    color: #7f8c9a;
+}
+
+.gen-card.gc-style-gen5::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+        radial-gradient(#b2bec3 20%, transparent 20%),
+        radial-gradient(#b2bec3 20%, transparent 20%);
+    background-position: 0 0, 6px 6px;
+    background-size: 12px 12px;
+    opacity: 0.15;
+    z-index: 0;
+}
+
+.gen-card.gc-style-gen5 .gc-inner {
+    position: relative;
+    z-index: 2;
+}
+
+.gen-card.gc-style-gen5::after {
+    content: '';
+    position: absolute;
+    bottom: -2px; left: 10px; right: 10px;
+    height: 4px;
+    background: repeating-linear-gradient(
+        90deg,
+        #2d3436,
+        #2d3436 4px,
+        transparent 4px,
+        transparent 6px
+    );
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.gen-card.gc-style-gen5 .gc-name {
+    font-weight: 700;
+}
+
+.gen-card.gc-style-gen5:hover {
+    background: #e1e4ea;
+}
+
+.gen-card.gc-style-gen5.active {
+    background: #1e1e1e;
+    border: 2px solid #1dd1a1;
+    color: #1dd1a1;
+    box-shadow:
+        0 0 0 2px #1e1e1e,
+        0 0 0 4px #1dd1a1,
+        0 0 20px rgba(29, 209, 161, 0.4);
+    transform: skewX(var(--sk)) scale(1.05) translateY(-5px);
+}
+
+.gen-card.gc-style-gen5.active .gc-num {
+    color: #b2bec3;
+    opacity: 0.5;
+    text-shadow: none;
+}
+
+.gen-card.gc-style-gen5.active::after {
+    background: repeating-linear-gradient(
+        90deg,
+        #1dd1a1,
+        #1dd1a1 4px,
+        transparent 4px,
+        transparent 6px
+    );
+    opacity: 0.8;
+}
+
+/* =========================================
+   GEN 6 STYLING: THE PRISM (X & Y 3D)
+   ========================================= */
+
+.gen-card.gc-style-gen6 {
+    background: linear-gradient(to bottom, #ffffff 0%, #f1f2f6 100%);
+    border: none;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+    font-family: 'Press Start 2P', cursive;
+    color: #4b6584;
+    position: relative;
+}
+
+.gen-card.gc-style-gen6::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 15px,
+        rgba(52, 152, 219, 0.03) 15px,
+        rgba(52, 152, 219, 0.03) 30px
+    );
+    z-index: 0;
+}
+
+.gen-card.gc-style-gen6 .gc-inner {
+    position: relative;
+    z-index: 2;
+}
+
+.gen-card.gc-style-gen6::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 10px; right: 10px; height: 3px;
+    background: linear-gradient(90deg, #3867d6 0%, #eb3b5a 100%);
+    border-radius: 0 0 4px 4px;
+    opacity: 0.5;
+}
+
+.gen-card.gc-style-gen6:hover {
+    background: #fff;
+    box-shadow:
+        0 0 10px rgba(56, 103, 214, 0.1),
+        inset 0 0 0 2px rgba(255,255,255,1);
+}
+
+.gen-card.gc-style-gen6.active {
+    background: linear-gradient(135deg, #3867d6 0%, #8854d0 50%, #eb3b5a 100%);
+    border: 3px solid #fff;
+    margin: -1px;
+    color: #fff;
+    box-shadow:
+        0 0 0 1px #8854d0,
+        0 8px 20px rgba(136, 84, 208, 0.4),
+        0 0 15px rgba(235, 59, 90, 0.3);
+    transform: skewX(var(--sk)) scale(1.05) translateY(-5px);
+}
+
+.gen-card.gc-style-gen6.active::before {
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(255,255,255,0.1),
+        rgba(255,255,255,0.1) 10px,
+        transparent 10px,
+        transparent 20px
+    );
+    opacity: 0.3;
+}
+
+.gen-card.gc-style-gen6.active .gc-num {
+    opacity: 0.25;
+    color: #fff;
+    mix-blend-mode: overlay;
+}
+
+.gen-card.gc-style-gen6.active::after {
+    display: none;
+}
+
+/* =========================================
+   GEN 7 STYLING: THE TROPICAL (Sun & Moon)
+   ========================================= */
+
+.gen-card.gc-style-gen7 {
+    background: linear-gradient(180deg, #e0fcff 0%, #b3e5fc 100%);
+    border: none;
+    font-family: 'Press Start 2P', cursive;
+    color: #01579b;
+    position: relative;
+}
+
+.gen-card.gc-style-gen7::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+        radial-gradient(circle, #0288d1 1.5px, transparent 1.6px),
+        radial-gradient(circle, #0288d1 1.5px, transparent 1.6px);
+    background-size: 20px 20px;
+    background-position: 0 0, 10px 10px;
+    opacity: 0.08;
+    z-index: 0;
+}
+
+.gen-card.gc-style-gen7 .gc-inner {
+    position: relative;
+    z-index: 2;
+}
+
+.gen-card.gc-style-gen7::after {
+    display: none;
+}
+
+.gen-card.gc-style-gen7:hover {
+    background: #fff;
+    box-shadow: 0 5px 15px rgba(2, 119, 189, 0.1);
+}
+
+.gen-card.gc-style-gen7.active {
+    background: linear-gradient(135deg, #ffc107 0%, #ff5722 50%, #6f42a1 100%);
+    border: 3px solid #fff;
+    color: #fff;
+    box-shadow:
+        0 4px 6px rgba(0,0,0,0.1),
+        0 0 15px rgba(255, 87, 34, 0.6),
+        0 0 30px rgba(111, 66, 161, 0.3);
+    transform: skewX(var(--sk)) scale(1.05) translateY(-5px);
+}
+
+.gen-card.gc-style-gen7.active .gc-name {
+    text-shadow: 0 2px 0 rgba(0,0,0,0.2);
+    font-weight: 800;
+}
+
+.gen-card.gc-style-gen7.active::after {
+    display: none;
+}
+
+.gen-card.gc-style-gen7.active .gc-num {
+    opacity: 0.3;
+    color: #3e2723;
+    mix-blend-mode: multiply;
+}
+
+/* =========================================
+   GEN 8 STYLING: THE SPORT / PUNK (Sword & Shield)
+   ========================================= */
+
+.gen-card.gc-style-gen8 {
+    background-color: #ffffff;
+    border: none;
+    font-family: 'Press Start 2P', cursive;
+    color: #111;
+    position: relative;
+}
+
+.gen-card.gc-style-gen8::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image: radial-gradient(#dff9fb 40%, transparent 40%);
+    background-size: 8px 8px;
+    z-index: 0;
+}
+
+.gen-card.gc-style-gen8 .gc-inner {
+    position: relative;
+    z-index: 2;
+}
+
+.gen-card.gc-style-gen8::after {
+    display: none;
+}
+
+.gen-card.gc-style-gen8:hover {
+    background: #fff0f6;
+}
+
+
+.gen-card.gc-style-gen8.active {
+    background: linear-gradient(160deg, #c23616 0%, #57064d 100%);
+    border: 3px solid #00d2d3;
+    border-bottom: 5px solid #00d2d3;
+    margin: -1px;
+    color: #fff;
+    box-shadow:
+        -4px 4px 0px #eb2f96,
+         4px 4px 0px #0984e3;
+    transform: skewX(var(--sk)) scale(1.05) translateY(-5px);
+}
+
+.gen-card.gc-style-gen8.active::before {
+    background: repeating-linear-gradient(
+        90deg,
+        transparent,
+        transparent 50px,
+        rgba(255, 255, 255, 0.05) 50px,
+        rgba(255, 255, 255, 0.05) 52px
+    );
+    background-size: 100% 100%;
+}
+
+.gen-card.gc-style-gen8.active .gc-num {
+    color: #fff;
+    opacity: 0.2;
+    text-shadow: 2px 0 0 #eb2f96, -2px 0 0 #00d2d3;
+}
+
+.gen-card.gc-style-gen8.active::after {
+    display: none;
+}
+
+.gen-card.gc-style-gen8.active .gc-name {
+    font-weight: 900;
+}
+
+/* =========================================
+   GEN 9-Pre STYLING: HISUI (Ancient Sinnoh)
+   ========================================= */
+
+.gen-card.gc-style-pla {
+    background: #f4ecd8;
+    border: none;
+    font-family: 'Press Start 2P', cursive;
+    color: #3e2723;
+    font-weight: 700;
+    position: relative;
+}
+
+.gen-card.gc-style-pla::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+        radial-gradient(rgba(93, 64, 55, 0.1) 15%, transparent 16%),
+        radial-gradient(rgba(93, 64, 55, 0.1) 15%, transparent 16%);
+    background-size: 60px 60px;
+    background-position: 0 0, 30px 30px;
+    opacity: 0.4;
+    z-index: 0;
+}
+
+.gen-card.gc-style-pla .gc-inner {
+    position: relative;
+    z-index: 2;
+}
+
+.gen-card.gc-style-pla::after {
+    content: '';
+    position: absolute;
+    top: -10px; right: -10px;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #9b59b6 0%, transparent 70%);
+    opacity: 0.3;
+    filter: blur(5px);
+}
+
+.gen-card.gc-style-pla .gc-name {
+    letter-spacing: 0px;
+    font-size: 0.8rem !important;
+    font-family: 'Press Start 2P', cursive;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.gen-card.gc-style-pla .gc-num {
+    font-family: 'Press Start 2P', cursive;
+    font-style: normal;
+    color: #5d4037;
+}
+
+.gen-card.gc-style-pla .gc-bonus {
+    font-family: 'Press Start 2P', cursive !important;
+}
+
+.gen-card.gc-style-pla:hover {
+    background: #fffbf0;
+}
+
+.gen-card.gc-style-pla.active {
+    background: #2d3436;
+    border: 3px solid #d4af37;
+    color: #f7f1e3;
+    box-shadow:
+        0 0 0 3px #2d3436,
+        4px 4px 10px rgba(0,0,0,0.5),
+        0 0 30px rgba(155, 89, 182, 0.4);
+    transform: skewX(var(--sk)) scale(1.05) translateY(-5px);
+}
+
+.gen-card.gc-style-pla.active::before {
+    background: radial-gradient(circle at 50% 120%, rgba(155, 89, 182, 0.2), transparent 70%);
+    opacity: 1;
+}
+
+.gen-card.gc-style-pla.active .gc-num {
+    color: #d4af37;
+    opacity: 0.8;
+}
+
+.gen-card.gc-style-pla.active .gc-name {
+    text-shadow: 0 0 5px #d4af37;
+}
+
+/* =========================================
+   GEN 9 STYLING: TERASTAL (Scarlet & Violet)
+   ========================================= */
+
+.gen-card.gc-style-gen9 {
+    background: linear-gradient(135deg, #f0ffff 0%, #dff9fb 100%);
+    border: none;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.8);
+    font-family: 'Press Start 2P', cursive;
+    color: #0c2461;
+    position: relative;
+}
+
+.gen-card.gc-style-gen9::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+        linear-gradient(115deg, transparent 40%, rgba(0, 255, 255, 0.05) 45%, transparent 50%),
+        linear-gradient(250deg, transparent 40%, rgba(0, 255, 255, 0.05) 45%, transparent 50%);
+    background-size: 100% 100%;
+    z-index: 0;
+}
+
+.gen-card.gc-style-gen9 .gc-inner {
+    position: relative;
+    z-index: 2;
+}
+
+.gen-card.gc-style-gen9::after {
+    display: none;
+}
+
+.gen-card.gc-style-gen9 .gc-name {
+    color: #2c3e50;
+    font-weight: 800;
+}
+
+.gen-card.gc-style-gen9:hover {
+    background: #fff;
+    box-shadow: 0 0 15px rgba(0, 210, 211, 0.2);
+}
+
+.gen-card.gc-style-gen9.active {
+    background: linear-gradient(160deg, #013b41 0%, #001214 90%);
+    border: 2px solid #5ffbfb;
+    box-shadow:
+        0 0 0 1px #013b41,
+        0 0 10px rgba(95, 251, 251, 0.8),
+        0 8px 25px rgba(0, 210, 211, 0.4);
+    color: #fff;
+    transform: skewX(var(--sk)) scale(1.05) translateY(-5px);
+}
+
+.gen-card.gc-style-gen9.active::before {
+    background: linear-gradient(
+        135deg,
+        transparent 0%,
+        transparent 45%,
+        rgba(255, 255, 255, 0.3) 50%,
+        rgba(0, 255, 255, 0.2) 60%,
+        transparent 100%
+    );
+    opacity: 0.8;
+}
+
+.gen-card.gc-style-gen9.active::after {
+    display: none;
+}
+
+.gen-card.gc-style-gen9.active .gc-name {
+    color: #afffff;
+    text-shadow: 0 0 5px rgba(0, 255, 255, 0.8);
+}
+
+.gen-card.gc-style-gen9.active .gc-num {
+    opacity: 0.5;
+    background: -webkit-linear-gradient(#fff, #00d2d3);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+}
+
+/* =========================================
+   [NEW] M8 TOURNAMENT UI MODULES
+   ========================================= */
+
+/* 段位选择器: 类似战棋/PVP游戏的排位卡 */
+.rank-selector-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.rank-opt-card {
+    background: rgba(255,255,255,0.7);
+    border: 2px solid #b2bec3;
+    border-radius: 8px;
+    padding: 10px 4px;
+    text-align: center;
+    cursor: pointer;
+    transition: 0.2s;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+}
+
+.rank-opt-card:hover { background: #fff; transform: translateY(-2px); }
+
+.rank-opt-card.selected {
+    border-color: #ffd700;
+    background: #2d3436;
+}
+
+.rank-opt-card.selected .ro-title { color: #ffd700; }
+.rank-opt-card.selected .ro-sub { color: #bdc3c7; }
+
+.ro-title {
+    font-family: var(--font-ui);
+    font-weight: 900;
+    font-size: 0.8rem;
+    color: #2d3436;
+    line-height: 1.1;
+    margin-bottom: 4px;
+}
+.ro-sub {
+    font-size: 0.55rem;
+    color: #636e72;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+/* 队伍构建网格: Ace 在左/上，队员在旁 */
+.team-builder-grid {
+    display: grid;
+    gap: 8px;
+    transition: 0.3s;
+}
+
+/* 动态网格布局：根据成员数量改变布局 */
+.tb-layout-1 { grid-template-columns: 1fr; }
+.tb-layout-3 { grid-template-columns: 1fr; } 
+/* 1 ACE + 2 Members */
+@media (min-width: 320px) {
+    .tb-layout-3 { grid-template-columns: 1fr 1fr; grid-auto-rows: auto; }
+    .tb-layout-3 .tb-item-ace { grid-column: 1 / -1; }
+}
+
+/* 6人布局 */
+.tb-layout-6 { grid-template-columns: 1fr 1fr; gap: 6px; }
+
+/* 输入框单体外观 */
+.tb-slot {
+   position: relative;
+   border: 1px solid #dfe6e9;
+   background: rgba(255,255,255,0.8);
+   border-radius: 6px;
+   padding: 0;
+   overflow: hidden;
+}
+
+.tb-slot.ace-slot {
+    border: 2px solid #fdcb6e;
+    background: #fff;
+    box-shadow: 0 4px 10px rgba(253, 203, 110, 0.2);
+}
+
+.tb-slot.ace-slot::after {
+    content:'ACE'; position: absolute; right: 0; top: 0;
+    background: #ffd700; color: #000; font-size: 0.5rem; font-weight: 900;
+    padding: 2px 4px; border-bottom-left-radius: 4px;
+}
+
+.tb-slot input {
+    width: 100%; height: 100%; border: none; background: transparent;
+    padding: 10px 8px; font-family: var(--font-txt);
+    font-weight: 700; font-size: 0.9rem; color: #2d3436;
+    text-transform: capitalize; outline: none;
+    text-align: center;
+}
+
+.tb-label-sm {
+    position: absolute; left: 4px; bottom: 2px;
+    font-size: 0.5rem; color: #b2bec3; font-weight: 800; pointer-events: none;
+}
+
+/* =========================================
+   [NEW] TEAM EDITOR OVERLAY (详细配置面板)
+   ========================================= */
+
+/* 编辑点击槽位 (主界面视觉) */
+.tb-slot {
+    cursor: pointer;
+    transition: 0.2s;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.tb-slot:hover {
+    border-color: #00cec9;
+    background-color: #f0fdf9;
+}
+
+.tb-slot.has-data {
+    background-color: #dfe6e9;
+    border-color: #2d3436;
+}
+
+.tb-summary-name {
+    font-weight: 800;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    z-index: 2;
+    color: #2d3436;
+}
+.tb-summary-lv {
+    font-size: 0.6rem;
+    color: #636e72;
+    font-weight: 700;
+    z-index: 2;
+}
+
+/* === 覆盖层编辑器 === */
+.editor-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 200;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(5px);
+    display: flex;
+    flex-direction: column;
+    padding: 15px;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.eo-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #2d3436;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+}
+.eo-title {
+    font-family: var(--font-ui);
+    font-weight: 900;
+    font-size: 1.2rem;
+    font-style: italic;
+}
+.eo-close {
+    cursor: pointer;
+    font-weight: 700;
+    color: #e74c3c;
+    font-size: 1.2rem;
+}
+
+.eo-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 5px;
+}
+.eo-scroll::-webkit-scrollbar { width: 4px; }
+.eo-scroll::-webkit-scrollbar-thumb { background: #b2bec3; border-radius: 2px; }
+
+.eo-form-group { margin-bottom: 10px; }
+.eo-label {
+    font-size: 0.6rem;
+    font-weight: 800;
+    color: #b2bec3;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+    display: block;
+}
+
+.eo-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.eo-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; }
+
+.eo-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    border: 1px solid #b2bec3;
+    border-radius: 4px;
+    font-family: var(--font-txt);
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #2d3436;
+    outline: none;
+    transition: 0.2s;
+    background: #fff;
+}
+.eo-input:focus { border-color: var(--c-accent); box-shadow: 0 0 0 2px rgba(0,206,201,0.1); }
+
+.stat-hex-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; }
+.stat-box { text-align: center; }
+.stat-box input {
+    width: 100%;
+    text-align: center;
+    font-size: 0.7rem;
+    padding: 2px 0;
+    border: 1px solid #dfe6e9;
+    appearance: textfield;
+}
+
+.eo-save-btn {
+    width: 100%;
+    background: #2d3436;
+    color: #fff;
+    border: none;
+    margin-top: 10px;
+    padding: 10px;
+    font-family: var(--font-ui);
+    font-weight: 900;
+    font-style: italic;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+.eo-save-btn:hover { background: var(--c-accent-dark); }
+.eo-save-btn::after {
+    content: 'SAVE CONFIGURATION';
+}
+
+/* =========================================
+   [PATCH] M8 TOURNAMENT UI - LIGHT DATA VISUALIZATION
+   Author: Optimized for Sci-Fi HUD V2
+   ========================================= */
+
+.rank-selector-row.holo-row {
+    gap: 10px;
+    perspective: 800px;
+    margin-bottom: 25px;
+    border: none;
+    overflow: visible;
+}
+
+.rank-opt-card.holo-card {
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 4px 15px rgba(220, 230, 240, 0.5), inset 0 0 20px rgba(255, 255, 255, 0.5);
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    transform-style: preserve-3d;
+    cursor: pointer;
+    min-height: 80px;
+}
+
+.rank-opt-card.holo-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, #b2bec3, transparent);
+    opacity: 0.3;
+}
+
+.data-decor {
+    position: absolute;
+    inset: 4px;
+    pointer-events: none;
+    border: 1px solid transparent;
+}
+
+.data-decor::after,
+.data-decor::before {
+    content: '';
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border: 1px solid #b2bec3;
+    transition: 0.3s;
+}
+
+.data-decor::before {
+    top: 0;
+    left: 0;
+    border-right: none;
+    border-bottom: none;
+}
+
+.data-decor::after {
+    bottom: 0;
+    right: 0;
+    border-left: none;
+    border-top: none;
+}
+
+.ro-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    position: relative;
+    z-index: 2;
+}
+
+.holo-card .ro-main {
+    font-size: 0.9rem;
+    font-weight: 900;
+    color: #636e72;
+    font-style: italic;
+}
+
+.holo-card .ro-rank {
+    font-family: var(--font-txt);
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #2d3436;
+    margin: 2px 0;
+}
+
+.holo-card .ro-sub {
+    font-size: 0.55rem;
+    color: #b2bec3;
+    background: #f1f2f6;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-top: 4px;
+    font-weight: 700;
+}
+
+.rank-opt-card.holo-card:hover {
+    background: rgba(255, 255, 255, 0.85);
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 10px 25px rgba(0, 206, 201, 0.15);
+}
+
+.rank-opt-card.holo-card:hover .ro-main {
+    color: var(--c-accent);
+}
+
+.rank-opt-card.holo-card:hover .data-decor::before,
+.rank-opt-card.holo-card:hover .data-decor::after {
+    border-color: var(--c-accent);
+    width: 100%;
+    height: 100%;
+}
+
+.rank-opt-card.holo-card.selected {
+    background: #fff;
+    border: 2px solid #00cec9;
+    box-shadow: 0 0 0 2px rgba(0, 206, 201, 0.1), 0 10px 30px rgba(0, 206, 201, 0.25);
+}
+
+.rank-opt-card.holo-card.selected .ro-main {
+    color: #00cec9;
+    text-shadow: 0 0 10px rgba(0, 206, 201, 0.3);
+}
+
+.rank-opt-card.holo-card.selected::before {
+    background: linear-gradient(90deg, transparent, #00cec9, transparent);
+    opacity: 1;
+    animation: scanLight 2s infinite linear;
+}
+
+.rank-opt-card.holo-card.selected .data-decor::before,
+.rank-opt-card.holo-card.selected .data-decor::after {
+    display: none;
+}
+
+.rank-opt-card.holo-card.selected:last-child {
+    border-color: #ffd700;
+}
+
+.rank-opt-card.holo-card.selected:last-child .ro-main {
+    color: #d4af37;
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
+}
+
+.rank-opt-card.holo-card.selected:last-child::before {
+    background: linear-gradient(90deg, transparent, #ffd700, transparent);
+}
+
+.team-builder-grid.sci-fi-grid {
+    gap: 10px;
+}
+
+.sci-fi-grid .tb-slot {
+    border: 1px solid #dfe6e9;
+    background: radial-gradient(circle at 50% 10%, #fff 40%, #fdfeff 100%);
+    box-shadow: inset 0 0 15px rgba(0, 255, 255, 0.05), 0 4px 6px rgba(0, 0, 0, 0.02);
+    border-radius: 6px;
+    height: 70px;
+    transition: 0.25s ease-out;
+    overflow: hidden;
+}
+
+.tb-layout-6.sci-fi-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+}
+
+.tb-layout-1.sci-fi-grid,
+.tb-layout-3.sci-fi-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+}
+
+.sci-fi-grid .tb-slot:not(.has-data) {
+    color: #dfe6e9;
+    border-style: dashed;
+    border-width: 2px;
+}
+
+.sci-fi-grid .tb-slot:not(.has-data):hover {
+    border-color: #00cec9;
+    color: #00cec9;
+    background: rgba(0, 206, 201, 0.05);
+}
+
+.sci-fi-grid .tb-slot.has-data {
+    border: 1px solid #b2bec3;
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 0 15px;
+    gap: 10px;
+}
+
+.sci-fi-grid .tb-slot.has-data img {
+    height: 55px;
+    width: 55px;
+    filter: drop-shadow(0 4px 3px rgba(0, 0, 0, 0.1));
+}
+
+.sci-fi-grid .tb-slot.has-data div.tb-summary-name {
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+    color: #2d3436;
+    font-style: normal;
+    margin: 0;
+}
+
+.sci-fi-grid .tb-slot.has-data div.tb-summary-lv {
+    font-size: 0.65rem;
+    color: #636e72;
+    opacity: 0.8;
+}
+
+.sci-fi-grid .tb-slot.ace-slot {
+    border: 1px solid rgba(255, 215, 0, 0.6);
+    background: linear-gradient(to right, #fff 50%, #fffbe6 100%);
+    box-shadow: 0 5px 15px rgba(255, 215, 0, 0.15);
+}
+
+.sci-fi-grid .tb-slot.ace-slot::after {
+    content: 'ACE // UNIT 01';
+    background: #ffd700;
+    color: #fff;
+    font-size: 0.5rem;
+    letter-spacing: 1px;
+    font-weight: 900;
+    padding: 3px 6px;
+    top: auto;
+    bottom: 0;
+    right: 0;
+    left: auto;
+    border-radius: 6px 0 0 0;
+    clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%);
+}
+
+.sci-fi-grid .tb-slot:hover {
+    transform: translateX(3px);
+    border-color: #00cec9;
+}
+
+.sci-fi-grid .tb-slot::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+    transform: skewX(-20deg);
+    transition: 0s;
+}
+
+.sci-fi-grid .tb-slot:hover::before {
+    transition: 0.5s;
+    left: 150%;
+}
+
+.config-block.sci-fi-option {
+    background: rgba(255, 255, 255, 0.7) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid #dfe6e9 !important;
+    border-radius: 50px;
+    padding: 10px 20px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.03) !important;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.toggle-light {
+    position: relative;
+    width: 46px;
+    height: 26px;
+    display: block;
+    cursor: pointer;
+}
+
+.toggle-light input {
+    display: none;
+}
+
+.toggle-light .slider-runway {
+    position: absolute;
+    inset: 0;
+    background: #dfe6e9;
+    border-radius: 20px;
+    transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.toggle-light .slider-knob {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.toggle-light input:checked + .slider-runway {
+    background: #00cec9;
+}
+
+.toggle-light input:checked + .slider-runway .slider-knob {
+    transform: translateX(20px);
+}
+
+@keyframes scanLight {
+    0% {
+        left: -50%;
+        opacity: 0;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        left: 150%;
+        opacity: 0;
+    }
+}
+
+.blink {
+    animation: blinker 1s linear infinite;
+    color: cyan;
+}
+
+@keyframes blinker {
+    50% {
+        opacity: 0;
+    }
+}
+
+/* =========================================
+   [NEW] THEME: WCS (WORLD CORONATION SERIES)
+   STYLE: Omni-Tech / Holographic Bright
+   ========================================= */
+
+.sim-screen.theme-wcs {
+    background: linear-gradient(135deg, #fdfdfd 0%, #f4faff 100%);
+    font-family: 'Exo 2', sans-serif !important;
+    overflow: hidden;
+}
+
+.sim-screen.theme-wcs::before {
+    content: '';
+    position: absolute;
+    inset: -50%;
+    background-image: linear-gradient(0deg, transparent 24%, rgba(0, 206, 201, 0.03) 25%, rgba(0, 206, 201, 0.03) 26%, transparent 27%, transparent 74%, rgba(0, 206, 201, 0.03) 75%, rgba(0, 206, 201, 0.03) 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, rgba(0, 206, 201, 0.03) 25%, rgba(0, 206, 201, 0.03) 26%, transparent 27%, transparent 74%, rgba(0, 206, 201, 0.03) 75%, rgba(0, 206, 201, 0.03) 76%, transparent 77%, transparent);
+    background-size: 30px 30px;
+    animation: wcsGridMove 60s linear infinite;
+    pointer-events: none;
+    z-index: 0;
+}
+
+@keyframes wcsGridMove {
+    0% {
+        transform: translate(0, 0) rotate(0deg);
+    }
+    100% {
+        transform: translate(50px, 50px) rotate(5deg);
+    }
+}
+
+.sim-screen.theme-wcs .sim-header {
+    background: rgba(255, 255, 255, 0.85) !important;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-left: 6px solid #00cec9 !important;
+    border-top: none;
+    border-bottom: 1px solid rgba(0, 206, 201, 0.15);
+    border-right: none;
+    border-radius: 0 0 20px 0 !important;
+    box-shadow: 0 10px 40px rgba(0, 206, 201, 0.08) !important;
+    margin: 0;
+    padding: 15px 20px !important;
+    display: flex;
+    justify-content: space_between;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.sim-screen.theme-wcs .sim-header .section-tag {
+    font-size: 0.65rem !important;
+    letter-spacing: 2px !important;
+    opacity: 1 !important;
+    color: #636e72 !important;
+    margin-bottom: 2px;
+}
+
+.sim-screen.theme-wcs .sim-header .section-tag span {
+    color: #00cec9;
+    animation: blinker 1s infinite;
+}
+
+.sim-screen.theme-wcs .sim-region-title {
+    font-family: 'Exo 2', sans-serif !important;
+    font-weight: 900 !important;
+    font-size: 2rem !important;
+    font-style: italic;
+    text-transform: uppercase;
+    background: -webkit-linear-gradient(0deg, #2d3436 0%, #636e72 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -2px;
+    line-height: 0.9 !important;
+    text-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+    position: relative;
+}
+
+.sim-screen.theme-wcs .sim-region-title::after {
+    content: 'WCS';
+    position: absolute;
+    left: 150px;
+    bottom: -15px;
+    font-size: 4rem;
+    opacity: 0.05;
+    color: #00cec9;
+    z-index: -1;
+}
+
+.sim-screen.theme-wcs #feature-list {
+    background: transparent !important;
+    color: #00cec9 !important;
+    border: 1px solid #00cec9;
+    border-radius: 4px;
+    font-size: 0.6rem !important;
+    padding: 2px 8px;
+    margin-top: 4px !important;
+    display: inline-block;
+    box-shadow: 0 0 8px rgba(0, 206, 201, 0.2);
+    text-shadow: none !important;
+    letter-spacing: 0.5px;
+}
+
+.sim-screen.theme-wcs .mb-icon {
+    border-radius: 50% !important;
+    width: 48px !important;
+    height: 48px !important;
+    background: #fff;
+    border: 2px solid #fff !important;
+    box-shadow: 0 0 0 2px #dff9fb, 0 0 15px rgba(0, 206, 201, 0.4);
+    font-size: 0.7rem;
+    font-weight: 900;
+    color: #2d3436 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sim-screen.theme-wcs .sim-header div:first-child {
+    display: flex;
+    flex-direction: column;
+}

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PKM Pink — 统一入口</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Exo 2', 'M PLUS Rounded 1c', 'Noto Sans SC', sans-serif;
+            background: #0a0a1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 900;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #ff9cd6, #5affda, #4bcffa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .subtitle {
+            opacity: 0.6;
+            font-size: 0.95rem;
+            margin-bottom: 40px;
+            letter-spacing: 1px;
+        }
+        .app-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 16px;
+            width: 100%;
+            max-width: 900px;
+        }
+        .app-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .app-card:hover {
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.2);
+            transform: translateY(-2px);
+        }
+        .app-card .name {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #fff;
+        }
+        .app-card .type {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.5;
+        }
+        .app-card .status {
+            font-size: 0.75rem;
+            margin-top: 4px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            display: inline-block;
+            width: fit-content;
+        }
+        .status-active { background: rgba(46, 204, 113, 0.15); color: #2ecc71; }
+        .status-legacy { background: rgba(241, 196, 15, 0.15); color: #f1c40f; }
+        .status-experimental { background: rgba(155, 89, 182, 0.15); color: #9b59b6; }
+        .app-card .note {
+            font-size: 0.8rem;
+            opacity: 0.5;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+        .tavern-link {
+            margin-top: 40px;
+            padding: 12px 24px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 8px;
+            color: #e0e0e0;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        .tavern-link:hover {
+            background: rgba(255,255,255,0.12);
+        }
+        .loading {
+            opacity: 0.5;
+            font-size: 0.9rem;
+        }
+        .error {
+            color: #ff6b6b;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <h1>PKM PINK</h1>
+    <div class="subtitle">UNIFIED ENTRY // VER 1.0</div>
+
+    <div id="app-list" class="app-grid">
+        <div class="loading">Loading registry...</div>
+    </div>
+
+    <a class="tavern-link" href="./containers/app.html?app=dashboard-main">Tavern Inject Container</a>
+
+    <script>
+        (async function() {
+            const listEl = document.getElementById('app-list');
+            try {
+                const res = await fetch('./registry/apps.json');
+                if (!res.ok) throw new Error('Failed to load registry');
+                const data = await res.json();
+                const apps = Object.values(data.apps || {});
+
+                if (!apps.length) {
+                    listEl.innerHTML = '<div class="error">No apps found in registry</div>';
+                    return;
+                }
+
+                listEl.innerHTML = apps.map(app => {
+                    const statusClass = app.status === 'active' ? 'status-active' :
+                                       app.status === 'legacy' ? 'status-legacy' : 'status-experimental';
+                    return `
+                        <a class="app-card" href="${app.container || app.entry}">
+                            <div class="type">${app.type}</div>
+                            <div class="name">${app.name}</div>
+                            <span class="status ${statusClass}">${app.status}</span>
+                            ${app.notes ? `<div class="note">${app.notes}</div>` : ''}
+                        </a>
+                    `;
+                }).join('');
+            } catch (e) {
+                listEl.innerHTML = `<div class="error">Error: ${e.message}</div>`;
+                console.error('[PKM Pink] Failed to load registry:', e);
+            }
+        })();
+
+        // Support ?app=xxx and #app=xxx routing
+        const queryParams = new URLSearchParams(location.search);
+        const hashParams = new URLSearchParams(location.hash.slice(1));
+        const targetApp = queryParams.get('app') || hashParams.get('app');
+        if (targetApp) {
+            (async function() {
+                try {
+                    const res = await fetch('./registry/apps.json');
+                    const data = await res.json();
+                    const app = data.apps?.[targetApp];
+                    if (app?.container) {
+                        location.replace(app.container);
+                    } else if (app?.entry) {
+                        location.replace(app.entry);
+                    }
+                } catch (e) {
+                    console.error('[PKM Pink] Routing failed:', e);
+                }
+            })();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,1385 @@
+/* ==============================================
+   SMART BUBBLE COMPONENT (智能战术悬浮窗)
+   ============================================== */
+.smart-bubble-wrapper {
+    position: absolute;
+    left: 40px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 64px;
+    height: 64px;
+    z-index: 900;  /* 低于结算画面(999)，确保在滤罩之下 */
+    cursor: pointer;
+    --bubble-color: #00d2d3;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.smart-bubble-wrapper:hover {
+    transform: translateY(-50%) scale(1.1);
+}
+
+.bubble-core {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: rgba(10, 12, 18, 0.9);
+    border: 2px solid var(--bubble-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5), 0 0 15px var(--bubble-color);
+    transition: border-color 0.5s, box-shadow 0.5s;
+}
+
+.bubble-icon-stage {
+    width: 65%;
+    height: 65%;
+    color: var(--bubble-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+        opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        filter 0.3s ease;
+    filter: drop-shadow(0 0 5px var(--bubble-color));
+}
+
+.bubble-icon-stage.align-left {
+    justify-content: flex-start;
+    padding-right: 5px;
+    padding-bottom: 5px;
+}
+
+.bubble-icon-stage.switching-out {
+    opacity: 0;
+    transform: scale(0.92);
+    filter: drop-shadow(0 0 0 transparent) blur(4px);
+}
+
+.bubble-glow-ring {
+    position: absolute;
+    inset: -10px;
+    border-radius: 50%;
+    border: 2px solid var(--bubble-color);
+    opacity: 0;
+    pointer-events: none;
+    animation: bubble-ping 3s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes bubble-ping {
+    0% { transform: scale(0.8); opacity: 0.8; }
+    75%, 100% { transform: scale(1.6); opacity: 0; }
+}
+
+.bubble-label-pill {
+    position: absolute;
+    bottom: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.85);
+    color: var(--bubble-color);
+    border: 1px solid var(--bubble-color);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.65rem;
+    font-weight: 900;
+    font-family: 'Exo 2', sans-serif;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    transition: color 0.3s, border-color 0.3s;
+}
+
+.bubble-progress {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-90deg);
+    width: 76px;
+    height: 76px;
+    pointer-events: none;
+}
+
+#bubble-timer-circle {
+    stroke: var(--bubble-color);
+    stroke-opacity: 0.6;
+    stroke-dasharray: 289;
+    animation: bubble-time 3s linear infinite;
+    transition: stroke 0.5s;
+}
+
+@keyframes bubble-time {
+    from { stroke-dashoffset: 0; }
+    to { stroke-dashoffset: 289; }
+}
+
+.smart-bubble-wrapper.locked #bubble-timer-circle {
+    animation: none;
+    stroke-dashoffset: 0;
+    stroke-opacity: 0.3;
+}
+
+.bubble-big-text {
+    font-family: 'Zhi Mang Xing', cursive;
+    font-size: 2.5rem;
+    line-height: 1;
+    color: currentColor;
+}
+
+/* =========================================
+   LEVEL 1 SLOT: TACTIC (Holographic HUD)
+   一级入口：指挥官战术面板
+   ========================================= */
+
+.cmd-btn.theme-tactics-entry {
+    background-color: #171b21;
+    background-image: 
+        linear-gradient(rgba(255, 159, 67, 0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 159, 67, 0.1) 1px, transparent 1px);
+    background-size: 20px 20px;
+    background-position: center;
+    box-shadow: 
+        inset 0 0 0 1px rgba(255, 159, 67, 0.3),
+        inset 0 0 20px rgba(0, 0, 0, 0.8);
+    color: #ff9f43;
+    overflow: hidden;
+    transition: all 0.2s ease-out;
+}
+
+.cmd-btn.theme-tactics-entry::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 300%;
+    background: linear-gradient(to bottom, transparent 40%, rgba(255, 159, 67, 0.1) 50%, transparent 60%);
+    animation: holo-scan 4s linear infinite;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.cmd-btn.theme-tactics-entry .cmd-label {
+    font-family: 'Exo 2', 'Rubik', sans-serif !important;
+    font-weight: 800;
+    font-style: italic;
+    font-size: 1.6rem;
+    color: #ff9f43;
+    text-shadow: 
+        0 0 5px rgba(255, 159, 67, 0.4),
+        2px 2px 0px rgba(0,0,0,0.5);
+    letter-spacing: -0.5px;
+    z-index: 10;
+    transition: transform 0.2s;
+}
+
+.cmd-btn.theme-tactics-entry .cmd-sub {
+    font-family: 'Noto Sans SC', 'Exo 2', sans-serif;
+    color: #ffcba4;
+    font-size: 0.75rem;
+    letter-spacing: 1.5px;
+    z-index: 10;
+    background: rgba(255, 159, 67, 0.15);
+    padding: 2px 8px;
+    border-radius: 2px;
+}
+
+.cmd-btn.theme-tactics-entry svg.icon-bg {
+    width: 260px !important;
+    height: 260px !important;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: #ff9f43;
+    opacity: 0.2 !important;
+    z-index: 0;
+    mix-blend-mode: screen;
+    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.cmd-btn.theme-tactics-entry .hud-ring-outer {
+    transform-origin: 50px 50px;
+    animation: spin-slow 20s linear infinite;
+}
+
+.cmd-btn.theme-tactics-entry:hover {
+    z-index: 50; 
+    background-color: #2f271d;
+    background-size: 22px 22px;
+    box-shadow: 
+        inset 0 0 0 2px #ff9f43,
+        0 0 20px rgba(255, 159, 67, 0.3);
+}
+
+.cmd-btn.theme-tactics-entry:hover .cmd-label {
+    transform: scale(1.1) skewX(-10deg);
+    color: #fff;
+    text-shadow: 0 0 10px #ff9f43;
+}
+
+.cmd-btn.theme-tactics-entry:hover .cmd-sub {
+    background: #ff9f43;
+    color: #000;
+}
+
+.cmd-btn.theme-tactics-entry:hover svg.icon-bg {
+    opacity: 0.8 !important;
+    color: #ffaf40;
+    filter: drop-shadow(0 0 5px #ff9f43);
+    transform: translate(-50%, -50%) scale(0.9);
+}
+
+.cmd-btn.theme-tactics-entry:hover .hud-arc {
+    animation: hud-lock-in 0.4s ease-out forwards;
+}
+
+.cmd-btn.theme-tactics-entry:hover .hud-chevrons path {
+    animation: hud-bg-pulse 1s infinite alternate;
+}
+
+.cmd-btn.theme-tactics-entry:hover::before {
+    content: '';
+    position: absolute;
+    right: 0; top: 0; bottom: 0;
+    width: 60px;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent, transparent 4px,
+        rgba(255, 159, 67, 0.4) 4px, rgba(255, 159, 67, 0.4) 5px
+    );
+    opacity: 0.3;
+    pointer-events: none;
+    z-index: 1;
+}
+
+@keyframes holo-scan {
+    0% { transform: translateY(-50px); opacity: 0; }
+    20% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { transform: translateY(150px); opacity: 0; }
+}
+
+@keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes hud-lock-in {
+    0% { transform: rotate(-45deg) scale(1.1); transform-origin: 50% 50%; opacity: 0.5; }
+    100% { transform: rotate(0deg) scale(1); transform-origin: 50% 50%; opacity: 1; }
+}
+
+@keyframes hud-bg-pulse {
+    from { opacity: 0.5; transform: scale(1); }
+    to { opacity: 1; transform: scale(1.1); translate: 1px 1px; }
+}
+
+.icon-mega { color: #cc74e4; text-shadow: 0 0 5px #cc74e4; }
+.icon-evo  { color: #ffd700; text-shadow: 0 0 5px #ffd700; }
+.icon-style-agile { color: #00d2d3; }
+.icon-style-strong { color: #ff6b6b; }
+.icon-tactics { color: #a4b0be; }
+
+@keyframes trigger-cycle {
+    90% { transform: translateY(0); opacity: 1; }
+    95% { transform: translateY(-30px); opacity: 0; }
+    100% { transform: translateY(30px); opacity: 0; }
+}
+
+/* =================================
+   Level 1 Themes (顶级菜单主题色)
+   ================================= */
+.theme-gimmick { --active-c: #e056fd; }
+.theme-gimmick.type-z { --active-c: #ffffff; }
+.theme-gimmick.type-dyna { --active-c: #ff0055; }
+
+.theme-evo-bond { --active-c: #ffd700; }
+.theme-evo-bio  { --active-c: #4cd137; }
+
+.theme-style-entry { --active-c: #576574; }
+.theme-tactics-entry { --active-c: #ff9f43; }
+
+/* =================================
+   二级：洗翠流派专用色
+   ================================= */
+.theme-style-blue { --active-c: #00d2d3; }
+.theme-style-red  { --active-c: #ff4757; }
+.theme-style-base { --active-c: #dfe4ea; }
+.theme-nav-back   { --active-c: #57606f; }
+
+/* Active selection highlight */
+.cmd-btn.active-selection {
+    box-shadow: 0 0 0 4px rgba(255,255,255,0.25);
+}
+
+.cmd-btn.disabled,
+.cmd-btn:disabled {
+    opacity: 0.4;
+    pointer-events: none;
+    filter: grayscale(1) brightness(0.7) !important;
+}
+
+/* =========================================
+   STYLE: MEGA EVOLUTION (Mystic DNA)
+   ========================================= */
+
+/* Use rainbow gradient defined in index.html defs */
+.theme-mega .icon-bg {
+    fill: url(#mega-rainbow) !important;
+    stroke: none;
+}
+
+/* Normal state: deep purple core + neon border */
+.cmd-btn.theme-mega {
+    background: radial-gradient(circle at center, #3b0a70 0%, #17032e 120%);
+    box-shadow:
+        /* 内边框：深紫内发光 */
+        inset 0 0 15px rgba(139, 92, 246, 0.12),
+        inset 0 0 2px 1px rgba(168, 85, 247, 0.9),
+        /* 外边框：紫色霓虹辉光 */
+        0 0 0 2px rgba(168, 85, 247, 0.8),
+        0 0 8px 2px rgba(192, 38, 211, 0.5),
+        0 0 20px 4px rgba(139, 92, 246, 0.3);
+    overflow: hidden;
+}
+
+.cmd-btn.theme-mega .cmd-label {
+    color: #fce7f3;
+    font-size: 34px;
+    text-shadow:
+        0 0 5px #d946ef,
+        0 0 10px #c026d3,
+        0 0 20px #86198f;
+    z-index: 10;
+}
+
+.cmd-btn.theme-mega .cmd-sub {
+    color: #ffd900;
+    opacity: 0.8;
+    z-index: 10;
+}
+
+.cmd-btn.theme-mega .icon-bg {
+    opacity: 0.15;
+    transform: translate(-50%, -50%) rotate(45deg) scale(1);
+    transition: all 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+    mix-blend-mode: screen;
+    top: 72%;
+    left: 65%;
+    z-index: 0;
+    pointer-events: none;
+}
+
+/* Hover burst state */
+@keyframes rainbow-flow {
+    0% { filter: blur(0.8px) hue-rotate(0deg) drop-shadow(0 0 5px rgba(255, 100, 200, 0.5)); }
+    50% { filter: blur(1.2px) hue-rotate(180deg) drop-shadow(0 0 10px rgba(100, 255, 255, 0.6)); }
+    100% { filter: blur(0.8px) hue-rotate(360deg) drop-shadow(0 0 5px rgba(255, 100, 200, 0.5)); }
+}
+
+.cmd-btn.theme-mega:hover {
+    z-index: 50;
+    background: linear-gradient(135deg, #ffffff 20%, #eff6ff 100%);
+    box-shadow:
+        /* 内边框：多层彩虹内辉光 */
+        inset 0 0 0 2px rgba(255, 235, 59, 0.95),
+        inset 0 0 6px 3px rgba(255, 156, 214, 0.95),
+        inset 0 0 10px 4px rgba(90, 255, 218, 0.9),
+        inset 0 0 14px 6px rgba(75, 207, 250, 0.9),
+        inset 0 0 18px 8px rgba(212, 155, 253, 0.85),
+}
+
+.cmd-btn.theme-mega:hover .cmd-label {
+    color: transparent !important;
+    background: linear-gradient(135deg, #ff3f8e 0%, #f9a602 25%, #00c896 50%, #0090ff 75%, #9b5cf4 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    text-shadow: 0 0 10px rgba(0, 0, 0, 0.35);
+    animation: text-shout 0.4s ease forwards;
+    z-index: 20;
+}
+
+.cmd-btn.theme-mega:hover .cmd-sub {
+    color: transparent !important;
+    background: linear-gradient(135deg, #ff3f8e 0%, #f9a602 25%, #00c896 50%, #0090ff 75%, #9b5cf4 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    font-weight: 800;
+    text-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+    z-index: 20;
+}
+
+.cmd-btn.theme-mega:hover .icon-bg,
+.cmd-btn.theme-mega:hover .icon-bg path,
+.cmd-btn.theme-mega:hover .icon-bg g {
+    fill: url(#mega-rainbow) !important;
+    stroke: none !important;
+}
+
+.cmd-btn.theme-mega:hover .icon-bg {
+    opacity: 0.9;
+    top: 68%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(0deg) scale(1.1);
+    mix-blend-mode: normal;
+    animation: rainbow-flow 3s linear infinite;
+    z-index: 0;
+}
+
+/* ----------------Z-MOVE THEME---------------- */
+.cmd-btn.theme-zmove {
+    background: linear-gradient(135deg, #013A63 0%, #001219 90%);
+    box-shadow:
+        inset 0 0 0 2px rgba(72, 202, 228, 0.7),
+        inset 0 0 20px rgba(0, 0, 0, 0.6),
+        0 4px 10px rgba(0, 119, 182, 0.2);
+    overflow: hidden;
+    transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.cmd-btn.theme-zmove::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.1;
+    background-image:
+        linear-gradient(45deg, #48CAE4 25%, transparent 25%, transparent 75%, #48CAE4 75%, #48CAE4),
+        linear-gradient(45deg, #48CAE4 25%, transparent 25%, transparent 75%, #48CAE4 75%, #48CAE4);
+    background-position: 0 0, 10px 10px;
+    background-size: 20px 20px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.cmd-btn.theme-zmove .cmd-label {
+    z-index: 10;
+    color: #ADE8F4;
+    text-shadow: 0 0 5px rgba(72, 202, 228, 0.6);
+    transform: scale(1);
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.cmd-btn.theme-zmove .cmd-sub {
+    color: #48CAE4;
+    z-index: 10;
+    font-weight: 700;
+}
+
+.cmd-btn.theme-zmove svg.icon-bg {
+    opacity: 0.25 !important;
+    width: 200px !important;
+    height: 200px !important;
+    top: 70%;
+    mix-blend-mode: screen;
+    filter: drop-shadow(0 0 2px rgba(255,255,255,0.3));
+    z-index: 0;
+    transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.cmd-btn.theme-zmove .z-shape-group {
+    transform: rotate(-10deg);
+    transition: transform 0.5s;
+}
+
+.cmd-btn.theme-zmove:hover {
+    z-index: 100;
+    transform: scale(1.05);
+    background: radial-gradient(circle at 30% 70%, #FFB703 0%, #FB8500 50%, #FF006E 100%);
+    box-shadow:
+        inset 0 0 0 3px #FFFFFF,
+        inset 0 0 30px rgba(255, 255, 255, 0.5),
+        0 0 25px rgba(255, 183, 3, 0.8),
+        0 0 60px rgba(251, 133, 0, 0.6);
+}
+
+.cmd-btn.theme-zmove:hover .cmd-label {
+    color: #FFF !important;
+    text-shadow: 2px 2px 0px #cf1557;
+    transform: scale(1.2) skewX(-5deg);
+}
+
+.cmd-btn.theme-zmove:hover .cmd-sub {
+    color: #FFE5B4 !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.cmd-btn.theme-zmove:hover svg.icon-bg {
+    opacity: 1 !important;
+    mix-blend-mode: normal;
+    top: 70%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(1.2);
+    filter: drop-shadow(0 0 15px rgba(255,255,255,0.8)) drop-shadow(0 0 30px #FF9F1C);
+}
+
+.cmd-btn.theme-zmove:hover .z-stroke {
+    stroke: rgba(255, 255, 255, 0.9);
+    stroke-width: 1px;
+}
+
+.cmd-btn.theme-zmove:hover::before {
+    content: '';
+    position: absolute;
+    inset: -50px;
+    background: radial-gradient(circle, rgba(255,255,255,0.8) 10%, transparent 10%);
+    background-size: 20px 20px;
+    opacity: 0.3;
+    animation: z-sparkles 1s linear infinite;
+    pointer-events: none;
+    z-index: 5;
+    mix-blend-mode: overlay;
+}
+
+@keyframes z-wiggle {
+    0% { transform: scale(1) rotate(-10deg); }
+    50% { transform: scale(1.1) rotate(10deg); }
+    100% { transform: scale(1) rotate(-10deg); }
+}
+
+@keyframes z-sparkles {
+    from { transform: translateY(0); }
+    to { transform: translateY(-20px); }
+}
+
+/* ----------------DYNAMAX THEME---------------- */
+.cmd-btn.theme-dyna {
+    background: radial-gradient(circle at 60% 40%, #D4145A 0%, #880E4F 40%, #4a0429 100%);
+    box-shadow:
+        inset 0 0 30px #000000,
+        inset 0 0 0 2px rgba(255, 30, 86, 0.9),
+        inset 0 0 10px rgba(255, 64, 129, 0.6),
+        inset 0 0 18px rgba(255, 150, 200, 0.4),
+        0 0 10px rgba(233, 30, 99, 0.3);
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.cmd-btn.theme-dyna::after {
+    content: '';
+    position: absolute;
+    inset: 0px;
+    border-radius: inherit;
+    background-image:
+        repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.1) 10px, rgba(0,0,0,0.1) 20px),
+        radial-gradient(circle at 0% 0%, rgba(255,255,255,0.1) 0%, transparent 40%);
+    opacity: 0.4;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.cmd-btn.theme-dyna .cmd-label {
+    z-index: 10;
+    color: #fff;
+    font-size: 24px;
+    text-shadow:
+        2px 2px 0px #880E4F,
+        4px 4px 0px #220211;
+    transform: scale(1.05);
+}
+
+.cmd-btn.theme-dyna .cmd-sub {
+    color: #FF80AB;
+    z-index: 10;
+    letter-spacing: 2px;
+}
+
+.cmd-btn.theme-dyna svg.icon-bg {
+    opacity: 1 !important;
+    width: 280px !important;
+    height: 280px !important;
+    top: 55%;
+    left: 45%;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.cmd-btn.theme-dyna .dyna-cross-path {
+    fill: #E91E63;
+    opacity: 0.8;
+}
+
+.cmd-btn.theme-dyna .dyna-clouds {
+    color: #560027;
+    animation: dyna-orbit-spin 20s linear infinite;
+}
+
+.cmd-btn.theme-dyna .dyna-ring-1 {
+    color: #F8BBD0;
+    stroke-width: 1px;
+}
+
+.cmd-btn.theme-dyna:hover {
+    transform: scale(1.05);
+    z-index: 50;
+    background: radial-gradient(circle at 50% 50%, #FF206E 0%, #AD1457 70%, #68052e 100%);
+    box-shadow:
+        inset 0 0 0 2px #fff,
+        inset 0 0 20px #FF4081,
+        0 0 40px rgba(233, 30, 99, 0.8),
+        0 0 100px rgba(136, 14, 79, 1);
+}
+
+.cmd-btn.theme-dyna:hover .cmd-label {
+    color: #FFD180;
+    text-shadow: 0 0 15px #FF4081;
+}
+
+.cmd-btn.theme-dyna:hover svg.icon-bg {
+    mix-blend-mode: normal;
+    opacity: 0.8 !important;
+    filter: drop-shadow(0 0 20px #D81B60);
+    top: 50%;
+    left: 50%;
+}
+
+.cmd-btn.theme-dyna:hover .dyna-cross-path {
+    fill: #FFFFFF;
+}
+
+@keyframes dyna-orbit-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes dyna-earthquake {
+    0% { transform: scale(1.1) translate(0, 0); }
+    25% { transform: scale(1.1) translate(1px, 1px); }
+    50% { transform: scale(1.1) translate(-1px, 2px); }
+    75% { transform: scale(1.1) translate(0px, -1px); }
+    100% { transform: scale(1.1) translate(0, 0); }
+}
+
+/* ----------------HISUI STYLE THEME---------------- */
+.cmd-btn.theme-style-entry .cmd-label {
+    color: #000;
+}
+
+.cmd-btn.theme-style-entry .cmd-sub { color: #000; }
+.cmd-btn.theme-style-entry svg.icon-bg { top: 50%; }
+
+/* =========================================
+   LEVEL 2 STYLE: ARCEUS CALLIGRAPHY (Fixed)
+   ========================================= */
+
+.cmd-btn.theme-style-pure-agile,
+.cmd-btn.theme-style-pure-strong,
+.cmd-btn.theme-style-pure-base,
+.cmd-btn.theme-style-pure-focus,
+.cmd-btn.theme-style-pure-back {
+    background: #ffffff;
+    background-image: radial-gradient(#aaa 0.5px, transparent 0.5px);
+    background-size: 20px 20px;
+    box-shadow: inset 0 0 0 1px #e5e5e5;
+    border: none;
+    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.cmd-btn[class*="theme-style-pure-"] .cmd-content {
+    display: block;
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.cmd-btn[class*="theme-style-pure-"] .cmd-label {
+    font-family: 'Zhi Mang Xing', cursive !important;
+    position: absolute;
+    inset: 40px;
+    color: #1a1a1d;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-style: normal;
+}
+
+.cmd-btn[class*="theme-style-pure-"] .cmd-label span {
+    position: absolute;
+    font-size: 4.5rem;
+    line-height: 1;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s, text-shadow 0.2s;
+}
+
+.cmd-btn[class*="theme-style-pure-"] .cmd-sub { display: none; }
+
+/* =========================================
+/* =========================================
+   修正版布局 - 收敛防溢出
+   Design Note: 将文字向象限的几何中心（最宽阔处）靠拢
+   ========================================= */
+
+/* --- 顶部：迅疾 --- 
+   修正：Y轴大幅下拉，X轴微缩
+*/
+.theme-style-pure-agile .c1 { 
+    /* 迅：往回拉，不要碰到左上顶角 */
+    transform: translate(-45%, -15%) rotate(-8deg); 
+}
+.theme-style-pure-agile .c2 { 
+    /* 疾：往左移，稍微往下放一点，利用右下角的空间 */
+    transform: translate(40%, 15%) rotate(-2deg); 
+}
+/* Hover：稍微往外动一点点即可 */
+.theme-style-pure-agile:hover .c1 { transform: translate(-50%, -15%) rotate(-10deg) scale(1.05); color: #008fa3; }
+.theme-style-pure-agile:hover .c2 { transform: translate(40%, 15%) rotate(0deg) scale(1.05); color: #008fa3; }
+
+
+/* --- 底部：刚猛 --- 
+   修正：Y轴大幅上拉
+*/
+.theme-style-pure-strong .c1 { 
+    /* 刚：放低姿态，往里收 */
+    transform: translate(-47%, -15%); 
+}
+.theme-style-pure-strong .c2 { 
+    transform: translate(42%, 15%); 
+}
+/* Hover */
+.theme-style-pure-strong:hover .c1 { transform: translate(-52%, -15%) scale(1.05); color: #c92a2a; }
+.theme-style-pure-strong:hover .c2 { transform: translate(47%, 15%) scale(1.05); color: #c92a2a; }
+
+
+.theme-style-pure-base .c1,
+.theme-style-pure-focus .c1 { 
+    /* 平：往右回收到 -55%，足够靠左但不出界 */
+    transform: translate(-45%, -15%) rotate(-5deg); 
+}
+.theme-style-pure-base .c2,
+.theme-style-pure-focus .c2 { 
+    /* 衡：因为“衡”字结构比较密，离圆心远一点点 */
+    transform: translate(45%, 20%); 
+}
+/* Hover */
+.theme-style-pure-base:hover .c1,
+.theme-style-pure-focus:hover .c1 { transform: translate(-52%, -15%) scale(1.05); }
+.theme-style-pure-base:hover .c2,
+.theme-style-pure-focus:hover .c2 { transform: translate(47%, 15%) scale(1.05); }
+
+
+/* --- 右侧：返回 --- 
+   修正：右边的字从 115% 拉回地球表面
+   特别解释：字体很大(4.8rem)，如果放太外层绝对会切角
+*/
+.theme-style-pure-back .c1 { 
+    font-size: 4.8rem; 
+    transform: translate(-45%, -15%) rotate(-5deg); /* 向左挪动至圆心左侧一点点 */ 
+    color: #1a1a1d; 
+}
+.theme-style-pure-back .c2 { 
+    font-size: 4.8rem; 
+    /* 回：原来是115%，直接砍半拉回 */
+    transform: translate(42%, 25%); 
+    color: #1a1a1d; 
+} 
+/* Hover */
+.theme-style-pure-back:hover .c1 { transform: translate(-52%, -15%) rotate(-8deg) scale(1.05); }
+.theme-style-pure-back:hover .c2 { transform: translate(40%, 25%) scale(1.05); }
+
+
+/* Hover backgrounds */
+.cmd-btn.theme-style-pure-agile:hover { 
+    background: #09636e; 
+    box-shadow: 0 0 0 1px #0e8491, 0 0 12px rgba(9, 99, 110, 0.6);
+}
+.cmd-btn.theme-style-pure-agile:hover .cmd-label,
+.cmd-btn.theme-style-pure-agile:hover .cmd-label span {
+    color: #e0f2fe;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.cmd-btn.theme-style-pure-strong:hover { 
+    background: #8a1c1c; 
+    box-shadow: 0 0 0 1px #c92a2a, 0 0 12px rgba(138, 28, 28, 0.6);
+}
+.cmd-btn.theme-style-pure-strong:hover .cmd-label,
+.cmd-btn.theme-style-pure-strong:hover .cmd-label span {
+    color: #ffe3e3;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.cmd-btn.theme-style-pure-base:hover { 
+    background: #111111; 
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.1), 0 4px 12px rgba(0,0,0,0.8);
+}
+.cmd-btn.theme-style-pure-base:hover .cmd-label,
+.cmd-btn.theme-style-pure-base:hover .cmd-label span {
+    color: #dedede;
+    text-shadow: none;
+}
+
+.cmd-btn.theme-style-pure-back:hover { 
+    background: #111111; 
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.1), 0 4px 12px rgba(0,0,0,0.8);
+}
+.cmd-btn.theme-style-pure-back:hover .cmd-label,
+.cmd-btn.theme-style-pure-back:hover .cmd-label span {
+    color: #dedede;
+    text-shadow: none;
+}
+
+.cmd-btn.theme-style-pure-focus:hover { 
+    background: #195e2d; 
+    box-shadow: 0 0 0 1px #2f9e44, 0 0 12px rgba(25, 94, 45, 0.6);
+}
+.cmd-btn.theme-style-pure-focus:hover .cmd-label,
+.cmd-btn.theme-style-pure-focus:hover .cmd-label span {
+    color: #e6fcf5;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* Hover backgrounds */
+.cmd-btn.theme-style-pure-agile:hover { background: #09636e; }
+.cmd-btn.theme-style-pure-strong:hover { background: #8a1c1c; }
+.cmd-btn.theme-style-pure-back:hover { background: #111111; }
+.cmd-btn.theme-style-pure-base:hover { background: #111111; }
+.cmd-btn.theme-style-pure-focus:hover { background: #195e2d; }
+
+
+/* =========================================
+   LEVEL 1 SLOT: STYLE (The Ancient Scroll)
+   一级入口：水墨古风流
+   ========================================= */
+
+.cmd-btn.theme-style-entry {
+    background-color: #f7f5f0;
+    background-image: 
+        radial-gradient(#dcdcdc 0.5px, transparent 0.5px),
+        radial-gradient(#e6e6e6 0.5px, transparent 0.5px);
+    background-size: 20px 20px;
+    background-position: 0 0, 10px 10px;
+    box-shadow: 
+        inset 0 0 0 3px #2d3436,
+        inset 0 0 8px 1px rgba(0,0,0,0.4),
+        0 0 10px rgba(0,0,0,0.1);
+    filter: sepia(0.2) contrast(0.95);
+    border: none;
+    overflow: hidden;
+    transition: all 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.cmd-btn.theme-style-entry::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 100% 100%, transparent 40%, rgba(139, 137, 137, 0.15) 100%);
+    pointer-events: none;
+    z-index: 2;
+    mix-blend-mode: multiply;
+}
+
+.cmd-btn.theme-style-entry .cmd-label {
+    font-family: 'Exo 2', 'Rubik', sans-serif;
+    color: #1a1a1a;
+    font-weight: 800;
+    letter-spacing: 2px;
+    z-index: 10;
+    text-shadow: 0 0 0.5px rgba(0,0,0,0.6);
+}
+
+.cmd-btn.theme-style-entry .cmd-sub {
+    font-family: 'Exo 2', 'Rubik', sans-serif;
+    color: #596275;
+    font-weight: 600;
+    z-index: 10;
+}
+
+.cmd-btn.theme-style-entry svg.icon-bg {
+    width: 220px !important;
+    height: 220px !important;
+    opacity: 0.1 !important;
+    color: #000;
+    top: 60%; left: 60%;
+    mix-blend-mode: multiply;
+    transition: all 0.5s ease-out;
+}
+
+.cmd-btn.theme-style-entry:hover {
+    z-index: 50;
+    transform: scale(1.02);
+    background-color: #1e272e;
+    box-shadow: 
+        inset 0 0 0 3px #d2dae2,
+        inset 0 0 15px rgba(255,255,255,0.1),
+        0 4px 20px rgba(0,0,0,0.4);
+    filter: sepia(0) contrast(1.1);
+}
+
+.cmd-btn.theme-style-entry:hover .cmd-label {
+    color: #fff;
+    text-shadow: 0 0 10px rgba(255,255,255,0.6);
+    transform: scale(1.05);
+}
+
+.cmd-btn.theme-style-entry:hover .cmd-sub {
+    color: #d2dae2;
+}
+
+.cmd-btn.theme-style-entry:hover svg.icon-bg {
+    opacity: 0.2 !important;
+    color: #fff;
+    mix-blend-mode: normal;
+    transform: translate(-50%, -50%) rotate(180deg) scale(0.9);
+    top: 50%; left: 50%;
+    filter: blur(2px) drop-shadow(0 0 10px rgba(255,255,255,0.5));
+}
+
+.cmd-btn.theme-style-entry:hover::before {
+    content: '';
+    position: absolute;
+    top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    background: radial-gradient(circle, transparent 30%, rgba(200, 200, 200, 0.05) 50%, transparent 70%);
+    animation: ripple-spread 3s linear infinite;
+    pointer-events: none;
+    z-index: 1;
+}
+
+@keyframes ripple-spread {
+    from { transform: scale(0.8); opacity: 1; }
+    to { transform: scale(1.2); opacity: 0; }
+}
+
+/* =========================================
+   LEVEL 2 TACTICS THEMES (Architected Border)
+   ========================================= */
+
+.cmd-btn.theme-insight,
+.cmd-btn.theme-passion,
+.cmd-btn.theme-devotion,
+.cmd-btn.theme-trust {
+    background: #000000 !important;
+    border: none;
+    box-shadow: none;
+    text-shadow: none;
+    overflow: hidden;
+    --base-opacity: 0.1;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 2. 定义四个象限的主题色变量 (CSS Variables Scope) */
+.cmd-btn.theme-insight  { --btn-color: #00efd1; } /* 青色/Dodge */
+.cmd-btn.theme-passion  { --btn-color: #ff3f3f; } /* 红色/Crit */
+.cmd-btn.theme-devotion { --btn-color: #a55eea; } /* 紫色/Endure */
+.cmd-btn.theme-trust    { --btn-color: #ff9800; } /* 橙色/Listen */
+
+.theme-insight::after,
+.theme-passion::after,
+.theme-devotion::after,
+.theme-trust::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 3px solid var(--btn-color);
+    border-radius: inherit;
+    z-index: 100;
+    pointer-events: none;
+    opacity: 0.6;
+    box-shadow: inset 0 0 15px rgba(0,0,0,0.8);
+    transition: all 0.3s ease;
+}
+
+.theme-insight svg.icon-bg,
+.theme-passion svg.icon-bg,
+.theme-devotion svg.icon-bg,
+.theme-trust svg.icon-bg {
+    width: 200px !important;
+    height: 200px !important;
+    top: 50%;
+    left: 50%;
+    opacity: var(--base-opacity) !important;
+    fill: var(--btn-color) !important;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+                opacity 0.4s ease;
+    z-index: 1;
+    pointer-events: none;
+    transform: translate(-50%, -50%) scale(0.8) rotate(0deg);
+}
+
+.theme-insight .cmd-content,
+.theme-passion .cmd-content,
+.theme-devotion .cmd-content,
+.theme-trust .cmd-content {
+    position: relative;
+    z-index: 50;
+}
+
+.theme-insight .cmd-sub,
+.theme-passion .cmd-sub,
+.theme-devotion .cmd-sub,
+.theme-trust .cmd-sub {
+    font-family: 'M PLUS Rounded 1c', 'Exo 2', sans-serif;
+    color: var(--btn-color);
+    opacity: 0.7;
+    transition: color 0.2s ease;
+}
+
+.theme-insight .cmd-label,
+.theme-passion .cmd-label,
+.theme-devotion .cmd-label,
+.theme-trust .cmd-label {
+    font-family: 'Exo 2', sans-serif !important;
+    font-weight: 800;
+    font-style: italic;
+    font-size: 1.6rem;
+    color: var(--btn-color);
+    opacity: 0.8;
+    transition: all 0.2s ease;
+}
+
+.cmd-btn.theme-insight:hover::after,
+.cmd-btn.theme-passion:hover::after,
+.cmd-btn.theme-devotion:hover::after,
+.cmd-btn.theme-trust:hover::after {
+    opacity: 1;
+    box-shadow:
+        0 0 15px var(--btn-color),
+        inset 0 0 10px var(--btn-color);
+    border-color: #fff;
+}
+
+.cmd-btn.theme-insight:hover .cmd-label,
+.cmd-btn.theme-passion:hover .cmd-label,
+.cmd-btn.theme-devotion:hover .cmd-label,
+.cmd-btn.theme-trust:hover .cmd-label {
+    opacity: 1;
+    color: #fff;
+    text-shadow:
+        0 0 5px #fff,
+        0 0 10px var(--btn-color),
+        2px 2px 0px rgba(0,0,0,0.5);
+    transform: scale(1.1) skewX(-5deg);
+}
+
+.cmd-btn.theme-insight:hover,
+.cmd-btn.theme-passion:hover,
+.cmd-btn.theme-devotion:hover,
+.cmd-btn.theme-trust:hover {
+    background: #080808 !important;
+}
+
+.theme-insight:hover svg.icon-bg,
+.theme-passion:hover svg.icon-bg,
+.theme-devotion:hover svg.icon-bg,
+.theme-trust:hover svg.icon-bg {
+    opacity: 0.35 !important;
+    transform: translate(-50%, -50%) scale(1.2) rotate(-8deg);
+    filter: drop-shadow(0 0 8px var(--btn-color));
+}
+
+
+.theme-insight:hover .cmd-sub,
+.theme-passion:hover .cmd-sub,
+.theme-devotion:hover .cmd-sub,
+.theme-trust:hover .cmd-sub {
+    color: #fff;
+    opacity: 1;
+}
+
+/* =========================================
+   EVO THEME A: BIO EVOLUTION (Genetics)
+   生命/基因进化: 绿色生化风
+   ========================================= */
+ 
+.cmd-btn.theme-evo-bio {
+    background: radial-gradient(circle at 50% 120%, #054f28 0%, #002b15 80%);
+    box-shadow: 
+        inset 0 0 10px rgba(46, 204, 113, 0.3),
+        0 0 0 2px rgba(46, 204, 113, 0.5);
+    overflow: hidden;
+}
+
+.cmd-btn.theme-evo-bio::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(46, 204, 113, 0.15) 20%, transparent 20%);
+    background-size: 8px 8px;
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.cmd-btn.theme-evo-bio .cmd-label {
+    color: #a3ffc3;
+    text-shadow: 0 0 5px rgba(46, 204, 113, 0.8);
+    z-index: 10;
+}
+
+.cmd-btn.theme-evo-bio .cmd-sub {
+    color: #2ecc71;
+    font-weight: 700;
+    z-index: 10;
+}
+
+.cmd-btn.theme-evo-bio svg.icon-bg {
+    color: #1a7442;
+    opacity: 0.25 !important;
+    width: 250px !important; 
+    height: 250px !important;
+    top: 60%;
+    left: 40%;
+    transform: translate(-50%, -50%) rotate(15deg);
+}
+
+.cmd-btn.theme-evo-bio .bio-bubble {
+    opacity: 0;
+    transition: opacity 0.5s;
+}
+
+.cmd-btn.theme-evo-bio:hover {
+    background: radial-gradient(circle at 50% 100%, #1a9e55 0%, #075f32 100%);
+    box-shadow: 
+        inset 0 0 20px #2ecc71,
+        0 0 25px rgba(46, 204, 113, 0.7);
+    z-index: 50;
+    transform: scale(1.05);
+}
+
+.cmd-btn.theme-evo-bio:hover svg.icon-bg {
+    opacity: 0.6 !important;
+    color: #5af59d;
+    filter: drop-shadow(0 0 8px #2ecc71);
+    top: 55%; 
+}
+
+.cmd-btn.theme-evo-bio:hover .bio-bubble {
+    animation: bio-float 3s infinite linear;
+    opacity: 0.6;
+    fill: #dafce7;
+}
+.cmd-btn.theme-evo-bio:hover .b1 { animation-duration: 2s; animation-delay: 0s; }
+.cmd-btn.theme-evo-bio:hover .b2 { animation-duration: 3.5s; animation-delay: 0.5s; }
+.cmd-btn.theme-evo-bio:hover .b3 { animation-duration: 2.5s; animation-delay: 1s; }
+
+@keyframes bio-float {
+    0% { transform: translateY(0) scale(1); opacity: 0; }
+    20% { opacity: 0.8; }
+    80% { opacity: 0.8; }
+    100% { transform: translateY(-50px) scale(0.5); opacity: 0; }
+}
+
+
+/* =========================================
+   EVO THEME B: BOND EVOLUTION (Love/Link)
+   羁绊进化: 粉色/珊瑚金 温暖风
+   ========================================= */
+
+.cmd-btn.theme-evo-bond {
+    background: linear-gradient(-45deg, #FF9A9E 0%, #FECFEF 100%);
+    box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.5);
+    border: none;
+}
+
+.cmd-btn.theme-evo-bond::before {
+    content: '♥';
+    position: absolute;
+    top: -20px; left: -20px;
+    font-size: 80px;
+    color: #fff;
+    opacity: 0.1;
+    transform: rotate(-15deg);
+}
+
+.cmd-btn.theme-evo-bond .cmd-label {
+    color: #fff;
+    text-shadow: 0 2px 2px rgba(235, 77, 75, 0.4);
+    z-index: 10;
+}
+
+.cmd-btn.theme-evo-bond .cmd-sub {
+    color: #d6336c;
+    z-index: 10;
+    font-weight: 700;
+}
+
+.cmd-btn.theme-evo-bond svg.icon-bg {
+    color: #fff;
+    opacity: 0.5 !important;
+    mix-blend-mode: overlay;
+    width: 220px !important;
+    height: 220px !important;
+    top: 55%; left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.bond-pulse-line, .bond-mini-heart { opacity: 0; }
+
+.cmd-btn.theme-evo-bond:hover {
+    z-index: 80;
+    transform: scale(1.05);
+    background: radial-gradient(circle at center, #ff80ab 0%, #c92a2a 120%);
+    box-shadow: 0 0 30px #ff4081;
+}
+
+.cmd-btn.theme-evo-bond:hover svg.icon-bg {
+    opacity: 1 !important;
+    mix-blend-mode: normal;
+    animation: bond-heartbeat 0.8s infinite ease-in-out;
+    filter: drop-shadow(0 0 10px rgba(255,255,255,0.6));
+    top: 50%;
+}
+
+.cmd-btn.theme-evo-bond:hover .bond-heart-core {
+    fill: #f06595;
+}
+
+.cmd-btn.theme-evo-bond:hover .bond-pulse-line {
+    opacity: 1;
+    stroke-dasharray: 200;
+    animation: bond-pulse-draw 1.5s linear infinite;
+}
+
+.cmd-btn.theme-evo-bond:hover .bond-mini-heart {
+    animation: bond-fly 1.5s infinite ease-in;
+    fill: #fff;
+}
+.cmd-btn.theme-evo-bond:hover .h1 { animation-delay: 0.2s; }
+.cmd-btn.theme-evo-bond:hover .h2 { animation-delay: 0.7s; }
+
+@keyframes bond-heartbeat {
+    0% { transform: translate(-50%, -50%) scale(1); }
+    15% { transform: translate(-50%, -50%) scale(1.15); }
+    30% { transform: translate(-50%, -50%) scale(1); }
+    45% { transform: translate(-50%, -50%) scale(1.15); }
+    60% { transform: translate(-50%, -50%) scale(1); }
+    100% { transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes bond-pulse-draw {
+    0% { stroke-dashoffset: 200; opacity: 1; }
+    50% { stroke-dashoffset: 0; opacity: 1; }
+    80% { stroke-dashoffset: -200; opacity: 0; }
+    100% { stroke-dashoffset: -200; opacity: 0; }
+}
+
+@keyframes bond-fly {
+    0% { transform: translateY(0) scale(0.5); opacity: 0; }
+    20% { opacity: 1; }
+    100% { transform: translateY(-40px) scale(0); opacity: 0; }
+}
+
+/* ----------------TERASTAL THEME---------------- */
+.cmd-btn.theme-tera {
+    background: linear-gradient(160deg, #0d3b4a 0%, #175464 60%, #0e7490 100%);
+    box-shadow:
+        inset 0 0 0 1px rgba(103, 232, 249, 0.4),
+        inset 0 0 30px rgba(8, 145, 178, 0.6),
+        0 4px 6px rgba(0,0,0,0.3);
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cmd-btn.theme-tera::before {
+    content: '';
+    position: absolute;
+    inset: -10px;
+    background-image: radial-gradient(rgba(255,255,255,0.2) 2px, transparent 2px);
+    background-size: 20px 20px;
+    background-position: 0 0;
+    opacity: 0.2;
+    transform: rotate(30deg);
+    z-index: 1;
+    transition: all 0.5s;
+}
+
+.cmd-btn.theme-tera::after {
+    content: '';
+    position: absolute;
+    top: 0; left: -150%;
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    transform: skewX(-20deg);
+    pointer-events: none;
+    z-index: 2;
+}
+
+.cmd-btn.theme-tera .cmd-label {
+    z-index: 10;
+    font-family: 'Exo 2', sans-serif;
+    color: #CFFAFE;
+    text-shadow:
+        0 0 10px rgba(6, 182, 212, 0.6),
+        0 2px 0 rgba(21, 94, 117, 1);
+    letter-spacing: 2px;
+}
+
+.cmd-btn.theme-tera .cmd-sub {
+    color: #67E8F9;
+    z-index: 10;
+    font-weight: 600;
+}
+
+.cmd-btn.theme-tera svg.icon-bg {
+    color: #22d3ee;
+    width: 220px !important;
+    height: 220px !important;
+    top: 55%;
+    opacity: 0.3 !important;
+    filter: drop-shadow(0 0 2px rgba(34, 211, 238, 0.5));
+    transition: all 0.5s ease-out;
+    mix-blend-mode: plus-lighter;
+}
+
+.cmd-btn.theme-tera:hover {
+    z-index: 60;
+    transform: scale(1.03);
+    background: linear-gradient(135deg, #155e75 0%, #0891b2 40%, #cffafe 100%);
+    box-shadow:
+        inset 0 0 0 2px rgba(255,255,255,0.9),
+        0 0 20px rgba(34,211,238, 0.6),
+        0 0 50px rgba(103,232,249, 0.4);
+}
+
+.cmd-btn.theme-tera:hover::before {
+    opacity: 0.3;
+    background-size: 24px 24px;
+}
+
+.cmd-btn.theme-tera:hover::after {
+    animation: tera-sheen 1.5s cubic-bezier(0.19, 1, 0.22, 1) infinite;
+}
+
+.cmd-btn.theme-tera:hover svg.icon-bg {
+    opacity: 0.9 !important;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%) rotate(-5deg);
+    color: #fff;
+    filter:
+        drop-shadow(0 0 5px rgba(255,255,255,0.8))
+        drop-shadow(0 0 15px rgba(6, 182, 212, 1));
+}
+
+.cmd-btn.theme-tera:hover .tera-bg-ring {
+    animation: tera-slow-spin 10s linear infinite;
+    stroke: #ECFEFF;
+}
+
+.cmd-btn.theme-tera:hover .tera-core-pulse {
+    animation: tera-pulse 2s infinite;
+}
+
+.cmd-btn.theme-tera:hover .cmd-label {
+    text-shadow:
+        0 0 15px #FFFFFF,
+        0 0 30px #22D3EE;
+    color: white;
+}
+
+@keyframes tera-sheen {
+    0% { left: -150%; opacity: 0; }
+    50% { left: 150%; opacity: 0.8; }
+    100% { left: 150%; opacity: 0; }
+}
+
+@keyframes tera-slow-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes tera-pulse {
+    0%, 100% { opacity: 0.6; transform: scale(0.9); transform-origin: center; }
+    50% { opacity: 1; transform: scale(1.1); transform-origin: center; fill: #E0F2FE; }
+}
+
+@keyframes tera-twinkle {
+    from { opacity: 0.3; transform: scale(0.5); transform-origin: center; }
+    to { opacity: 1; transform: scale(1.2); transform-origin: center; }
+}

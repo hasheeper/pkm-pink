@@ -1,0 +1,74 @@
+========================================
+  PKM12 招式实现覆盖率分析
+========================================
+
+📊 数据概览:
+   MOVES 数据库: 954 个招式
+   MoveHandlers: 299 个专用处理器
+   CHARGE_MOVE_CONFIG: 19 个蓄力技配置
+
+========================================
+  总体覆盖率
+========================================
+   ✅ 完整实现: 934 (99.6%)
+   ⚠️  部分实现: 0 (0.0%)
+   ❌ 缺失实现: 4 (0.4%)
+   ⏭️  非标准(Past/Z/Max等): 16
+   ─────────────────────
+   总计: 954 | 标准招式: 938
+
+========================================
+  按分类统计
+========================================
+   Physical   | 总424 | ✅421 | ⚠️   0 | ❌  0 | 覆盖率 100.0%
+   Special    | 总259 | ✅258 | ⚠️   0 | ❌  0 | 覆盖率 100.0%
+   Status     | 总271 | ✅255 | ⚠️   0 | ❌  4 | 覆盖率 98.5%
+
+========================================
+  ❌ 缺失实现的招式 (4个)
+========================================
+
+  ── Status (4个) ──
+   ❌ After You                 [Normal  ] 变化技需要onHit但无handler; 变化技无通用效果且无handler
+   ❌ Ally Switch               [Psychic ] 变化技需要onHit但无handler; 变化技无通用效果且无handler
+   ❌ Instruct                  [Psychic ] 变化技需要onHit但无handler; 变化技无通用效果且无handler
+   ❌ Quash                     [Dark    ] 变化技需要onHit但无handler; 变化技无通用效果且无handler
+
+========================================
+  📋 有专用 Handler 的招式: 299个
+========================================
+
+  ── damageCallback (13个) ──
+   Counter, Dragon Rage, Endeavor, Final Gambit, Guardian of Alola, Metal Burst, Mirror Coat, Night Shade, Psywave, Ruination, Seismic Toss, Sonic Boom, Super Fang
+
+  ── basePowerCallback (58个) ──
+   Acrobatics, Assurance, Avalanche, Beat Up, Bolt Beak, Crush Grip, Dragon Energy, Echoed Voice, Electro Ball, Eruption, Expanding Force, Facade, Fire Pledge, Fishious Rend, Flail, Fling, Frustration, Fury Cutter, Grass Knot, Grass Pledge, Gyro Ball, Hard Press, Heat Crash, Heavy Slam, Hex, Ice Ball, Infernal Parade, Knock Off, Last Respects, Low Kick, Magnitude, Misty Explosion, Natural Gift, Payback, Power Trip, Present, Punishment, Rage Fist, Return, Revenge, Reversal, Rising Voltage, Rollout, Round, Spit Up, Stomping Tantrum, Stored Power, Temper Flare, Terrain Pulse, Triple Axel, Triple Kick, Trump Card, Wake-Up Slap, Water Pledge, Water Shuriken, Water Spout, Weather Ball, Wring Out
+
+  ── onHit (116个) ──
+   Blast Burn, Burn Up, Chloroblast, Circle Throw, Clear Smog, Court Change, Doodle, Double Shock, Dragon Tail, Entrainment, Eternabeam, Final Gambit, Fling, Flip Turn, Floral Healing, Forest's Curse, Frenzy Plant, Giga Impact, G-Max Befuddle, G-Max Cannonade, G-Max Centiferno, G-Max Chi Strike, G-Max Cuddle, G-Max Depletion, G-Max Finale, G-Max Foam Burst, G-Max Gold Rush, G-Max Gravitas, G-Max Malodor, G-Max Meltdown, G-Max Replenish, G-Max Resonance, G-Max Sandblast, G-Max Smite, G-Max Snooze, G-Max Steelsurge, G-Max Stonesurge, G-Max Stun Shock, G-Max Sweetness, G-Max Tartness, G-Max Terror, G-Max Vine Lash, G-Max Volcalith, G-Max Volt Crash, G-Max Wildfire, G-Max Wind Rage, Guard Swap, Haze, Heart Swap, Hydro Cannon, Hyper Beam, Ice Ball, Ice Spinner, Leech Seed, Magic Powder, Max Airstream, Max Darkness, Max Flare, Max Flutterby, Max Geyser, Max Hailstorm, Max Knuckle, Max Lightning, Max Mindstorm, Max Ooze, Max Overgrowth, Max Phantasm, Max Quake, Max Rockfall, Max Starfall, Max Steelspike, Max Strike, Max Wyrmwind, Meteor Assault, Mind Blown, Moonlight, Morning Sun, Parting Shot, Power Split, Power Swap, Prismatic Laser, Psych Up, Purify, Rapid Spin, Recover, Refresh, Rest, Roar, Role Play, Rollout, Roost, Salt Cure, Shore Up, Simple Beam, Skill Swap, Slack Off, Soak, Soft-Boiled, Spectral Thief, Speed Swap, Spite, Spit Up, Steel Beam, Steel Roller, Strength Sap, Struggle, Synthesis, Tera Blast, Topsy-Turvy, Tri Attack, Trick-or-Treat, U-turn, Volt Switch, Whirlwind, Wish, Worry Seed
+
+  ── onUse (120个) ──
+   Acupressure, Aromatherapy, Aura Wheel, Baneful Bunker, Baton Pass, Beak Blast, Belly Drum, Blast Burn, Block, Bounce, Celebrate, Charge, Chilly Reception, Clangorous Soul, Conversion, Conversion 2, Copycat, Counter, Curse, Defense Curl, Defog, Destiny Bond, Detect, Dig, Dive, Doom Desire, Electro Shot, Endure, Eternabeam, Explosion, Fairy Lock, Fake Out, Fillet Away, First Impression, Fly, Focus Punch, Freeze Shock, Frenzy Plant, Future Sight, Geomancy, Giga Impact, Gigaton Hammer, Gravity, Grudge, Guard Split, Hail, Happy Hour, Heal Bell, Healing Wish, Heal Pulse, Hydro Cannon, Hyper Beam, Ice Burn, Jungle Healing, Laser Focus, Last Resort, Lock-On, Lunar Blessing, Lunar Dance, Magic Room, Magnetic Flux, Mat Block, Max Guard, Mean Look, Metal Burst, Meteor Assault, Meteor Beam, Metronome, Mimic, Mirror Coat, Misty Explosion, Natural Gift, Nature Power, Obstruct, Pain Split, Perish Song, Phantom Force, Poltergeist, Prismatic Laser, Protect, Psycho Shift, Rain Dance, Razor Wind, Recycle, Reflect Type, Revival Blessing, Sandstorm, Self-Destruct, Shadow Force, Silk Trap, Sketch, Skull Bash, Sky Attack, Sky Drop, Sleep Talk, Snore, Snowscape, Solar Beam, Solar Blade, Spider Web, Spiky Shield, Spit Up, Splash, Steel Roller, Stockpile, Stuff Cheeks, Sunny Day, Swallow, Switcheroo, Take Heart, Teatime, Teleport, Tidy Up, Transform, Trick, Trick Room, Triple Axel, Triple Kick, Uproar, Wonder Room
+
+  ── onAfterMove (2个) ──
+   Gigaton Hammer, Glaive Rush
+
+  ── onModifyType (3个) ──
+   Aura Wheel, Terrain Pulse, Weather Ball
+
+========================================
+  🎯 变化技重点关注 (最容易缺失实现)
+========================================
+   总计: 271 | ✅255 | ❌4
+
+  ── 缺失的变化技 ──
+
+  标准招式 (4个):
+   ❌ After You                 [Normal  ] 变化技需要onHit但无handler; 变化技无通用效果且无handler
+   ❌ Ally Switch               [Psychic ] 变化技需要onHit但无handler; 变化技无通用效果且无handler
+   ❌ Instruct                  [Psychic ] 变化技需要onHit但无handler; 变化技无通用效果且无handler
+   ❌ Quash                     [Dark    ] 变化技需要onHit但无handler; 变化技无通用效果且无handler
+
+========================================
+  分析完成
+========================================

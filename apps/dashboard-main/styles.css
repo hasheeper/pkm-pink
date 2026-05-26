@@ -1,0 +1,134 @@
+/* Product overrides for dashboard-main.
+   Shared base styles live in ../shared/dashboard/base.css. */
+
+.main-viewport {
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+}
+
+.dash-card-box.npc:hover {
+    border-color: var(--c-pink);
+    box-shadow: 6px 8px 0 rgba(253, 121, 168, 0.3);
+}
+
+.npc-card.unmet .npc-portrait img {
+    filter: grayscale(1) brightness(0.58) contrast(1.08) drop-shadow(0 4px 4px rgba(0,0,0,0.16));
+    opacity: 0.94;
+}
+
+.chip-cell::before,
+.asi-label {
+    font-size: 0.45rem;
+}
+
+.nb-icon-img {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    image-rendering: pixelated;
+    image-rendering: -webkit-optimize-contrast;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.2));
+}
+
+.avs-dashboard {
+    left: 85px;
+    right: 50px;
+    width: auto;
+}
+
+.npc-bond-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 12;
+    border-radius: 4px;
+    font-size: 1.1rem;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.npc-bond-badge .nb-bg {
+    display: none;
+}
+.npc-bond-badge.locked {
+    background: rgba(0,0,0,0.45);
+    border: 1px solid rgba(255,255,255,0.35);
+    border-radius: 50%;
+    filter: grayscale(100%) opacity(0.75);
+    color: #fff;
+    transform: scale(0.9);
+}
+.npc-bond-badge.locked .nb-icon {
+    opacity: 0.55;
+    filter: blur(0.4px);
+}
+.npc-bond-badge.unlocked {
+    background: rgba(255,255,255,0.2);
+    backdrop-filter: blur(4px);
+    border: 1px solid #fff;
+    border-radius: 6px;
+    box-shadow:
+        0 2px 8px rgba(0,0,0,0.12),
+        inset 0 0 10px rgba(255,255,255,0.35),
+        0 0 10px rgba(255,223,0,0.35);
+    animation: badgeFloat 3s ease-in-out infinite;
+}
+.npc-bond-badge.unlocked .nb-bg {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: radial-gradient(circle, rgba(255,255,255,0.85) 0%, transparent 70%);
+    opacity: 0.4;
+}
+.npc-bond-badge:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(255,255,255,0.5);
+    background: #fff;
+    color: #2d3436;
+}
+@keyframes badgeFloat {
+    0%,100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+}
+
+html.dashboard-perf-mode .npc-bond-badge.unlocked,
+body.dashboard-perf-mode .npc-bond-badge.unlocked {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+}
+
+.page {
+    min-height: 100%;
+    height: auto;
+    overflow: visible;
+}
+
+.ps-center {
+    max-width: none;
+    min-width: initial;
+    font-size: 0.9rem;
+    font-weight: 800;
+    text-align: initial;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+.box-tactical.theme-teal,
+.box-tactical.theme-purple,
+.box-tactical.tile-box,
+.box-tactical.tile-relation,
+.box-tactical.tile-map-static,
+.box-tactical.tile-settings {
+    height: 150px !important;
+}
+
+.box-tactical.tile-map-static,
+.box-tactical.tile-settings {
+    height: 82px !important;
+}

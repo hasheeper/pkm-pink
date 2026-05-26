@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RHODIA TACTICAL MAP</title>
+    <!-- M PLUS Rounded 1c - 日系圆体，完美契合宝可梦UI风格 -->
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <link rel="stylesheet" href="scifi.css">
+    <link rel="stylesheet" href="../../shared/dashboard/notification.css">
+</head>
+<body>
+
+    <div id="canvas-wrapper">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <div id="ui-layer">
+        <div class="map-branding">
+            <div class="brand-text">
+                <h1>RHODIA <span style="opacity:0.4; font-weight:400;">OS</span></h1>
+                <div class="subtitle">TACTICAL VIEW // V3.0</div>
+            </div>
+        </div>
+
+        <div class="layer-menu-wrapper">
+            <button id="layer-toggle-btn" onclick="toggleLayerMenu()">
+                <span><i class="ri-stack-line"></i> LAYERS</span>
+            </button>
+            <div id="layer-panel-content" class="collapsed">
+                <div class="layer-control-nav">
+                    <span class="action-txt" onclick="toggleAllLayers(true)">ALL ON</span>
+                    <span style="opacity:0.3">|</span>
+                    <span class="action-txt" onclick="toggleAllLayers(false)">OFF</span>
+                </div>
+                <div id="layer-toggles"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RIGHT ACTION DOCK (skew-safe) -->
+    <div id="map-controls">
+        <button class="map-btn sk-btn" onclick="modifyZoom(0.2)" title="Zoom In">
+            <span class="unskew"><i class="ri-add-line"></i></span>
+        </button>
+        <button class="map-btn sk-btn" onclick="modifyZoom(-0.2)" title="Zoom Out">
+            <span class="unskew"><i class="ri-subtract-line"></i></span>
+        </button>
+        <div style="height:8px"></div>
+        <button class="map-btn sk-btn accent" onclick="centerCameraOnPlayer()" title="Locate Squad">
+            <span class="unskew"><i class="ri-crosshair-2-line"></i></span>
+        </button>
+        <button class="map-btn sk-btn" onclick="window.RouteSystem && RouteSystem.toggle()" title="Plot Route">
+            <span class="unskew"><i class="ri-map-pin-add-line"></i></span>
+        </button>
+    </div>
+
+    <!-- JOURNEY PLANNER PANEL (COLLAPSIBLE) -->
+    <div id="journey-panel" class="hidden ver-dawn-card sk-panel">
+        <!-- Compact Header (Always Visible) -->
+        <div class="panel-header-compact unskew" onclick="window.RouteSystem && RouteSystem.toggleExpand()">
+            <div class="header-left">
+                <i class="ri-route-line"></i>
+                <span class="header-title">ROUTE</span>
+                <span class="route-summary" id="route-summary">0 LEGS</span>
+            </div>
+            <div class="header-actions">
+                <i class="expand-icon ri-arrow-down-s-line" id="expand-icon"></i>
+            </div>
+        </div>
+
+        <!-- Expandable Content -->
+        <div class="panel-body" id="journey-body">
+            <div class="route-metrics unskew">
+                <div class="metric-item">
+                    <span class="metric-label">DIST</span>
+                    <span class="metric-value" id="route-dist">0m</span>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-label">LEGS</span>
+                    <span class="metric-value" id="route-legs">0</span>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-label">RISK</span>
+                    <span class="metric-value" id="route-risk" style="color:#00b894">SAFE</span>
+                </div>
+            </div>
+
+            <div id="route-steps" class="unskew"></div>
+
+            <div class="panel-actions unskew">
+                <button class="action-btn-mini reset" onclick="window.RouteSystem && RouteSystem.reset()">
+                    <i class="ri-delete-bin-2-line"></i> CLEAR
+                </button>
+                <button class="action-btn-mini commit" onclick="window.RouteSystem && RouteSystem.toggle()">
+                    <i class="ri-check-line"></i> DONE
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTOM HUD (Status Card + Main Action) -->
+    <div id="bottom-dock">
+        <!-- 左侧状态面板：Skrew Container -->
+        <div class="info-card sk-panel">
+            <div class="hud-decor-strip"></div>
+
+            <div class="info-content unskew">
+
+                <div class="info-row status-line">
+                    <span class="hud-label-tiny">LINK_STATUS</span>
+                    <span class="hud-val-status">ONLINE</span>
+                </div>
+
+                <div class="hud-divider"></div>
+
+                <div class="info-row coord-line">
+                    <span class="hud-label-tiny">GRID REF.</span>
+                    <div class="hud-coords-display" id="ui-coords">--</div>
+                </div>
+            </div>
+        </div>
+
+        <button id="encounter-btn" onclick="window.TacticalSystem && TacticalSystem._openEncounterPopup()" class="action-btn sk-btn encounter-btn" style="display:none;">
+            <span class="action-btn-inner unskew">
+                <i class="ri-sword-line"></i>
+                <span>ENCOUNTER</span>
+            </span>
+        </button>
+
+        <button id="relocate-btn" onclick="window.TacticalSystem && TacticalSystem.toggleMovementMode()" class="action-btn sk-btn relocate-btn" style="display:none;">
+            <span class="action-btn-inner unskew">
+                <i class="ri-map-pin-user-line"></i>
+                <span>RELOCATE</span>
+            </span>
+        </button>
+
+        <button id="action-btn" onclick="toggleTacticalMode()" class="action-btn sk-btn">
+            <span class="action-btn-inner unskew">
+                <i class="ri-focus-3-line"></i>
+                <span id="action-btn-text">TACTICAL DIVE</span>
+            </span>
+        </button>
+    </div>
+
+    <div id="tooltip"></div>
+
+    <script src="../../shared/translations.js"></script>
+    <script src="tacticalView.js"></script>
+    <script src="data/pkmdata.js"></script>
+    <script src="../../shared/pokedex-data.js"></script>
+    <script src="game.js"></script>
+    <script src="pokemonEngine.js"></script>
+
+    <script>
+        function toggleLayerMenu() {
+            const panel = document.getElementById('layer-panel-content');
+            const btn = document.getElementById('layer-toggle-btn');
+            panel.classList.toggle('collapsed');
+            btn.classList.toggle('active');
+        }
+    </script>
+</body>
+</html>

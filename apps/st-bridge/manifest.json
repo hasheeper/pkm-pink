@@ -1,0 +1,182 @@
+{
+  "version": "0.1.0",
+  "defaultPack": "pkm-universal",
+  "activePack": "pkm-universal",
+  "packs": {
+    "pkm-universal": {
+      "label": "PKM Pink Universal MVUZ",
+      "product": "universal",
+      "scripts": [
+        {
+          "id": "pkm-core",
+          "type": "script",
+          "url": "./packs/pkm-core.js"
+        },
+        {
+          "id": "pkm-common-context",
+          "type": "script",
+          "url": "./packs/pkm-common/context.mvuz.js"
+        },
+        {
+          "id": "pkm-common-scheduler",
+          "type": "script",
+          "url": "./packs/pkm-common/scheduler.mvuz.js"
+        },
+        {
+          "id": "pkm-common-state-replay",
+          "type": "script",
+          "url": "./packs/pkm-common/state-replay.mvuz.js"
+        },
+        {
+          "id": "pkm-common-message-autofill",
+          "type": "script",
+          "url": "./packs/pkm-common/message-autofill.mvuz.js"
+        },
+        {
+          "id": "pkm-common-actions-api",
+          "type": "script",
+          "url": "./packs/pkm-common/actions-api.mvuz.js"
+        },
+        {
+          "id": "pkm-common-battle-frontend",
+          "type": "script",
+          "url": "./packs/pkm-common/battle-frontend.mvuz.js"
+        },
+        {
+          "id": "pkm-common-bootstrap",
+          "type": "script",
+          "url": "./packs/pkm-common/bootstrap.mvuz.js"
+        },
+        {
+          "id": "pkm-common-dashboard-host",
+          "type": "script",
+          "url": "./packs/pkm-common/dashboard-host.mvuz.js"
+        },
+        {
+          "id": "pkm-universal-schema",
+          "type": "module",
+          "url": "./packs/pkm-universal/pkm-universal-schema.js"
+        },
+        {
+          "id": "pkm-universal-plugin",
+          "type": "script",
+          "url": "./packs/pkm-universal/pkm-tavern-plugin.mvuz.js"
+        },
+        {
+          "id": "pkm-universal-dashboard",
+          "type": "script",
+          "url": "./packs/pkm-universal/tavern-inject.mvuz.js"
+        }
+      ]
+    },
+    "pkm-main": {
+      "label": "PKM Pink Main MVUZ",
+      "product": "main",
+      "globals": {
+        "PKM_MVUZ_PRODUCT": "main"
+      },
+      "scripts": [
+        {
+          "id": "pkm-core",
+          "type": "script",
+          "url": "./packs/pkm-core.js"
+        },
+        {
+          "id": "pkm-common-context",
+          "type": "script",
+          "url": "./packs/pkm-common/context.mvuz.js"
+        },
+        {
+          "id": "pkm-common-scheduler",
+          "type": "script",
+          "url": "./packs/pkm-common/scheduler.mvuz.js"
+        },
+        {
+          "id": "pkm-common-state-replay",
+          "type": "script",
+          "url": "./packs/pkm-common/state-replay.mvuz.js"
+        },
+        {
+          "id": "pkm-common-message-autofill",
+          "type": "script",
+          "url": "./packs/pkm-common/message-autofill.mvuz.js"
+        },
+        {
+          "id": "pkm-common-actions-api",
+          "type": "script",
+          "url": "./packs/pkm-common/actions-api.mvuz.js"
+        },
+        {
+          "id": "pkm-common-battle-frontend",
+          "type": "script",
+          "url": "./packs/pkm-common/battle-frontend.mvuz.js"
+        },
+        {
+          "id": "pkm-common-bootstrap",
+          "type": "script",
+          "url": "./packs/pkm-common/bootstrap.mvuz.js"
+        },
+        {
+          "id": "pkm-common-dashboard-host",
+          "type": "script",
+          "url": "./packs/pkm-common/dashboard-host.mvuz.js"
+        },
+        {
+          "id": "pkm-main-schema",
+          "type": "module",
+          "url": "./packs/pkm-main/pkm-main-schema.js"
+        },
+        {
+          "id": "pkm-main-data-trainers",
+          "type": "script",
+          "url": "./packs/pkm-main/data/trainer-data.mvuz.js"
+        },
+        {
+          "id": "pkm-main-data-npcs",
+          "type": "script",
+          "url": "./packs/pkm-main/data/npc-data.mvuz.js"
+        },
+        {
+          "id": "pkm-main-map-shared",
+          "type": "script",
+          "url": "./packs/pkm-main/map/shared.mvuz.js"
+        },
+        {
+          "id": "pkm-main-map-weather",
+          "type": "script",
+          "url": "./packs/pkm-main/map/weather.mvuz.js"
+        },
+        {
+          "id": "pkm-main-map-spawns",
+          "type": "script",
+          "url": "./packs/pkm-main/map/spawns.mvuz.js"
+        },
+        {
+          "id": "pkm-main-map-phenomenon",
+          "type": "script",
+          "url": "./packs/pkm-main/map/phenomenon.mvuz.js"
+        },
+        {
+          "id": "pkm-main-map-location-context",
+          "type": "script",
+          "url": "./packs/pkm-main/map/location-context.mvuz.js"
+        },
+        {
+          "id": "pkm-main-map-events",
+          "type": "script",
+          "url": "./packs/pkm-main/map/events.mvuz.js"
+        },
+        {
+          "id": "pkm-main-plugin",
+          "type": "script",
+          "url": "./packs/pkm-main/pkm-tavern-plugin.mvuz.js"
+        },
+        {
+          "id": "pkm-main-dashboard",
+          "type": "script",
+          "url": "./packs/pkm-main/tavern-inject.mvuz.js"
+        }
+      ]
+    }
+  }
+}

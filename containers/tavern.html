@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PKM Pink — Tavern Inject</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100%;
+            height: 100%;
+            background: #0a0a1a;
+            overflow: hidden;
+        }
+        #tavern-frame {
+            width: 100%;
+            height: 100%;
+            border: 0;
+            display: block;
+        }
+        #toolbar {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 2147483647;
+            display: flex;
+            gap: 8px;
+        }
+        .tool-btn {
+            appearance: none;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(10,10,26,0.9);
+            color: #e0e0e0;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            backdrop-filter: blur(6px);
+        }
+        #error-msg {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff6b6b;
+            font-family: monospace;
+            font-size: 14px;
+            text-align: center;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <button id="btn-fullscreen" class="tool-btn">Fullscreen</button>
+    </div>
+    <div id="error-msg"></div>
+    <iframe id="tavern-frame" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin" allow="fullscreen" allowfullscreen></iframe>
+
+    <script>
+        (async function() {
+            const queryParams = new URLSearchParams(location.search);
+            const hashParams = new URLSearchParams(location.hash.slice(1));
+            const target = queryParams.get('target') || hashParams.get('target') || 'dashboard-main';
+
+            const frame = document.getElementById('tavern-frame');
+            const errorMsg = document.getElementById('error-msg');
+            const btnFullscreen = document.getElementById('btn-fullscreen');
+
+            try {
+                const registryUrl = new URL('../registry/apps.json', location.href);
+                const appRootUrl = new URL('../', registryUrl);
+                const res = await fetch(registryUrl);
+                if (!res.ok) throw new Error('Failed to load registry');
+                const registry = await res.json();
+
+                const app = registry.apps?.[target];
+                if (!app) {
+                    throw new Error(`Target app not found: ${target}`);
+                }
+
+                // Tavern container loads the app's entry directly
+                const src = app.entry || app.container;
+                if (!src) {
+                    throw new Error(`No entry defined for ${target}`);
+                }
+
+                frame.src = new URL(src.replace(/^\.\//, ''), appRootUrl).href;
+
+                // Fullscreen toggle
+                btnFullscreen.addEventListener('click', () => {
+                    if (document.fullscreenElement) {
+                        document.exitFullscreen();
+                    } else {
+                        document.documentElement.requestFullscreen();
+                    }
+                });
+
+                // TODO(Phase 2): Implement unified Tavern postMessage bridge
+                // This will replace the scattered tavern-inject.js scripts in
+                // apps/dashboard-main/ and apps/dashboard-universal/
+                window.addEventListener('message', (event) => {
+                    console.log('[PKM Pink Tavern] Message received:', event.data);
+                    if (frame.contentWindow) {
+                        frame.contentWindow.postMessage(event.data, '*');
+                    }
+                });
+
+            } catch (e) {
+                errorMsg.style.display = 'block';
+                errorMsg.textContent = 'Error: ' + e.message;
+                console.error('[PKM Pink Tavern]', e);
+            }
+        })();
+    </script>
+</body>
+</html>

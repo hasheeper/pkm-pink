@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "apps": {
+    "battle": {
+      "id": "battle",
+      "name": "PKM Battle Simulator",
+      "type": "battle",
+      "container": "./containers/app.html?app=battle",
+      "entry": "./apps/battle-sim/index.html",
+      "legacyRepo": "hasheeper/pkm33",
+      "legacyLocal": "pkm12",
+      "status": "active",
+      "notes": "Vite project. Build required before deploy. See apps/battle-sim/vite.config.js"
+    },
+    "dashboard-main": {
+      "id": "dashboard-main",
+      "name": "PKM Dashboard Main",
+      "type": "dashboard",
+      "profile": "main",
+      "container": "./containers/app.html?app=dashboard-main",
+      "entry": "./apps/dashboard-main/index.html",
+      "legacyRepo": "hasheeper/pkm55",
+      "legacyLocal": "pkm13",
+      "status": "active",
+      "notes": "Full version with map/transit/social systems. Latest commit 2026-03-24."
+    },
+    "dashboard-universal": {
+      "id": "dashboard-universal",
+      "name": "PKM Dashboard Universal",
+      "type": "dashboard",
+      "profile": "universal",
+      "container": "./containers/app.html?app=dashboard-universal",
+      "entry": "./apps/dashboard-universal/index.html",
+      "legacyRepo": "hasheeper/pkm21",
+      "legacyLocal": "pkm21",
+      "status": "legacy",
+      "notes": "Mini version. Map/transit/social removed. Last commit 2026-02-03. May be deprecated in favor of dashboard-main."
+    },
+    "map": {
+      "id": "map",
+      "name": "RHODIA Tactical Map",
+      "type": "map",
+      "container": "./containers/app.html?app=map",
+      "entry": "./apps/tactical-map/index.html",
+      "legacyLocal": "pkm15",
+      "status": "experimental",
+      "notes": "Standalone tactical map. No git repository."
+    },
+    "commander": {
+      "id": "commander",
+      "name": "Commander UI Legacy",
+      "type": "prototype",
+      "container": "./containers/app.html?app=commander",
+      "entry": "./packages/commander-ui-legacy/index.html",
+      "legacyLocal": "pkm14",
+      "status": "legacy",
+      "notes": "Already integrated into apps/battle-sim/cmd/. Kept as reference."
+    }
+  }
+}

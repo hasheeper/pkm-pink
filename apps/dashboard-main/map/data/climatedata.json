@@ -1,0 +1,420 @@
+{
+"Spring": {
+  "Early": {
+    "desc": "Thawing period. Ground is wet, air is misty. Last traces of winter.",
+    "modifier": {
+      "clear": 0.8,
+      "sun": 0.6,
+      "rain": 1.2,
+      "snow": 1.8,
+      "fog": 2.5,
+      "gale": 1.0,
+      "sandstorm": 0.1,
+      "ashfall": 1.5,
+      "smog": 1.5
+    }
+  },
+  "Mid": {
+    "desc": "Peak Bloom. Strong vitality winds dominate. High visibility.",
+    "modifier": {
+      "clear": 1.5,
+      "sun": 1.2,
+      "rain": 0.8,
+      "snow": 0.1,
+      "fog": 0.5,
+      "gale": 2.5,
+      "sandstorm": 0.3,
+      "ashfall": 0.8,
+      "smog": 0.7
+    }
+  },
+  "Late": {
+    "desc": "Humid Warmth. Pre-summer showers began. Temperatures rising.",
+    "modifier": {
+      "clear": 1.0,
+      "sun": 1.5,
+      "rain": 1.8,
+      "snow": 0.0,
+      "fog": 1.0,
+      "gale": 1.0,
+      "sandstorm": 0.5,
+      "ashfall": 1.0,
+      "smog": 1.2
+    }
+  }
+},
+"Summer": {
+  "Early": {
+    "desc": "Rainy Season (Plum Rain). High humidity, persistent rainfall, heavy clouds.",
+    "modifier": {
+      "clear": 0.4,
+      "sun": 0.3,
+      "rain": 3.0,
+      "snow": 0.0,
+      "fog": 2.0,
+      "gale": 0.5,
+      "sandstorm": 0.1,
+      "ashfall": 0.1,
+      "smog": 0.8
+    }
+  },
+  "Mid": {
+    "desc": "The Dog Days. Extreme heat radiation. Photochemical smog peaks in urban areas.",
+    "modifier": {
+      "clear": 0.8,
+      "sun": 3.5,
+      "rain": 0.2,
+      "snow": 0.0,
+      "fog": 0.0,
+      "gale": 0.8,
+      "sandstorm": 1.2,
+      "ashfall": 0.8,
+      "smog": 2.5
+    }
+  },
+  "Late": {
+    "desc": "Typhoon Season. Violent atmospheric volatility. High winds carrying heavy rain.",
+    "modifier": {
+      "clear": 0.5,
+      "sun": 0.7,
+      "rain": 2.5,
+      "snow": 0.0,
+      "fog": 0.5,
+      "gale": 3.0,
+      "sandstorm": 1.5,
+      "ashfall": 1.5,
+      "smog": 0.5
+    }
+  }
+},
+"Autumn": {
+  "Early": {
+    "desc": "Indian Summer heat. Air dries rapidly. High daytime visibility.",
+    "modifier": {
+      "clear": 1.5,
+      "sun": 1.8,
+      "rain": 0.3,
+      "snow": 0.0,
+      "fog": 0.2,
+      "gale": 0.8,
+      "sandstorm": 1.2,
+      "ashfall": 1.0,
+      "smog": 1.0
+    }
+  },
+  "Mid": {
+    "desc": "Peak Autumn. Crisp, cool air. Max visibility and stability.",
+    "modifier": {
+      "clear": 3.0,
+      "sun": 1.0,
+      "rain": 0.1,
+      "snow": 0.0,
+      "fog": 0.3,
+      "gale": 1.0,
+      "sandstorm": 1.5,
+      "ashfall": 1.2,
+      "smog": 1.2
+    }
+  },
+  "Late": {
+    "desc": "Withered transition. Strong dry winds lift dust. Pre-winter chill.",
+    "modifier": {
+      "clear": 1.2,
+      "sun": 0.5,
+      "rain": 0.8,
+      "snow": 0.3,
+      "fog": 0.8,
+      "gale": 2.5,
+      "sandstorm": 2.8,
+      "ashfall": 1.5,
+      "smog": 1.5
+    }
+  }
+},
+"Winter": {
+  "Early": {
+    "desc": "Sleet and Frost. Temperatures plunge. Rain turns into freezing needles.",
+    "modifier": {
+      "clear": 1.0,
+      "sun": 0.5,
+      "rain": 1.5,
+      "snow": 1.5,
+      "fog": 1.2,
+      "gale": 2.0,
+      "sandstorm": 0.1,
+      "ashfall": 1.2,
+      "smog": 1.5
+    }
+  },
+  "Mid": {
+    "desc": "Deep Freeze. Atmospheric Inversion Layer traps pollutants and ash. Deadly cold.",
+    "modifier": {
+      "clear": 1.2,
+      "sun": 0.2,
+      "rain": 0.0,
+      "snow": 3.5,
+      "fog": 0.5,
+      "gale": 1.5,
+      "sandstorm": 0.0,
+      "ashfall": 2.5,
+      "smog": 3.0
+    }
+  },
+  "Late": {
+    "desc": "The Great Thaw. Melting slush releases massive moisture. Visibility near zero to ground fog.",
+    "modifier": {
+      "clear": 0.5,
+      "sun": 0.8,
+      "rain": 2.0,
+      "snow": 0.5,
+      "fog": 3.5,
+      "gale": 0.8,
+      "sandstorm": 0.0,
+      "ashfall": 1.5,
+      "smog": 2.0
+    }
+  }
+},
+  "Tropical_Monsoon": {
+    "clear": 4,
+    "sun": 6,
+    "rain": 8,
+    "gale": 5,
+    "fog": 1,
+    "sandstorm": 0,
+    "snow": 0,
+    "ashfall": 0,
+    "smog": 0
+  },
+  "Industrial_Gloom": {
+    "clear": 6,
+    "sun": 1,
+    "rain": 8,
+    "gale": 3,
+    "fog": 2,
+    "sandstorm": 0,
+    "snow": 0,
+    "ashfall": 2,
+    "smog": 9
+  },
+  "Scorched_Badlands": {
+    "clear": 7,
+    "sun": 10,
+    "rain": 0,
+    "gale": 4,
+    "fog": 1,
+    "sandstorm": 3,
+    "snow": 3,
+    "ashfall": 2,
+    "smog": 1
+  },
+  "Polar_Tundra": {
+    "clear": 5,
+    "sun": 1,
+    "rain": 1,
+    "gale": 3,
+    "fog": 6,
+    "sandstorm": 0,
+    "snow": 10,
+    "ashfall": 1,
+    "smog": 1
+  },
+  "Spectral_Haze": {
+    "clear": 4,
+    "sun": 0,
+    "rain": 3,
+    "gale": 1,
+    "fog": 10,
+    "sandstorm": 0,
+    "snow": 2,
+    "ashfall": 0,
+    "smog": 2
+  },
+  "Continental_Lush": {
+    "clear": 8,
+    "sun": 4,
+    "rain": 6,
+    "gale": 4,
+    "fog": 3,
+    "sandstorm": 0,
+    "snow": 0,
+    "ashfall": 0,
+    "smog": 1
+  },
+  "Controlled_Vault": {
+    "clear": 10,
+    "sun": 3,
+    "rain": 1,
+    "gale": 0,
+    "fog": 0,
+    "sandstorm": 1,
+    "snow": 1,
+    "ashfall": 0,
+    "smog": 0
+  },
+  "Continental_Savanna": {
+    "clear": 9,
+    "sun": 5,
+    "rain": 3,
+    "gale": 2,
+    "fog": 0,
+    "sandstorm": 6,
+    "snow": 0,
+    "ashfall": 1,
+    "smog": 0
+  },
+  "Continental_Highland": {
+    "clear": 8,
+    "sun": 2,
+    "rain": 1,
+    "gale": 4,
+    "fog": 7,
+    "sandstorm": 0,
+    "snow": 3,
+    "ashfall": 1,
+    "smog": 1
+  },
+  "Iron_Sand_Desert": {
+    "clear": 4,
+    "sun": 9,
+    "rain": 0,
+    "gale": 3,
+    "fog": 0,
+    "sandstorm": 10,
+    "snow": 0,
+    "ashfall": 2,
+    "smog": 0
+  },
+  "Volcanic_Fallout": {
+    "clear": 2,
+    "sun": 5,
+    "rain": 0,
+    "gale": 1,
+    "fog": 1,
+    "sandstorm": 1,
+    "snow": 0,
+    "ashfall": 10,
+    "smog": 4
+  },
+  "Radiant_Cityscape": {
+    "clear": 8,
+    "sun": 4,
+    "rain": 7,
+    "gale": 3,
+    "fog": 1,
+    "sandstorm": 0,
+    "snow": 0,
+    "ashfall": 0,
+    "smog": 1
+  },
+  "Maritime_Trade_Winds": {
+    "clear": 6,
+    "sun": 7,
+    "rain": 5,
+    "gale": 8,
+    "fog": 2,
+    "sandstorm": 1,
+    "snow": 0,
+    "ashfall": 0,
+    "smog": 1
+  },
+  "Azure_Coral_Atolls": {
+    "clear": 9,
+    "sun": 7,
+    "rain": 9,
+    "gale": 6,
+    "fog": 5,
+    "sandstorm": 0,
+    "snow": 0,
+    "ashfall": 0,
+    "smog": 0
+  },
+  "Southern_Tradewind": {
+    "clear": 8,
+    "sun": 5,
+    "rain": 5,
+    "gale": 8,
+    "fog": 3,
+    "sandstorm": 1,
+    "snow": 0,
+    "ashfall": 0,
+    "smog": 2
+  },
+  "Chrome_Magnetic_Waters": {
+    "clear": 3,
+    "sun": 1,
+    "rain": 9,
+    "gale": 2,
+    "fog": 4,
+    "sandstorm": 0,
+    "snow": 0,
+    "ashfall": 0,
+    "smog": 8
+  },
+  "Northern_Floe": {
+    "clear": 6,
+    "sun": 2,
+    "rain": 2,
+    "gale": 4,
+    "fog": 7,
+    "sandstorm": 0,
+    "snow": 10,
+    "ashfall": 2,
+    "smog": 1
+  },
+  "Phosphorescent_Shoals": {
+    "clear": 6,
+    "sun": 1,
+    "rain": 4,
+    "gale": 2,
+    "fog": 10,
+    "sandstorm": 0,
+    "snow": 4,
+    "ashfall": 1,
+    "smog": 1
+  },
+  "Basalt_Geyser_Shelf": {
+    "clear": 4,
+    "sun": 7,
+    "rain": 2,
+    "gale": 5,
+    "fog": 10,
+    "sandstorm": 1,
+    "snow": 0,
+    "ashfall": 6,
+    "smog": 3
+  },
+  "Abyssal_North": {
+    "clear": 6,
+    "sun": 0,
+    "rain": 1,
+    "gale": 5,
+    "fog": 8,
+    "sandstorm": 0,
+    "snow": 10,
+    "ashfall": 0,
+    "smog": 0
+  },
+  "Abyssal_South": {
+    "clear": 1,
+    "sun": 7,
+    "rain": 9,
+    "gale": 8,
+    "fog": 2,
+    "sandstorm": 0,
+    "snow": 0,
+    "ashfall": 3,
+    "smog": 2
+  },
+  "Abyssal_Middle": {
+    "clear": 7,
+    "sun": 3,
+    "rain": 8,
+    "gale": 6,
+    "fog": 4,
+    "sandstorm": 0,
+    "snow": 0,
+    "ashfall": 0,
+    "smog": 0
+  }
+}
