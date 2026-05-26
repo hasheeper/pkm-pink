@@ -1,4 +1,5 @@
 name: Deploy GitHub Pages
+run-name: Deploy GitHub Pages @ ${{ github.sha }}
 
 on:
   push:
