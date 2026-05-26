@@ -1401,6 +1401,8 @@ export const AbilityHandlers = {
     'Illusion': {
         // 入场时设置幻觉
         onStart: (self, enemy, logs, battle) => {
+            if (self.illusionActive) return;
+
             // 获取队伍
             const party = battle?.playerParty?.includes(self) 
                 ? battle.playerParty 
@@ -1425,7 +1427,15 @@ export const AbilityHandlers = {
             self.illusionTarget = {
                 name: disguiseTarget.name,
                 cnName: disguiseTarget.cnName,
-                types: disguiseTarget.types ? [...disguiseTarget.types] : null
+                types: disguiseTarget.types ? [...disguiseTarget.types] : null,
+                ability: disguiseTarget.ability || null,
+                moves: disguiseTarget.moves ? disguiseTarget.moves.map(m => ({ ...m })) : null,
+                atk: disguiseTarget.atk,
+                def: disguiseTarget.def,
+                spa: disguiseTarget.spa,
+                spd: disguiseTarget.spd,
+                spe: disguiseTarget.spe,
+                baseStats: disguiseTarget.baseStats ? { ...disguiseTarget.baseStats } : null
             };
             
             // 显示用的伪装名称
@@ -1460,6 +1470,17 @@ export const AbilityHandlers = {
                     window.updateBattleSprites();
                 }
             }
+        },
+        // 换下时不公开真身，但必须清理伪装状态，避免后备宝可梦继续污染日志/AI感知。
+        onSwitchOut: (pokemon) => {
+            if (!pokemon.illusionActive) return;
+            pokemon.illusionActive = false;
+            pokemon.displayName = null;
+            pokemon.displayCnName = null;
+            pokemon.displaySpriteUrl = null;
+            pokemon.displaySpriteId = null;
+            pokemon.illusionTarget = null;
+            console.log(`[ILLUSION] ${pokemon.name} 换下，幻觉状态重置`);
         }
     },
 

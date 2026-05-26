@@ -162,6 +162,9 @@ async function initGame() {
         window.initWeatherSystem();
     }
 
+    let openingPoke = null;
+    let openingEnemy = null;
+
     // 加载对战 JSON (已在预加载阶段获取)
     try {
         console.log('[PKM] 使用战斗数据:', json);
@@ -227,6 +230,11 @@ async function initGame() {
         battle.loadFromJSON(json);
         updateTrainerHud();
         
+        openingPoke = battle.getPlayer();
+        openingEnemy = battle.getEnemy();
+        primeIllusionDisplay(openingEnemy, openingPoke);
+        primeIllusionDisplay(openingPoke, openingEnemy);
+
         const t = battle.trainer;
         const btnCatch = document.getElementById('btn-catch');
         const rightCol = document.getElementById('menu-right-col');
@@ -244,7 +252,7 @@ async function initGame() {
         if (t) {
             const isWild = t.id === 'wild';
             if (isWild) {
-                log(`野生宝可梦【${battle.getEnemy().cnName}】出现了！`);
+                log(`野生宝可梦【${getBattleDisplayName(openingEnemy)}】出现了！`);
             } else {
                 log(`<b style="color:#e74c3c">【${t.name}】</b>发起挑战！`);
             }
@@ -252,7 +260,7 @@ async function initGame() {
                 log(`<i>${t.name}: "${t.lines.start}"</i>`);
             }
         }
-        log(`敌方派出了 <b>${battle.getEnemy().cnName}</b> (Lv.${battle.getEnemy().level})!`);
+        log(`敌方派出了 <b>${getBattleDisplayName(openingEnemy)}</b> (Lv.${openingEnemy.level})!`);
         
         if (battle.scriptedResult === 'loss') {
             log(`<span style="color:#e67e22">[剧情战] 这是一场必败的战斗...</span>`);
@@ -267,13 +275,13 @@ async function initGame() {
             trainer: { name: '野生宝可梦', id: 'wild', line: '' },
             party: [{ name: 'Rattata', lv: 3, moves: ['Tackle'] }]
         });
+        openingPoke = battle.getPlayer();
+        openingEnemy = battle.getEnemy();
         log("野生的小拉达出现了！");
     }
 
-    const openingPoke = battle.getPlayer();
-    const openingEnemy = battle.getEnemy();
     if (openingPoke) {
-        log(`去吧！${openingPoke.cnName}（Lv.${openingPoke.level}）！`);
+        log(`去吧！${getBattleDisplayName(openingPoke)}（Lv.${openingPoke.level}）！`);
     }
     
     // === 播放双方宝可梦叫声 ===
@@ -1054,6 +1062,53 @@ async function handleStruggle() {
     showMovesMenu();
 }
 
+function getBattleDisplayName(pokemon) {
+    return pokemon?.displayCnName || pokemon?.cnName || pokemon?.name || '???';
+}
+
+function getStruggleMove() {
+    return (window.PPSystem && typeof window.PPSystem.createStruggle === 'function')
+        ? window.PPSystem.createStruggle()
+        : { name: 'Struggle', cn: '挣扎', power: 50, type: 'Normal', cat: 'phys', accuracy: true, flags: { contact: 1 } };
+}
+
+function isChoiceItemName(itemName) {
+    if (!itemName) return false;
+    if (typeof window.isChoiceItem === 'function') {
+        return !!window.isChoiceItem(itemName);
+    }
+    const normalized = String(itemName).toLowerCase();
+    return normalized.includes('choice') || String(itemName).includes('讲究');
+}
+
+function moveMatchesChoiceLock(move, lockedMoveName) {
+    if (!move || !lockedMoveName) return false;
+    return move.name === lockedMoveName ||
+        move.baseMove === lockedMoveName ||
+        move.originalMoveName === lockedMoveName;
+}
+
+function findChoiceLockedMove(pokemon) {
+    if (!pokemon?.choiceLockedMove) return null;
+    return (pokemon.moves || []).find(m => moveMatchesChoiceLock(m, pokemon.choiceLockedMove)) || null;
+}
+
+function hasMovePP(move) {
+    if (!window.PPSystem || typeof window.PPSystem.hasPP !== 'function') {
+        return !move || move.pp === undefined || move.pp > 0;
+    }
+    return window.PPSystem.hasPP(move);
+}
+
+function primeIllusionDisplay(pokemon, opponent) {
+    if (!pokemon || pokemon.ability !== 'Illusion' || pokemon.illusionActive) return;
+    if (typeof AbilityHandlers === 'undefined') return;
+    const handler = AbilityHandlers.Illusion;
+    if (handler && typeof handler.onStart === 'function') {
+        handler.onStart(pokemon, opponent, [], battle);
+    }
+}
+
 /**
  * 核心逻辑：发起攻击处理 (支持先制技优先级)
  * @param {number} moveIndex 招式索引
@@ -1110,45 +1165,46 @@ async function handleAttack(moveIndex, options = {}) {
     }
     
     // =========================================================
-    // 【BUG修复】Choice 道具锁招强制检查
-    // 如果玩家持有 Choice 道具且已锁定技能，必须使用锁定的技能
-    // 如果尚未锁定，则在此处锁定（在对冲逻辑之前）
-    // 【重要修复】Choice 道具只应锁定攻击技，不应锁定变化技
+    // Choice 道具锁招强制检查
+    // 正作规则：第一次成功选择的招式会被锁定，变化技也会锁定。
     // =========================================================
     const pItem = p.item || '';
-    const pIsChoiceItem = pItem.includes('Choice') || pItem.includes('讲究');
-    if (pIsChoiceItem) {
-        // 辅助函数：检查技能是否为变化技（Status move）
-        const _isStatusMove = (moveName) => {
-            if (!moveName) return false;
-            const mid = moveName.toLowerCase().replace(/[^a-z0-9]/g, '');
-            const mdata = (typeof MOVES !== 'undefined' && MOVES[mid]) ? MOVES[mid] : null;
-            return mdata && (mdata.category === 'Status' || mdata.basePower === 0);
-        };
-        
+    const pIsChoiceItem = isChoiceItemName(pItem);
+    if (pIsChoiceItem && playerMove && playerMove.name !== 'Struggle') {
         if (p.choiceLockedMove) {
-            // 【BUG修复】如果被锁定的是变化技（不应发生），清除锁定
-            if (_isStatusMove(p.choiceLockedMove)) {
-                console.log(`[CHOICE FIX] ${p.name} 被错误锁定在变化技 ${p.choiceLockedMove}，清除锁定`);
-                delete p.choiceLockedMove;
-            } else {
-                // 已锁定攻击技：强制使用锁定的技能
-                const lockedMoveObj = p.moves.find(m => m.name === p.choiceLockedMove);
-                if (lockedMoveObj && playerMove.name !== p.choiceLockedMove) {
+            const lockedMoveObj = findChoiceLockedMove(p);
+            if (lockedMoveObj) {
+                if (!moveMatchesChoiceLock(playerMove, p.choiceLockedMove)) {
                     console.log(`[CHOICE ENFORCE] 玩家试图使用 ${playerMove.name}，但被 ${pItem} 锁定在 ${p.choiceLockedMove}`);
                     log(`<span style="color:#e74c3c">${p.cnName} 被 ${pItem} 锁定，只能使用 ${lockedMoveObj.cn || p.choiceLockedMove}！</span>`);
-                    playerMove = lockedMoveObj;
                 }
+                playerMove = lockedMoveObj;
+            } else {
+                console.log(`[CHOICE FIX] ${p.name} 的锁定招式 ${p.choiceLockedMove} 已不存在，清除锁定`);
+                delete p.choiceLocked;
+                delete p.choiceLockedMove;
             }
         }
-        // 尚未锁定：只锁定攻击技，变化技不触发锁定
+
         if (!p.choiceLockedMove) {
-            if (!_isStatusMove(playerMove.name)) {
-                p.choiceLockedMove = playerMove.name;
-                console.log(`[CHOICE LOCK] ${p.name} 被 ${pItem} 锁定在 ${playerMove.name}`);
-            } else {
-                console.log(`[CHOICE SKIP] ${p.name} 使用变化技 ${playerMove.name}，Choice 道具不锁定`);
-            }
+            p.choiceLockedMove = playerMove.baseMove || playerMove.originalMoveName || playerMove.name;
+            console.log(`[CHOICE LOCK] ${p.name} 被 ${pItem} 锁定在 ${p.choiceLockedMove}`);
+        }
+    }
+
+    if (window.PPSystem && playerMove && !hasMovePP(playerMove)) {
+        const lockedByChoice = pIsChoiceItem &&
+            p.choiceLockedMove &&
+            moveMatchesChoiceLock(playerMove, p.choiceLockedMove);
+        if (lockedByChoice || window.PPSystem.allPPDepleted(p)) {
+            const reason = lockedByChoice ? '被讲究道具锁定的招式 PP 耗尽' : '所有招式 PP 耗尽';
+            log(`<span style="color:#ef4444">${p.cnName} ${reason}，只能挣扎!</span>`);
+            playerMove = getStruggleMove();
+        } else {
+            log(`<span style="color:#e74c3c">${playerMove.cn || playerMove.name} 的 PP 已耗尽！</span>`);
+            battle.locked = false;
+            showMovesMenu();
+            return;
         }
     }
     
@@ -1163,7 +1219,7 @@ async function handleAttack(moveIndex, options = {}) {
             console.log(`[CHOICE+TORMENT] ${p.name} 被锁定在 ${playerMove.name} 但无法使用: ${postChoiceCheck.reason}`);
             log(`<span style="color:#e74c3c">${postChoiceCheck.reason}</span>`);
             // Fallback 到挣扎
-            playerMove = { name: 'Struggle', cn: '挣扎', power: 50, type: 'Normal', cat: 'phys', accuracy: true, flags: { contact: 1 } };
+            playerMove = getStruggleMove();
             log(`<span style="color:#ef4444">${p.cnName} 无技可用，只能挣扎!</span>`);
         }
     }
@@ -1173,7 +1229,7 @@ async function handleAttack(moveIndex, options = {}) {
     // 【互斥检查】Mega/极巨化状态下禁止使用 Z 招式
     // 【Ultra Burst】日/月骡子使用 Z 招式时先触发 Ultra Burst
     // =========================================================
-    if (options.useZ && !battle.playerZUsed) {
+    if (options.useZ && !battle.playerZUsed && playerMove.name !== 'Struggle') {
         // 【安全检查】如果已经 Mega 或极巨化，禁止使用 Z 招式
         if (p.isMega || p.isDynamaxed || p.hasBondResonance) {
             console.warn(`[CHEAT BLOCK] 试图在 Mega/极巨化 状态下使用 Z 招式！已强制拦截。`);
@@ -1252,6 +1308,10 @@ async function handleAttack(moveIndex, options = {}) {
     let currentMoveStyle = window.currentMoveStyle || 'normal';
     console.log(`[STYLES] 当前风格: ${currentMoveStyle}`);
     
+    if (playerMove.name === 'Struggle') {
+        currentMoveStyle = 'normal';
+    }
+
     if (currentMoveStyle !== 'normal' && battle.playerUnlocks?.enable_styles) {
         // 【Chronal Rift 洗翠无法】检查是否在时空裂隙中
         let isUnboundArts = false;
@@ -1442,6 +1502,10 @@ async function handleAttack(moveIndex, options = {}) {
     if (window.PPSystem && playerMove) {
         const ppResult = window.PPSystem.deductPP(p, playerMove, e);
         if (ppResult && ppResult.logs) ppResult.logs.forEach(msg => log(msg));
+        if (ppResult && ppResult.noPP) {
+            log(`<span style="color:#ef4444">${p.cnName} 的 ${playerMove.cn || playerMove.name} PP 已耗尽，只能挣扎!</span>`);
+            playerMove = getStruggleMove();
+        }
     }
 
     // === 回合开始：清除双方的 Protect 状态（新回合开始，守住失效）===
@@ -2013,17 +2077,37 @@ async function handleAttack(moveIndex, options = {}) {
         if (!enemyMove) {
             enemyMove = e.moves[Math.floor(Math.random() * e.moves.length)];
         }
+
+        const eIsChoiceItem = isChoiceItemName(e.item || '');
+        if (eIsChoiceItem && enemyMove && enemyMove.name !== 'Struggle' && e.choiceLockedMove) {
+            const lockedMoveObj = findChoiceLockedMove(e);
+            if (lockedMoveObj) {
+                if (!moveMatchesChoiceLock(enemyMove, e.choiceLockedMove)) {
+                    console.log(`[CHOICE ENFORCE] 敌方试图使用 ${enemyMove.name}，但被 ${e.item} 锁定在 ${e.choiceLockedMove}`);
+                    log(`<span style="color:#e74c3c">${e.cnName} 被 ${e.item} 锁定，只能使用 ${lockedMoveObj.cn || e.choiceLockedMove}！</span>`);
+                }
+                enemyMove = lockedMoveObj;
+            } else {
+                console.log(`[CHOICE FIX] ${e.name} 的锁定招式 ${e.choiceLockedMove} 已不存在，清除锁定`);
+                delete e.choiceLocked;
+                delete e.choiceLockedMove;
+            }
+        }
         
         // === 【PP系统】检查敌方选中招式是否有PP ===
-        if (window.PPSystem && enemyMove && enemyMove.pp !== undefined && enemyMove.pp <= 0) {
+        if (window.PPSystem && enemyMove && !hasMovePP(enemyMove)) {
             console.log(`[AI PP] ${e.cnName} 的 ${enemyMove.cn || enemyMove.name} PP耗尽，重新选招`);
+            const eIsChoiceLocked = eIsChoiceItem &&
+                e.choiceLockedMove &&
+                moveMatchesChoiceLock(enemyMove, e.choiceLockedMove);
             const ppAvailable = e.moves.filter(m => m.pp === undefined || m.pp > 0);
-            if (ppAvailable.length > 0) {
+            if (!eIsChoiceLocked && ppAvailable.length > 0) {
                 enemyMove = ppAvailable[Math.floor(Math.random() * ppAvailable.length)];
                 console.log(`[AI PP] 改用: ${enemyMove.cn || enemyMove.name}`);
             } else {
-                enemyMove = { name: 'Struggle', cn: '挣扎', power: 50, type: 'Normal', cat: 'phys' };
-                log(`<span style="color:#aaa">${e.cnName} 所有招式PP耗尽，只能挣扎!</span>`);
+                enemyMove = getStruggleMove();
+                const reason = eIsChoiceLocked ? '被讲究道具锁定的招式 PP 耗尽' : '所有招式PP耗尽';
+                log(`<span style="color:#aaa">${e.cnName} ${reason}，只能挣扎!</span>`);
             }
         }
         
@@ -2032,6 +2116,13 @@ async function handleAttack(moveIndex, options = {}) {
             const canUseResult = MoveEffects.canUseMove(e, enemyMove);
             if (!canUseResult.canUse) {
                 log(`<span style="color:#e74c3c">${canUseResult.reason}</span>`);
+                const eChoiceBlocked = isChoiceItemName(e.item || '') &&
+                    e.choiceLockedMove &&
+                    moveMatchesChoiceLock(enemyMove, e.choiceLockedMove);
+                if (eChoiceBlocked) {
+                    enemyMove = getStruggleMove();
+                    log(`<span style="color:#aaa">${e.cnName} 被讲究道具锁定的招式无法使用，只能挣扎!</span>`);
+                } else {
                 // 尝试选择其他可用技能（同时过滤PP耗尽的招式）
                 const availableMoves = e.moves.filter(m => {
                     const check = MoveEffects.canUseMove(e, m);
@@ -2043,10 +2134,15 @@ async function handleAttack(moveIndex, options = {}) {
                     console.log(`[AI] Taunt 阻止了原技能，改用: ${enemyMove.name}`);
                 } else {
                     // 没有可用技能，使用挣扎
-                    enemyMove = { name: 'Struggle', cn: '挣扎', power: 50, type: 'Normal', cat: 'phys' };
+                    enemyMove = getStruggleMove();
                     log(`<span style="color:#aaa">${e.cnName} 无技可用，只能挣扎!</span>`);
                 }
+                }
             }
+        }
+
+        if (enemyAction && enemyAction.move && enemyMove !== enemyAction.move) {
+            enemyAction = { ...enemyAction, style: null };
         }
         
         // =====================================================
@@ -2057,7 +2153,7 @@ async function handleAttack(moveIndex, options = {}) {
         // 优先寻找能触发专属 Z 的招式，否则尝试转换当前招式
         // 【Ultra Burst】日/月骡子使用 Z 招式时先触发 Ultra Burst
         const enemyUnlocksForZ = battle.enemyUnlocks || {};
-        if (enemyUnlocksForZ.enable_z_move && e.mechanic === 'zmove' && !battle.enemyZUsed && enemyMove) {
+        if (enemyUnlocksForZ.enable_z_move && e.mechanic === 'zmove' && !battle.enemyZUsed && enemyMove && enemyMove.name !== 'Struggle') {
             let zTarget = null;
             let zBaseMove = null;
             
@@ -2143,7 +2239,7 @@ async function handleAttack(moveIndex, options = {}) {
         // 刚猛 (Strong): 速度快时必中(卖先手)，速度慢时命中0.8x(白嫖)
         // 【平衡性改动】使用后进入 1 回合冷却
         const enemyUnlocksForStyles = battle.enemyUnlocks || {};
-        if (enemyUnlocksForStyles.enable_styles && enemyMove && !enemyMove.isZ) {
+        if (enemyUnlocksForStyles.enable_styles && enemyMove && enemyMove.name !== 'Struggle' && !enemyMove.isZ) {
             // 【Chronal Rift 洗翠无法】检查是否在时空裂隙中
             let isEnemyUnboundArts = false;
             let enemyUnboundModifier = null;
@@ -2318,11 +2414,12 @@ async function handleAttack(moveIndex, options = {}) {
     
     // === 阶段 1：敌方换人（在玩家攻击之前） ===
     if (enemyWillSwitch) {
-        log(`<span style="color:#ef4444">敌方收回了 ${e.cnName}！</span>`);
+        log(`<span style="color:#ef4444">敌方收回了 ${getBattleDisplayName(e)}！</span>`);
         
         // 【修复】清除 Choice 锁招状态（换人解除锁招）
-        if (e.choiceLockedMove) {
+        if (e.choiceLockedMove || e.choiceLocked) {
             console.log(`[CHOICE] ${e.name} 换下，解除 ${e.choiceLockedMove} 锁定`);
+            delete e.choiceLocked;
             delete e.choiceLockedMove;
         }
         
@@ -2336,10 +2433,17 @@ async function handleAttack(moveIndex, options = {}) {
         if (typeof e.resetBoosts === 'function') {
             e.resetBoosts();
         }
+
+        if (typeof AbilityHandlers !== 'undefined' && e.ability) {
+            const handler = AbilityHandlers[e.ability];
+            if (handler && handler.onSwitchOut) {
+                handler.onSwitchOut(e);
+                console.log(`[ABILITY] ${e.cnName} 触发退场特性: ${e.ability}`);
+            }
+        }
         
         battle.enemyActive = switchTargetIndex;
         const newE = battle.getEnemy();
-        log(`<span style="color:#ef4444">敌方派出了 ${newE.cnName}！</span>`);
         
         // 【标记换人】用于重复精灵图修复
         if (typeof window.markEnemySwitch === 'function') {
@@ -2355,6 +2459,8 @@ async function handleAttack(moveIndex, options = {}) {
             }
         }
         
+        primeIllusionDisplay(newE, p);
+        log(`<span style="color:#ef4444">敌方派出了 ${getBattleDisplayName(newE)}！</span>`);
         updateAllVisuals('enemy');
         await wait(500);
         triggerEntryAbilities(newE, p);
@@ -2374,6 +2480,10 @@ async function handleAttack(moveIndex, options = {}) {
     if (window.PPSystem && enemyMove && !enemyWillSwitch) {
         const ppResult = window.PPSystem.deductPP(e, enemyMove, p);
         if (ppResult && ppResult.logs) ppResult.logs.forEach(msg => log(msg));
+        if (ppResult && ppResult.noPP) {
+            log(`<span style="color:#aaa">${e.cnName} 的 ${enemyMove.cn || enemyMove.name} PP 已耗尽，只能挣扎!</span>`);
+            enemyMove = getStruggleMove();
+        }
     }
 
     // === 阶段 2：执行攻击（按速度/优先级顺序） ===
@@ -2818,12 +2928,13 @@ async function handleAttack(moveIndex, options = {}) {
         if (playerResult?.pivot && hasAliveSwitch(battle.playerParty, battle.playerActive)) {
             const oldP = battle.getPlayer();
             const moveName = playerMove?.name || '';
+            const oldPName = getBattleDisplayName(oldP);
             if (moveName === 'Volt Switch') {
-                log(`${oldP.cnName} 伏特替换，迅速撤退了!`);
+                log(`${oldPName} 伏特替换，迅速撤退了!`);
             } else if (moveName === 'Flip Turn') {
-                log(`${oldP.cnName} 快速翻转，撤退了!`);
+                log(`${oldPName} 快速翻转，撤退了!`);
             } else {
-                log(`${oldP.cnName} 打完后急速折返回来了!`);
+                log(`${oldPName} 打完后急速折返回来了!`);
             }
             // 【修复】存储 Shed Tail/Baton Pass 传递标记
             battle.pendingPassSub = playerResult.passSub || false;
@@ -2921,14 +3032,15 @@ async function handleAttack(moveIndex, options = {}) {
         if (enemyResult?.pivot && hasAliveSwitch(battle.enemyParty, battle.enemyActive)) {
             const oldE = battle.getEnemy();
             const moveName = enemyMove?.name || '';
+            const oldEName = getBattleDisplayName(oldE);
             if (moveName === 'Volt Switch') {
-                log(`${oldE.cnName} 伏特替换，迅速撤退了!`);
+                log(`${oldEName} 伏特替换，迅速撤退了!`);
             } else if (moveName === 'Flip Turn') {
-                log(`${oldE.cnName} 快速翻转，撤退了!`);
+                log(`${oldEName} 快速翻转，撤退了!`);
             } else if (moveName === 'Baton Pass') {
-                log(`${oldE.cnName} 使用接力棒撤退了!`);
+                log(`${oldEName} 使用接力棒撤退了!`);
             } else {
-                log(`${oldE.cnName} 打完后急速折返回来了!`);
+                log(`${oldEName} 打完后急速折返回来了!`);
             }
             await handleEnemyPivot(enemyResult?.passBoosts || false);
             e = battle.getEnemy();
@@ -2982,14 +3094,15 @@ async function handleAttack(moveIndex, options = {}) {
         if (enemyResult?.pivot && hasAliveSwitch(battle.enemyParty, battle.enemyActive)) {
             const oldE = battle.getEnemy();
             const moveName = enemyMove?.name || '';
+            const oldEName = getBattleDisplayName(oldE);
             if (moveName === 'Volt Switch') {
-                log(`${oldE.cnName} 伏特替换，迅速撤退了!`);
+                log(`${oldEName} 伏特替换，迅速撤退了!`);
             } else if (moveName === 'Flip Turn') {
-                log(`${oldE.cnName} 快速翻转，撤退了!`);
+                log(`${oldEName} 快速翻转，撤退了!`);
             } else if (moveName === 'Baton Pass') {
-                log(`${oldE.cnName} 使用接力棒撤退了!`);
+                log(`${oldEName} 使用接力棒撤退了!`);
             } else {
-                log(`${oldE.cnName} 打完后急速折返回来了!`);
+                log(`${oldEName} 打完后急速折返回来了!`);
             }
             await handleEnemyPivot(enemyResult?.passBoosts || false);
             e = battle.getEnemy();
@@ -3052,6 +3165,13 @@ async function handleAttack(moveIndex, options = {}) {
             if (!canUseResult.canUse) {
                 log(`<span style="color:#e74c3c">${canUseResult.reason}</span>`);
                 await wait(500);
+                const pChoiceBlocked = pIsChoiceItem &&
+                    p.choiceLockedMove &&
+                    moveMatchesChoiceLock(playerMove, p.choiceLockedMove);
+                if (pChoiceBlocked) {
+                    playerMove = getStruggleMove();
+                    log(`<span style="color:#ef4444">${p.cnName} 被讲究道具锁定的招式无法使用，只能挣扎!</span>`);
+                } else {
                 // 【BUG修复】不应直接跳过玩家行动，应尝试选择其他可用技能或使用挣扎
                 const availableMoves = p.moves.filter(m => {
                     const check = MoveEffects.canUseMove(p, m);
@@ -3063,8 +3183,9 @@ async function handleAttack(moveIndex, options = {}) {
                     log(`<span style="color:#f59e0b">${p.cnName} 改为使用 ${playerMove.cn || playerMove.name}!</span>`);
                 } else {
                     // 没有可用技能，使用挣扎
-                    playerMove = { name: 'Struggle', cn: '挣扎', power: 50, type: 'Normal', cat: 'phys', accuracy: true, flags: { contact: 1 } };
+                    playerMove = getStruggleMove();
                     log(`<span style="color:#ef4444">${p.cnName} 无技可用，只能挣扎!</span>`);
+                }
                 }
             }
         }
@@ -3088,12 +3209,13 @@ async function handleAttack(moveIndex, options = {}) {
         if (playerResult?.pivot && hasAliveSwitch(battle.playerParty, battle.playerActive)) {
             const oldP = battle.getPlayer();
             const moveName = playerMove?.name || '';
+            const oldPName = getBattleDisplayName(oldP);
             if (moveName === 'Volt Switch') {
-                log(`${oldP.cnName} 伏特替换，迅速撤退了!`);
+                log(`${oldPName} 伏特替换，迅速撤退了!`);
             } else if (moveName === 'Flip Turn') {
-                log(`${oldP.cnName} 快速翻转，撤退了!`);
+                log(`${oldPName} 快速翻转，撤退了!`);
             } else {
-                log(`${oldP.cnName} 打完后急速折返回来了!`);
+                log(`${oldPName} 打完后急速折返回来了!`);
             }
             // 【修复】存储 Shed Tail/Baton Pass 传递标记
             battle.pendingPassSub = playerResult.passSub || false;
@@ -3925,6 +4047,7 @@ async function performSwitch(newIndex) {
     const isForced = !oldP.isAlive() || battle.phase === 'force_switch';
     const isPivot = battle.phase === 'pivot_switch';
     const newPoke = battle.playerParty[newIndex];
+    const oldDisplayName = getBattleDisplayName(oldP);
     console.log('[performSwitch] isPivot:', isPivot, 'isForced:', isForced, 'hasPivotResolve:', !!battle.pivotResolve);
 
     // 【修复】Baton Pass: 在 resetBoosts 之前保存能力变化和替身
@@ -3966,8 +4089,9 @@ async function performSwitch(newIndex) {
     }
     
     // 【Choice 锁招修复】换人时清除锁招状态（官方机制：换人解除锁招）
-    if (oldP.choiceLockedMove) {
+    if (oldP.choiceLockedMove || oldP.choiceLocked) {
         console.log(`[CHOICE] ${oldP.cnName} 换下，解除 ${oldP.choiceLockedMove} 锁定`);
+        delete oldP.choiceLocked;
         delete oldP.choiceLockedMove;
     }
     
@@ -3977,13 +4101,18 @@ async function performSwitch(newIndex) {
         console.log(`[TOX RESET] ${oldP.cnName} 换下，剧毒计数器重置`);
     }
 
+    // Illusion 只影响公开显示名，需要在出场日志前预先套上伪装。
+    primeIllusionDisplay(newPoke, battle.getEnemy());
+
+    const newDisplayName = getBattleDisplayName(newPoke);
+
     // Pivot 换人使用不同的日志
     if (isPivot) {
-        log(`${oldP.cnName} 撤回！${newPoke.cnName} 登场！`);
+        log(`${oldDisplayName} 撤回！${newDisplayName} 登场！`);
     } else {
         log(isForced 
-            ? `去吧! ${newPoke.cnName}!` 
-            : `回来吧 ${oldP.cnName}! ${newPoke.cnName}, 上!`);
+            ? `去吧! ${newDisplayName}!`
+            : `回来吧 ${oldDisplayName}! ${newDisplayName}, 上!`);
     }
     
     // === 播放新上场宝可梦叫声 ===
@@ -4148,11 +4277,32 @@ function handlePlayerRevivalChoice() {
     });
 }
 
+function escapeRegExp(text) {
+    return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function maskIllusionNamesInLog(message) {
+    let masked = String(message ?? '');
+    const parties = [battle?.playerParty, battle?.enemyParty];
+    for (const party of parties) {
+        if (!Array.isArray(party)) continue;
+        for (const pokemon of party) {
+            if (!pokemon?.illusionActive || !pokemon.displayCnName) continue;
+            const realNames = [pokemon.cnName, pokemon.name].filter(Boolean);
+            for (const realName of realNames) {
+                if (realName === pokemon.displayCnName || realName === pokemon.displayName) continue;
+                masked = masked.replace(new RegExp(escapeRegExp(realName), 'g'), pokemon.displayCnName);
+            }
+        }
+    }
+    return masked;
+}
+
 // 辅助 LOG
 function log(msg) {
     const box = document.getElementById('log-box');
 
-    let formatMsg = msg;
+    let formatMsg = maskIllusionNamesInLog(msg);
     formatMsg = formatMsg.replace(/(\d+)\s*(伤害)/g, '<span class="hl-dmg">$1</span> <span style="font-size:0.9em;color:#888">$2</span>');
     formatMsg = formatMsg.replace(/(效果拔群|效果绝佳!|Super Effective!)/gi, '<span class="hl-sup">效果绝佳</span>');
     formatMsg = formatMsg.replace(/(效果不好|收效甚微|Not Very Effective\.\.\.)/gi, '<span class="hl-res">效果不好</span>');

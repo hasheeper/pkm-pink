@@ -65,6 +65,64 @@ const AI_ABILITY_TRAITS = {
 // 反强化技能列表（面对高威胁时优先使用）
 const AI_COUNTER_MOVES = ['Haze', 'Clear Smog', 'Roar', 'Whirlwind', 'Dragon Tail', 'Circle Throw', 'Topsy-Turvy', 'Spectral Thief'];
 
+function getAIPerceivedPokemon(pokemon) {
+    if (!pokemon?.illusionActive || !pokemon.illusionTarget) return pokemon;
+
+    const target = pokemon.illusionTarget;
+    return {
+        ...pokemon,
+        name: target.name || pokemon.displayName || pokemon.name,
+        cnName: target.cnName || pokemon.displayCnName || pokemon.cnName,
+        types: target.types ? [...target.types] : pokemon.types,
+        ability: target.ability || pokemon.ability,
+        moves: target.moves ? target.moves.map(m => ({ ...m })) : pokemon.moves,
+        atk: target.atk ?? pokemon.atk,
+        def: target.def ?? pokemon.def,
+        spa: target.spa ?? pokemon.spa,
+        spd: target.spd ?? pokemon.spd,
+        spe: target.spe ?? pokemon.spe,
+        baseStats: target.baseStats ? { ...target.baseStats } : pokemon.baseStats,
+        isIllusionView: true,
+        realPokemon: pokemon
+    };
+}
+
+function isChoiceItemName(itemName) {
+    if (!itemName) return false;
+    if (typeof window !== 'undefined' && typeof window.isChoiceItem === 'function') {
+        return !!window.isChoiceItem(itemName);
+    }
+    const normalized = String(itemName).toLowerCase();
+    return normalized.includes('choice') || String(itemName).includes('讲究');
+}
+
+function moveMatchesChoiceLock(move, lockedMoveName) {
+    if (!move || !lockedMoveName) return false;
+    return move.name === lockedMoveName ||
+        move.baseMove === lockedMoveName ||
+        move.originalMoveName === lockedMoveName;
+}
+
+function getChoiceLockedMove(pokemon) {
+    if (!pokemon?.choiceLockedMove || !isChoiceItemName(pokemon.item || '')) return null;
+    return (pokemon.moves || []).find(m => moveMatchesChoiceLock(m, pokemon.choiceLockedMove)) || null;
+}
+
+function hasMovePP(move) {
+    return !move || move.name === 'Struggle' || move.pp === undefined || move.pp > 0;
+}
+
+function getSelectableMoves(pokemon, { filterNoPP = false } = {}) {
+    const lockedMove = getChoiceLockedMove(pokemon);
+    if (lockedMove) return [lockedMove];
+
+    const moves = pokemon?.moves || [];
+    if (!filterNoPP) return moves;
+
+    const ppMoves = moves.filter(hasMovePP);
+    return ppMoves.length > 0 ? ppMoves : moves;
+}
+
 /**
  * 获取 AI 决策（统一入口）
  * @param {Pokemon} aiPoke - AI 当前宝可梦
@@ -76,6 +134,7 @@ const AI_COUNTER_MOVES = ['Haze', 'Clear Smog', 'Roar', 'Whirlwind', 'Dragon Tai
  */
 export function getAiAction(aiPoke, playerPoke, difficulty = 'hard', aiParty = [], battleContext = {}) {
     if (!aiPoke || !playerPoke) return null;
+    const perceivedPlayerPoke = getAIPerceivedPokemon(playerPoke);
     
     // 【蓄力技能锁定】检查 AI 是否正在蓄力
     if (aiPoke.volatile?.chargingMove) {
@@ -91,30 +150,30 @@ export function getAiAction(aiPoke, playerPoke, difficulty = 'hard', aiParty = [
     
     switch (normalizedDiff) {
         case 'expert':
-            return getExpertAiAction(aiPoke, playerPoke, aiParty, battleContext);
+            return getExpertAiAction(aiPoke, perceivedPlayerPoke, aiParty, battleContext);
         case 'hard': {
             // 【v2.1】Hard 难度也支持风格选择
-            const hardMove = getHardAiMove(aiPoke, playerPoke, aiParty);
+            const hardMove = getHardAiMove(aiPoke, perceivedPlayerPoke, aiParty);
             let chosenStyle = null;
             if (hardMove) {
                 const mergedMove = getMergedMoveData(hardMove);
-                chosenStyle = tryOptimizeStyle(aiPoke, playerPoke, mergedMove);
+                chosenStyle = tryOptimizeStyle(aiPoke, perceivedPlayerPoke, mergedMove);
             }
             return { type: AI_ACTION_TYPE.MOVE, move: hardMove, style: chosenStyle };
         }
         case 'normal': {
             // 【v2.1】Normal 难度也支持风格选择（概率较低）
-            const normalMove = getNormalAiMove(aiPoke, playerPoke, aiParty);
+            const normalMove = getNormalAiMove(aiPoke, perceivedPlayerPoke, aiParty);
             let chosenStyle = null;
             if (normalMove && Math.random() < 0.5) { // 50% 概率尝试风格
                 const mergedMove = getMergedMoveData(normalMove);
-                chosenStyle = tryOptimizeStyle(aiPoke, playerPoke, mergedMove);
+                chosenStyle = tryOptimizeStyle(aiPoke, perceivedPlayerPoke, mergedMove);
             }
             return { type: AI_ACTION_TYPE.MOVE, move: normalMove, style: chosenStyle };
         }
         case 'easy':
         default:
-            return { type: AI_ACTION_TYPE.MOVE, move: getEasyAiMove(aiPoke, playerPoke, aiParty) };
+            return { type: AI_ACTION_TYPE.MOVE, move: getEasyAiMove(aiPoke, perceivedPlayerPoke, aiParty) };
     }
 }
 
@@ -124,16 +183,17 @@ export function getAiAction(aiPoke, playerPoke, difficulty = 'hard', aiParty = [
  * ============================================================= */
 export function getEasyAiMove(attacker, defender, aiParty = null) {
     if (!attacker?.moves || attacker.moves.length === 0) return null;
+    const selectableMoves = getSelectableMoves(attacker, { filterNoPP: true });
     
     // 【修复】过滤掉首回合限制招式（非首回合时）
     const firstTurnOnlyMoves = ['Fake Out', 'First Impression', 'Mat Block'];
     const isFirstTurn = (attacker.turnsOnField || 0) === 0;
     const availableMoves = isFirstTurn 
-        ? attacker.moves 
-        : attacker.moves.filter(m => !firstTurnOnlyMoves.includes(m.name));
+        ? selectableMoves
+        : selectableMoves.filter(m => !firstTurnOnlyMoves.includes(m.name));
     
     // 如果过滤后没有招式了，回退到原始招式列表
-    const movesToUse = availableMoves.length > 0 ? availableMoves : attacker.moves;
+    const movesToUse = availableMoves.length > 0 ? availableMoves : selectableMoves;
     
     // 80% 概率随机选
     if (Math.random() < 0.8) {
@@ -161,9 +221,10 @@ export function getEasyAiMove(attacker, defender, aiParty = null) {
  * ============================================================= */
 export function getNormalAiMove(attacker, defender, aiParty = null) {
     if (!attacker?.moves || attacker.moves.length === 0) return null;
+    const selectableMoves = getSelectableMoves(attacker, { filterNoPP: true });
     
     const rankedMoves = rankMovesByScore(attacker, defender, aiParty);
-    if (rankedMoves.length === 0) return attacker.moves[0];
+    if (rankedMoves.length === 0) return selectableMoves[0];
     
     // 【修复】过滤掉必定失败的招式（得分 <= -9000）
     const viableMoves = rankedMoves.filter(m => m.score > -9000);
@@ -191,9 +252,10 @@ export function getNormalAiMove(attacker, defender, aiParty = null) {
  * ============================================================= */
 export function getHardAiMove(attacker, defender, aiParty = null) {
     if (!attacker?.moves || attacker.moves.length === 0) return null;
+    const selectableMoves = getSelectableMoves(attacker, { filterNoPP: true });
     
     const rankedMoves = rankMovesByScore(attacker, defender, aiParty);
-    if (rankedMoves.length === 0) return attacker.moves[0];
+    if (rankedMoves.length === 0) return selectableMoves[0];
     
     // 【修复】过滤掉必定失败的招式（得分 <= -9000）
     const viableMoves = rankedMoves.filter(m => m.score > -9000);
@@ -508,7 +570,7 @@ function checkFirstTurnMoves(aiPoke, playerPoke, turnCount) {
     
     const fakeOutMoves = ['Fake Out', 'First Impression'];
     
-    for (const move of aiPoke.moves) {
+    for (const move of getSelectableMoves(aiPoke, { filterNoPP: true })) {
         if (fakeOutMoves.includes(move.name)) {
             // 确保能造成伤害（不是免疫）
             const eff = getTypeEffectivenessAI(move.type || 'Normal', playerPoke.types || ['Normal']);
@@ -541,7 +603,7 @@ function findKillMove(aiPoke, playerPoke) {
     // 【修复】首回合限制技能列表
     const firstTurnOnlyMoves = ['Fake Out', 'First Impression', 'Mat Block'];
     
-    for (const move of aiPoke.moves) {
+    for (const move of getSelectableMoves(aiPoke, { filterNoPP: true })) {
         const mergedMove = getMergedMoveData(move);
         const category = (mergedMove.cat || mergedMove.category || '').toLowerCase();
         if (category === 'status' || mergedMove.power === 0) continue;
@@ -650,7 +712,7 @@ function findEvasionMove(aiPoke, playerPoke) {
     let bestEvasionMove = null;
     let bestDamage = 0;
     
-    for (const move of aiPoke.moves) {
+    for (const move of getSelectableMoves(aiPoke, { filterNoPP: true })) {
         if (INVULN_MOVES.includes(move.name)) {
             const mergedMove = getMergedMoveData(move);
             const dmgResult = simulateDamage(aiPoke, playerPoke, mergedMove);
@@ -943,7 +1005,7 @@ function evaluatePrediction(aiPoke, playerPoke, aiParty) {
     let bestKillMove = null;
     let bestKillDamage = 0;
     
-    for (const move of aiPoke.moves) {
+    for (const move of getSelectableMoves(aiPoke, { filterNoPP: true })) {
         const mergedMove = getMergedMoveData(move);
         const dmgResult = simulateDamage(aiPoke, playerPoke, mergedMove);
         if (dmgResult.damage >= playerHp) {
@@ -973,7 +1035,7 @@ function evaluatePrediction(aiPoke, playerPoke, aiParty) {
     if (!coverageTypes) return null;
     
     // 找一个覆盖技能
-    for (const move of aiPoke.moves) {
+    for (const move of getSelectableMoves(aiPoke, { filterNoPP: true })) {
         const mergedMove = getMergedMoveData(move);
         if (coverageTypes.includes(mergedMove.type) && (mergedMove.basePower || mergedMove.power || 0) >= 60) {
             // 50% 概率使用预读技能（不要太激进）
@@ -1043,7 +1105,7 @@ function evaluateStrategicMoves(aiPoke, playerPoke, threatAssessment) {
     let bestStrategicMove = null;
     let bestStrategicScore = 0;
     
-    for (const move of aiPoke.moves) {
+    for (const move of getSelectableMoves(aiPoke, { filterNoPP: true })) {
         const moveName = move.name || '';
         let score = 0;
         let reasoning = '';
@@ -1233,32 +1295,18 @@ function evaluateStrategicMoves(aiPoke, playerPoke, threatAssessment) {
  */
 function rankMovesByScore(attacker, defender, aiParty = null) {
     if (!attacker?.moves) return [];
-    
-    // 【修复】Choice 道具锁招检查
-    // 如果持有 Choice 道具且已经锁定了技能，只能使用那个技能
-    // 使用 items-data.js 的 isChoiceItem 函数
-    const item = attacker.item || '';
-    const checkIsChoice = typeof window !== 'undefined' && typeof window.isChoiceItem === 'function' 
-        ? window.isChoiceItem 
-        : (i) => i && (i.includes('Choice') || i.includes('讲究'));
-    const hasChoiceItem = checkIsChoice(item);
-    const lockedMove = attacker.choiceLockedMove;
-    
-    if (hasChoiceItem && lockedMove) {
-        // 找到被锁定的技能
-        const locked = attacker.moves.find(m => m.name === lockedMove);
-        if (locked) {
-            console.log(`[AI CHOICE] ${attacker.name} 被 ${item} 锁定在 ${lockedMove}`);
-            const mergedMove = getMergedMoveData(locked);
-            return [{
-                move: locked,
-                score: calcMoveScore(attacker, defender, mergedMove, aiParty)
-            }];
-        }
+
+    const locked = getChoiceLockedMove(attacker);
+    if (locked) {
+        console.log(`[AI CHOICE] ${attacker.name} 被 ${attacker.item} 锁定在 ${attacker.choiceLockedMove}`);
     }
-    
-    return attacker.moves.map(move => {
+
+    return getSelectableMoves(attacker).map(move => {
         const mergedMove = getMergedMoveData(move);
+
+        if (!locked && !hasMovePP(move)) {
+            return { move, score: -10000 };
+        }
         
         // === 【环境图层系统】检查技能是否被环境禁用 ===
         if (typeof window !== 'undefined' && window.envOverlay && window.envOverlay.isMoveBanned) {

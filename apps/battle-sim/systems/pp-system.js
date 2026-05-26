@@ -70,6 +70,11 @@ const PPSystem = {
         const targetMove = this.findMove(user, move.name);
         if (!targetMove) return { success: true, logs }; // 非标准招式，不扣PP
 
+        if (targetMove.pp !== undefined && targetMove.pp <= 0) {
+            console.log(`[PP] ${user.cnName || user.name} 的 ${targetMove.cn || targetMove.name} PP 已耗尽，不能继续使用`);
+            return { success: false, noPP: true, logs };
+        }
+
         // 计算消耗量
         let cost = 1;
 

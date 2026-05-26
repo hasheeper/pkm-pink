@@ -32,6 +32,31 @@ export function applyMoveSecondaryEffects(user, target, move, damageDealt = 0, b
     // 获取完整技能数据
     const moveId = (move.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const fullMoveData = (typeof MOVES !== 'undefined' && MOVES[moveId]) ? MOVES[moveId] : {};
+
+    const getBattleDisplayName = (pokemon) => pokemon?.displayCnName || pokemon?.cnName || pokemon?.name || '???';
+    const clearChoiceLock = (pokemon) => {
+        if (!pokemon) return;
+        delete pokemon.choiceLocked;
+        delete pokemon.choiceLockedMove;
+    };
+    const triggerSwitchOut = (pokemon) => {
+        if (!pokemon) return;
+        clearChoiceLock(pokemon);
+        if (typeof AbilityHandlers !== 'undefined' && pokemon.ability) {
+            const abilityHandler = AbilityHandlers[pokemon.ability];
+            if (abilityHandler && abilityHandler.onSwitchOut) {
+                abilityHandler.onSwitchOut(pokemon);
+            }
+        }
+    };
+    const primeIllusionDisplay = (pokemon, opponent) => {
+        if (!pokemon || pokemon.ability !== 'Illusion' || pokemon.illusionActive) return;
+        if (typeof AbilityHandlers === 'undefined') return;
+        const abilityHandler = AbilityHandlers.Illusion;
+        if (abilityHandler && typeof abilityHandler.onStart === 'function') {
+            abilityHandler.onStart(pokemon, opponent, [], battle);
+        }
+    };
     
     // === 策略模式：检查是否有特殊处理器 ===
     const handler = (typeof getMoveHandler === 'function') ? getMoveHandler(move.name) : null;
@@ -256,11 +281,14 @@ export function applyMoveSecondaryEffects(user, target, move, damageDealt = 0, b
                     if (availablePokemon.length > 0) {
                         const randomPoke = availablePokemon[Math.floor(Math.random() * availablePokemon.length)];
                         const newIndex = enemyParty.indexOf(randomPoke);
-                        if (target.volatile) target.volatile = {};
+                        const oldDisplayName = getBattleDisplayName(user);
+                        if (user.volatile) user.volatile = {};
+                        triggerSwitchOut(user);
                         battle.enemyActive = newIndex;
                         if ('enemyActiveIndex' in battle) battle.enemyActiveIndex = newIndex;
                         randomPoke.turnCount = 0;
-                        logs.push(`<span style="color:#3498db">🔄 ${user.cnName} 被自己的招式吹走了！${randomPoke.cnName} 被强制拉上了战场!</span>`);
+                        primeIllusionDisplay(randomPoke, target);
+                        logs.push(`<span style="color:#3498db">🔄 ${oldDisplayName} 被自己的招式吹走了！${getBattleDisplayName(randomPoke)} 被强制拉上了战场!</span>`);
                     }
                 }
             }
@@ -295,11 +323,13 @@ export function applyMoveSecondaryEffects(user, target, move, damageDealt = 0, b
                 if (availablePokemon.length > 0) {
                     const randomPoke = availablePokemon[Math.floor(Math.random() * availablePokemon.length)];
                     const newIndex = enemyParty.indexOf(randomPoke);
+                    const oldDisplayName = getBattleDisplayName(target);
                     
                     // 清除当前宝可梦的 volatile 状态
                     if (target.volatile) {
                         target.volatile = {};
                     }
+                    triggerSwitchOut(target);
                     
                     // 执行换人
                     battle.enemyActive = newIndex;
@@ -310,8 +340,9 @@ export function applyMoveSecondaryEffects(user, target, move, damageDealt = 0, b
                     
                     // 重置入场回合计数
                     randomPoke.turnCount = 0;
+                    primeIllusionDisplay(randomPoke, user);
                     
-                    logs.push(`<span style="color:#3498db">🔄 ${randomPoke.cnName} 被强制拉上了战场!</span>`);
+                    logs.push(`<span style="color:#3498db">🔄 ${oldDisplayName} 被吹走了！${getBattleDisplayName(randomPoke)} 被强制拉上了战场!</span>`);
                     
                     // 触发入场钉子伤害
                     if (typeof MoveEffects !== 'undefined' && MoveEffects.applyEntryHazards) {

@@ -3066,18 +3066,26 @@ export const MoveHandlers = {
             user.item = targetItem;
             target.item = userItem;
             
-            // 记录交换（用于 AI 判断锁招）- 使用 items-data.js 的 isChoiceItem
-            const checkChoice = typeof isChoiceItem === 'function' ? isChoiceItem : 
-                (item) => item && (item.includes('Choice') || item.includes('讲究'));
-            
-            if (checkChoice(targetItem)) {
-                target.choiceLocked = true;
-                target.choiceLockedMove = null;
-            }
-            if (checkChoice(userItem)) {
-                user.choiceLocked = true;
-                user.choiceLockedMove = null;
-            }
+            // 同步交换后的 Choice 锁招状态；失去讲究道具时旧锁招也要清掉。
+            const checkChoice = (typeof window !== 'undefined' && typeof window.isChoiceItem === 'function')
+                ? window.isChoiceItem
+                : (item) => {
+                    if (!item) return false;
+                    const normalized = String(item).toLowerCase();
+                    return normalized.includes('choice') || String(item).includes('讲究');
+                };
+            const syncChoiceLockAfterItemChange = (pokemon) => {
+                if (checkChoice(pokemon.item || '')) {
+                    pokemon.choiceLocked = true;
+                    pokemon.choiceLockedMove = null;
+                } else {
+                    delete pokemon.choiceLocked;
+                    delete pokemon.choiceLockedMove;
+                }
+            };
+
+            syncChoiceLockAfterItemChange(user);
+            syncChoiceLockAfterItemChange(target);
             
             // 生成日志 - 尝试获取中文名
             const getItemCnName = (item) => {

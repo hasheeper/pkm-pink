@@ -41,6 +41,19 @@ function log(msg) {
     }
 }
 
+function getBattleDisplayName(pokemon) {
+    return pokemon?.displayCnName || pokemon?.cnName || pokemon?.name || '???';
+}
+
+function primeIllusionDisplay(pokemon, opponent) {
+    if (!pokemon || pokemon.ability !== 'Illusion' || pokemon.illusionActive) return;
+    if (typeof AbilityHandlers === 'undefined') return;
+    const handler = AbilityHandlers.Illusion;
+    if (handler && typeof handler.onStart === 'function') {
+        handler.onStart(pokemon, opponent, [], window.battle);
+    }
+}
+
 /**
  * 辅助函数：更新视觉
  */
@@ -106,7 +119,7 @@ export async function handleEnemyPivot(passBoosts = false) {
         const ally = battle.enemyParty[i];
         if (!ally || i === battle.enemyActive) continue;
         if (!ally.isAlive || !ally.isAlive() || ally.currHp <= 0) continue;
-        
+
         let score = 0;
         
         // 检查玩家最强技能对该宝可梦的效果
@@ -135,11 +148,12 @@ export async function handleEnemyPivot(passBoosts = false) {
     
     // 如果找到合适目标，执行换人
     if (bestIndex !== -1) {
-        log(`<span style="color:#ef4444">敌方收回了 ${currentE.cnName}！</span>`);
+        log(`<span style="color:#ef4444">敌方收回了 ${getBattleDisplayName(currentE)}！</span>`);
         
         // 清除 Choice 锁招状态
-        if (currentE.choiceLockedMove) {
+        if (currentE.choiceLockedMove || currentE.choiceLocked) {
             console.log(`[CHOICE] ${currentE.name} 换下，解除 ${currentE.choiceLockedMove} 锁定`);
+            delete currentE.choiceLocked;
             delete currentE.choiceLockedMove;
         }
         
@@ -205,17 +219,18 @@ export async function handleEnemyPivot(passBoosts = false) {
             console.log(`[SHED TAIL] ${newE.cnName} 继承了断尾替身! (HP: ${savedShedTailSub})`);
             log(`<span style="color:#3498db">🛡️ ${newE.cnName} 继承了替身保护! (替身HP: ${savedShedTailSub})</span>`);
         }
-        log(`<span style="color:#ef4444">敌方派出了 ${newE.cnName}！</span>`);
-        
         // 【标记换人】用于重复精灵图修复
         if (typeof window.markEnemySwitch === 'function') {
             window.markEnemySwitch();
         }
-        
+
+        primeIllusionDisplay(newE, p);
+        log(`<span style="color:#ef4444">敌方派出了 ${getBattleDisplayName(newE)}！</span>`);
+
         updateAllVisuals('enemy');
         await wait(500);
         triggerEntryAbilities(newE, p);
-        
+
         // 结算敌方场地钉子伤害
         if (typeof MoveEffects !== 'undefined' && MoveEffects.applyEntryHazards) {
             const hazardLogs = MoveEffects.applyEntryHazards(newE, false, battle);
@@ -363,13 +378,13 @@ export async function handleEnemyFainted(e) {
     if (battle.nextAliveEnemy()) {
         const newE = battle.getEnemy();
         
-        // 【BUG修复】先触发入场特性（Illusion等），再输出日志
-        // 这样 Illusion 的 displayCnName 会在日志输出前设置好
-        triggerEntryAbilities(newE, battle.getPlayer());
+        // Illusion 的 displayCnName 需要在日志输出前设置好。
+        primeIllusionDisplay(newE, battle.getPlayer());
         
         // 使用 displayCnName（幻觉伪装名）或 cnName（真名）
         const displayName = newE.displayCnName || newE.cnName;
         log(`敌方派出 <b>${displayName}</b> (Lv.${newE.level})!`);
+        triggerEntryAbilities(newE, battle.getPlayer());
         
         // 【标记换人】用于重复精灵图修复
         if (typeof window.markEnemySwitch === 'function') {
@@ -515,7 +530,7 @@ export async function handleEnemyFainted(e) {
         }
         
         updateAllVisuals('enemy');
-        // 【注意】triggerEntryAbilities 已在日志输出前调用，这里不再重复调用
+        // 【注意】triggerEntryAbilities 已在出场日志后调用，这里不再重复调用
         
         // 结算敌方场地钉子伤害
         if (typeof MoveEffects !== 'undefined' && MoveEffects.applyEntryHazards) {
@@ -653,7 +668,9 @@ export async function handlePlayerFainted(p) {
         await wait(500);
         if (battle.nextAliveEnemy()) {
             const newE = battle.getEnemy();
-            log(`敌方派出 <b>${newE.cnName}</b> (Lv.${newE.level})!`);
+            primeIllusionDisplay(newE, battle.getPlayer());
+            log(`敌方派出 <b>${getBattleDisplayName(newE)}</b> (Lv.${newE.level})!`);
+            // 双杀场景需要等玩家换人完成后再结算威吓等入场特性。
             
             if (typeof window.markEnemySwitch === 'function') {
                 window.markEnemySwitch();
