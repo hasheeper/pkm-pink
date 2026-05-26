@@ -40,6 +40,11 @@
     let iframeInitialized = false;
     let dashboardWindow = null;
     let disposed = false;
+    const dashboardChrome = {
+      iframe: null,
+      wrapper: null,
+      overlay: null
+    };
     const messageTargets = [];
     const scheduler = COMMON.createScheduler(`${PRODUCT}:dashboard-host`);
     const messageSourceIds = new WeakMap();
@@ -202,8 +207,12 @@
       return null;
     }
 
+    function getDashboardIframe() {
+      return dashboardChrome.iframe || ROOT.document?.getElementById(IFRAME_ID);
+    }
+
     function postToIframe(message) {
-      const iframe = ROOT.document?.getElementById(IFRAME_ID);
+      const iframe = getDashboardIframe();
       const targetWindow = iframe?.contentWindow || dashboardWindow;
       if (!targetWindow) {
         console.warn(`${PLUGIN_NAME} iframe is not ready; skip ${message?.type || 'message'}`);
@@ -680,11 +689,13 @@
       console.log(`${PLUGIN_NAME} scheduled transferBuffer check`, { reason });
     }
 
-    function setFullscreen(enabled) {
-      const iframe = ROOT.document?.getElementById(IFRAME_ID);
-      const wrapper = iframe?.parentElement;
-      const overlay = ROOT.document?.getElementById(OVERLAY_ID);
-      if (!iframe || !wrapper || !overlay) return;
+    function setFullscreen(enabled, options = {}) {
+      const iframe = getDashboardIframe();
+      const wrapper = dashboardChrome.wrapper || iframe?.parentElement;
+      const overlay = dashboardChrome.overlay || ROOT.document?.getElementById(OVERLAY_ID);
+      if (!iframe || !wrapper || !overlay) {
+        return;
+      }
       if (enabled) {
         wrapper.style.width = '100vw';
         wrapper.style.maxWidth = '100vw';
@@ -700,7 +711,9 @@
         iframe.style.borderRadius = '24px';
         overlay.style.padding = '4px';
       }
-      postToIframe({ type: 'MAP_RESIZE', product: PRODUCT });
+      if (options.resize !== false) {
+        postToIframe({ type: 'MAP_RESIZE', product: PRODUCT });
+      }
     }
 
     function getMessageSourceId(source) {
@@ -1130,6 +1143,9 @@
       wrapper.append(iframe, closeBtn);
       overlay.append(wrapper);
       $('body').append(ball, overlay);
+      dashboardChrome.iframe = iframe[0] || null;
+      dashboardChrome.wrapper = wrapper[0] || null;
+      dashboardChrome.overlay = overlay[0] || null;
 
       const setBallCollapsed = (collapsed) => {
         ball.toggleClass(BALL_COLLAPSED_CLASS, collapsed);
@@ -1170,12 +1186,18 @@
         setBallCollapsed(!ball.hasClass(BALL_COLLAPSED_CLASS));
       });
 
-      closeBtn.on('click', () => overlay.css('display', 'none'));
+      const hideOverlay = () => {
+        setFullscreen(false, { resize: false });
+        postToIframe({ type: 'PKM_EXIT_MAP_FULLSCREEN', product: PRODUCT, resize: false });
+        overlay.css('display', 'none');
+      };
+
+      closeBtn.on('click', hideOverlay);
       overlay.on('click', (event) => {
-        if (event.target === overlay[0]) overlay.css('display', 'none');
+        if (event.target === overlay[0]) hideOverlay();
       });
       ROOT.jQuery(ROOT.document).on('keydown.pkmMvuz', (event) => {
-        if (event.key === 'Escape' && overlay.css('display') !== 'none') overlay.css('display', 'none');
+        if (event.key === 'Escape' && overlay.css('display') !== 'none') hideOverlay();
       });
     }
 
@@ -1185,6 +1207,9 @@
         ROOT.jQuery?.(`#${BALL_ID}, #${OVERLAY_ID}, #${STYLE_ID}`).remove();
         ROOT.jQuery?.(ROOT.document).off('keydown.pkmMvuz');
       } catch (_) {}
+      dashboardChrome.iframe = null;
+      dashboardChrome.wrapper = null;
+      dashboardChrome.overlay = null;
       cancelTransferSequence();
       scheduler.disposeAll();
       ROOT.removeEventListener?.('message', handleWindowMessage);

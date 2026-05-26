@@ -234,6 +234,9 @@ const TacticalSystem = {
     cam: { x:0, y:0, inputX:0, inputY:0 },
     isDragging: false,
     lastMouse: { x:0, y:0 },
+    _touchTapStart: null,
+    _touchMoved: false,
+    _ignoreNextClick: false,
     
     // 数据面板
     hoverData: null,
@@ -257,6 +260,9 @@ const TacticalSystem = {
         
         this.cam = { x:0, y:0, inputX:0, inputY:0 };
         this.isDragging = false; 
+        this._touchTapStart = null;
+        this._touchMoved = false;
+        this._ignoreNextClick = false;
         
         this.bindEvents();
         this.checkHover(this.w/2, this.h/2);
@@ -283,6 +289,7 @@ const TacticalSystem = {
             if(e.button===0) {
                 // 检查是否点击了宝可梦面板标题栏
                 if (this.handlePokemonPanelClick(e.clientX, e.clientY)) {
+                    this._ignoreNextClick = true;
                     return; // 点击了折叠按钮，不开始拖拽
                 }
                 this.isDragging=true; 
@@ -305,24 +312,14 @@ const TacticalSystem = {
         };
 
         this._click = (e) => {
-            // 移动模式下的点击选择
-            if(this._movementMode && e.button === 0) {
-                const cx = this.w/2 + this.cam.x;
-                const cy = this.h/2 + this.cam.y;
-                const s = TACTICAL_STYLE.TILE_SIZE;
-                const dx = Math.floor((e.clientX - cx + s/2)/s);
-                const dy = Math.floor((e.clientY - cy + s/2)/s);
-                const gx = this.anchor.x + dx;
-                const gy = this.anchor.y + dy;
-                
-                console.log('[Tactical] 点击相对坐标:', dx, dy, '世界坐标:', gx, gy);
-                
-                if(this._isInMoveRange(gx, gy)) {
-                    this._movementTarget = { gx, gy };
-                    console.log('[Tactical] 选择移动目标:', gx, gy);
-                } else {
-                    console.log('[Tactical] 格子不在移动范围内');
-                }
+            if(e.button !== 0) return;
+            if (this._ignoreNextClick) {
+                this._ignoreNextClick = false;
+                e.stopPropagation();
+                return;
+            }
+            if(e.target === this.ctx?.canvas || this._movementMode) {
+                this._handlePointTap(e.clientX, e.clientY);
                 e.stopPropagation();
             }
         };
@@ -338,9 +335,18 @@ const TacticalSystem = {
             if(e.target !== _cvs) return; // 不拦截按钮等 UI 元素
             if(e.touches.length === 1) {
                 const t = e.touches[0];
-                if (this.handlePokemonPanelClick(t.clientX, t.clientY)) return;
+                if (this.handlePokemonPanelClick(t.clientX, t.clientY)) {
+                    this._touchTapStart = null;
+                    e.preventDefault();
+                    return;
+                }
                 this.isDragging = true;
                 this.lastMouse = {x: t.clientX, y: t.clientY};
+                this._touchTapStart = { x: t.clientX, y: t.clientY, time: Date.now() };
+                this._touchMoved = false;
+            } else {
+                this._touchTapStart = null;
+                this._touchMoved = true;
             }
             e.preventDefault();
         };
@@ -348,23 +354,52 @@ const TacticalSystem = {
             if(!this.isDragging) return;
             if(e.touches.length === 1) {
                 const t = e.touches[0];
+                if (this._touchTapStart) {
+                    const totalDx = t.clientX - this._touchTapStart.x;
+                    const totalDy = t.clientY - this._touchTapStart.y;
+                    if (Math.hypot(totalDx, totalDy) > 10) {
+                        this._touchMoved = true;
+                    }
+                }
+                if (!this._touchMoved) {
+                    e.preventDefault();
+                    return;
+                }
                 this.cam.inputX += t.clientX - this.lastMouse.x;
                 this.cam.inputY += t.clientY - this.lastMouse.y;
                 const dragLimit = TACTICAL_STYLE.TILE_SIZE * 1.2;
                 this.cam.inputX = Math.max(-dragLimit, Math.min(dragLimit, this.cam.inputX));
                 this.cam.inputY = Math.max(-dragLimit, Math.min(dragLimit, this.cam.inputY));
                 this.lastMouse = {x: t.clientX, y: t.clientY};
+            } else {
+                this._touchTapStart = null;
+                this._touchMoved = true;
             }
             e.preventDefault();
         };
         this._touchEnd = e => {
             if(e.touches.length === 0) {
+                const tap = this._touchTapStart;
+                const changed = e.changedTouches && e.changedTouches[0];
+                if (tap && changed && !this._touchMoved && Date.now() - tap.time < 600) {
+                    this._handlePointTap(changed.clientX, changed.clientY);
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                this._touchTapStart = null;
+                this._touchMoved = false;
                 this.isDragging = false;
             }
         };
+        this._touchCancel = () => {
+            this._touchTapStart = null;
+            this._touchMoved = false;
+            this.isDragging = false;
+        };
         window.addEventListener('touchstart', this._touchStart, {passive:false});
         window.addEventListener('touchmove', this._touchMove, {passive:false});
-        window.addEventListener('touchend', this._touchEnd);
+        window.addEventListener('touchend', this._touchEnd, {passive:false});
+        window.addEventListener('touchcancel', this._touchCancel);
     },
     unbindEvents: function() {
         if(this._down) window.removeEventListener('mousedown', this._down);
@@ -374,15 +409,43 @@ const TacticalSystem = {
         if(this._touchStart) window.removeEventListener('touchstart', this._touchStart);
         if(this._touchMove) window.removeEventListener('touchmove', this._touchMove);
         if(this._touchEnd) window.removeEventListener('touchend', this._touchEnd);
+        if(this._touchCancel) window.removeEventListener('touchcancel', this._touchCancel);
     },
 
-    checkHover: function(mx, my) {
+    _getGridAtPoint: function(mx, my) {
         const cx = this.w/2 + this.cam.x; const cy = this.h/2 + this.cam.y;
         const s = TACTICAL_STYLE.TILE_SIZE;
         const dx = Math.floor((mx - cx + s/2)/s);
         const dy = Math.floor((my - cy + s/2)/s);
         const gx = this.anchor.x + dx; 
         const gy = this.anchor.y + dy;
+        return { dx, dy, gx, gy };
+    },
+
+    _selectMovementTargetAt: function(mx, my) {
+        const { dx, dy, gx, gy } = this._getGridAtPoint(mx, my);
+
+        console.log('[Tactical] 点击相对坐标:', dx, dy, '世界坐标:', gx, gy);
+
+        if(this._isInMoveRange(gx, gy)) {
+            this._movementTarget = { gx, gy };
+            this.checkHover(mx, my);
+            console.log('[Tactical] 选择移动目标:', gx, gy);
+        } else {
+            console.log('[Tactical] 格子不在移动范围内');
+        }
+        return true;
+    },
+
+    _handlePointTap: function(mx, my) {
+        if (this.handlePanelClick(mx, my)) return true;
+        if (this._movementMode) return this._selectMovementTargetAt(mx, my);
+        this.checkHover(mx, my);
+        return true;
+    },
+
+    checkHover: function(mx, my) {
+        const { gx, gy } = this._getGridAtPoint(mx, my);
 
         const tags = getZoneInfo(gx, gy);
         const surfaceVal = getIntVal(gx, gy, "Surface") || 0;

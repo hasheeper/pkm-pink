@@ -881,6 +881,49 @@ function notifyPkmBridgeReady() {
 // ========== 监听来自酒馆的 postMessage ==========
 let lastBridgePayloadKey = '';
 let lastBridgePayloadAt = 0;
+let mapResizeForwardTimer = null;
+
+function setMapFullscreenButtonState(modal, isFullscreen) {
+    const btn = modal?.querySelector?.('.map-modal-fullscreen');
+    if (!btn) return;
+    btn.textContent = '⛶';
+    btn.title = isFullscreen ? '退出全屏' : '全屏';
+}
+
+function scheduleMapIframeResize(delayMs = 0) {
+    if (mapResizeForwardTimer) {
+        clearTimeout(mapResizeForwardTimer);
+    }
+    mapResizeForwardTimer = setTimeout(() => {
+        mapResizeForwardTimer = null;
+        const modal = document.getElementById('map-modal');
+        const mapIframe = document.getElementById('map-iframe');
+        if (!modal || !modal.classList.contains('active')) {
+            return;
+        }
+        if (!mapIframe || !mapIframe.contentWindow) return;
+        mapIframe.contentWindow.postMessage({ type: 'MAP_RESIZE' }, '*');
+    }, Math.max(0, delayMs));
+}
+
+function postMapFullscreenMessage(isFullscreen) {
+    const message = {
+        type: 'PKM_MAP_FULLSCREEN',
+        fullscreen: isFullscreen
+    };
+    try {
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage(message, '*');
+            console.log('[PKM] ✓ 已发送全屏消息到 parent');
+        }
+        if (window.top && window.top !== window && window.top !== window.parent) {
+            window.top.postMessage(message, '*');
+            console.log('[PKM] ✓ 已发送全屏消息到 top');
+        }
+    } catch (e) {
+        console.error('[PKM] postMessage 发送失败:', e);
+    }
+}
 
 window.addEventListener('message', function(event) {
     if (!event.data || !event.data.type) return;
@@ -933,20 +976,24 @@ window.addEventListener('message', function(event) {
     }
 
     if (event.data.type === 'MAP_RESIZE') {
-        // 收到外部容器 resize 消息，转发给 map iframe
-        console.log('[PKM] 收到 MAP_RESIZE 消息，转发给 map iframe');
-        const mapIframe = document.getElementById('map-iframe');
-        if (mapIframe && mapIframe.contentWindow) {
-            mapIframe.contentWindow.postMessage({ type: 'MAP_RESIZE' }, '*');
-        }
+        // 收到外部容器 resize 消息，只在 MAP 弹窗打开时转发，避免关闭中的隐藏 iframe 误重算尺寸。
+        scheduleMapIframeResize(0);
+        return;
     } else if (event.data.type === 'PKM_EXIT_MAP_FULLSCREEN') {
         // 收到退出全屏消息，退出 MAP 全屏模式
         console.log('[PKM] 收到退出全屏消息');
         const modal = document.getElementById('map-modal');
-        if (modal && modal.classList.contains('fullscreen')) {
+        if (modal) {
+            const wasFullscreen = modal.classList.contains('fullscreen')
+                || document.body.classList.contains('map-fullscreen-active');
             modal.classList.remove('fullscreen');
             document.body.classList.remove('map-fullscreen-active');
+            setMapFullscreenButtonState(modal, false);
+            if (wasFullscreen && event.data.resize !== false) {
+                scheduleMapIframeResize(120);
+            }
         }
+        return;
     }
 });
 
@@ -1616,36 +1663,35 @@ window.openMapSystem = function() {
             }
         };
     }
-    
+
+    modal.classList.remove('fullscreen');
+    document.body.classList.remove('map-fullscreen-active');
+    setMapFullscreenButtonState(modal, false);
     modal.classList.add('active');
+    scheduleMapIframeResize(120);
 };
 
 // 关闭 MAP 系统
 window.closeMapSystem = function() {
     const modal = document.getElementById('map-modal');
     if (!modal) return;
-    
-    // 如果在全屏模式，先退出全屏
-    if (modal.classList.contains('fullscreen')) {
-        // 通知父级窗口退出全屏
-        const message = { type: 'PKM_MAP_FULLSCREEN', fullscreen: false };
-        try {
-            if (window.parent && window.parent !== window) {
-                window.parent.postMessage(message, '*');
-            }
-            if (window.top && window.top !== window && window.top !== window.parent) {
-                window.top.postMessage(message, '*');
-            }
-        } catch (e) {
-            console.error('[PKM] postMessage 发送失败:', e);
-        }
+
+    const wasFullscreen = modal.classList.contains('fullscreen')
+        || document.body.classList.contains('map-fullscreen-active');
+    if (wasFullscreen) {
         modal.classList.remove('fullscreen');
         document.body.classList.remove('map-fullscreen-active');
+        setMapFullscreenButtonState(modal, false);
         console.log('[PKM] MAP 关闭时退出全屏');
     }
-    
+
     // 关闭 MAP 模态框
     modal.classList.remove('active');
+
+    // 先让本地弹窗进入关闭态，再通知宿主恢复小窗，避免宿主回发的 MAP_RESIZE 打到隐藏中的地图。
+    if (wasFullscreen) {
+        postMapFullscreenMessage(false);
+    }
 };
 
 // 切换 MAP 全屏模式
@@ -1657,37 +1703,13 @@ window.toggleMapFullscreen = function() {
     document.body.classList.toggle('map-fullscreen-active', isFullscreen);
     
     // 更新按钮图标
-    const btn = modal.querySelector('.map-modal-fullscreen');
-    if (btn) {
-        btn.textContent = isFullscreen ? '⛶' : '⛶';
-        btn.title = isFullscreen ? '退出全屏' : '全屏';
-    }
+    setMapFullscreenButtonState(modal, isFullscreen);
     
     // 通知父级窗口调整 PKM 容器大小（main 专属协议）
-    const message = {
-        type: 'PKM_MAP_FULLSCREEN',
-        fullscreen: isFullscreen
-    };
-    try {
-        if (window.parent && window.parent !== window) {
-            window.parent.postMessage(message, '*');
-            console.log('[PKM] ✓ 已发送全屏消息到 parent');
-        }
-        if (window.top && window.top !== window && window.top !== window.parent) {
-            window.top.postMessage(message, '*');
-            console.log('[PKM] ✓ 已发送全屏消息到 top');
-        }
-    } catch (e) {
-        console.error('[PKM] postMessage 发送失败:', e);
-    }
+    postMapFullscreenMessage(isFullscreen);
     
     // 通知 map iframe 调整大小
-    const iframe = document.getElementById('map-iframe');
-    if (iframe && iframe.contentWindow) {
-        setTimeout(() => {
-            iframe.contentWindow.postMessage({ type: 'MAP_RESIZE' }, '*');
-        }, 100);
-    }
+    scheduleMapIframeResize(120);
     
     console.log('[PKM] MAP 全屏模式:', isFullscreen ? '开启' : '关闭');
 };
