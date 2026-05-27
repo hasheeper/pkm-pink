@@ -42,7 +42,7 @@ function getDefaultBattleData() {
             "enableEnemyStrategicSwitching": false
         },
         "player": {
-            "name": "Revival Blessing Tester",
+            "name": "SIM Regression Tester",
             "trainerProficiency": 0,
             "faintedPartyIndexes": [1],
             "unlocks": {
@@ -58,12 +58,38 @@ function getDefaultBattleData() {
             "party": [
                 {
                     "slot": 1,
-                    "name": "Pawmot",
-                    "lv": 70,
+                    "name": "Rotom-Wash",
+                    "lv": 100,
                     "isLead": true,
+                    "ability": "Levitate",
+                    "nature": "Timid",
+                    "item": "Choice Scarf",
+                    "moves": ["Trick", "Volt Switch", "Will-O-Wisp", "Hydro Pump"],
+                    "stats_meta": {
+                        "ivs": { "hp": 31, "atk": 0, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+                        "ev_level": { "hp": 252, "atk": 0, "def": 0, "spa": 4, "spd": 0, "spe": 252 }
+                    }
+                },
+                {
+                    "slot": 2,
+                    "name": "Meowscarada",
+                    "lv": 100,
+                    "ability": "Protean",
+                    "nature": "Jolly",
+                    "item": "Focus Sash",
+                    "moves": ["Play Rough", "Flower Trick", "Knock Off", "U-turn"],
+                    "stats_meta": {
+                        "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+                        "ev_level": { "hp": 0, "atk": 252, "def": 0, "spa": 0, "spd": 4, "spe": 252 }
+                    }
+                },
+                {
+                    "slot": 3,
+                    "name": "Pawmot",
+                    "lv": 100,
                     "ability": "Iron Fist",
                     "nature": "Jolly",
-                    "item": "Leppa Berry",
+                    "item": "Choice Scarf",
                     "moves": ["Revival Blessing", "Double Shock", "Close Combat", "Mach Punch"],
                     "stats_meta": {
                         "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
@@ -71,37 +97,35 @@ function getDefaultBattleData() {
                     }
                 },
                 {
-                    "slot": 2,
-                    "name": "Ceruledge",
-                    "lv": 70,
-                    "ability": "Weak Armor",
-                    "nature": "Jolly",
-                    "mechanic": "tera",
-                    "teraType": "Fire",
-                    "item": "Clear Amulet",
-                    "moves": ["Bitter Blade", "Shadow Sneak", "Close Combat", "Swords Dance"],
-                    "stats_meta": {
-                        "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
-                        "ev_level": { "hp": 4, "atk": 252, "def": 0, "spa": 0, "spd": 0, "spe": 252 }
-                    }
-                },
-                {
-                    "slot": 3,
-                    "name": "Gengar",
-                    "lv": 70,
-                    "ability": "Cursed Body",
+                    "slot": 4,
+                    "name": "Zoroark-Hisui",
+                    "lv": 100,
+                    "ability": "Illusion",
                     "nature": "Timid",
                     "item": "Focus Sash",
-                    "moves": ["Shadow Ball", "Sludge Bomb", "Thunderbolt", "Protect"],
+                    "moves": ["Night Daze", "Bitter Malice", "Shadow Ball", "U-turn"],
                     "stats_meta": {
                         "ivs": { "hp": 31, "atk": 0, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
                         "ev_level": { "hp": 0, "atk": 0, "def": 0, "spa": 252, "spd": 4, "spe": 252 }
+                    }
+                },
+                {
+                    "slot": 5,
+                    "name": "Greninja",
+                    "lv": 100,
+                    "ability": "Protean",
+                    "nature": "Naive",
+                    "item": "Expert Belt",
+                    "moves": ["Hydro Pump", "Dark Pulse", "Ice Beam", "U-turn"],
+                    "stats_meta": {
+                        "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+                        "ev_level": { "hp": 0, "atk": 4, "def": 0, "spa": 252, "spd": 0, "spe": 252 }
                     }
                 }
             ]
         },
         "enemy": {
-            "name": "Pivot Switch Dummy",
+            "name": "Choice Lock Regression Dummy",
             "type": "DEBUG",
             "trainerProficiency": 0,
             "unlocks": {
@@ -116,25 +140,25 @@ function getDefaultBattleData() {
             },
             "party": [
                 {
-                    "name": "Tyranitar",
-                    "lv": 70,
+                    "name": "Dragonite",
+                    "lv": 100,
                     "isLead": true,
-                    "ability": "Sand Stream",
+                    "ability": "Multiscale",
                     "nature": "Adamant",
-                    "item": "Smooth Rock",
-                    "moves": ["Crunch", "Rock Slide", "Stone Edge", "Stealth Rock"],
+                    "item": "Heavy-Duty Boots",
+                    "moves": ["Dragon Dance", "Outrage", "Extreme Speed", "Roost"],
                     "stats_meta": {
                         "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 0, "spd": 31, "spe": 31 },
-                        "ev_level": { "hp": 252, "atk": 252, "def": 0, "spa": 0, "spd": 4, "spe": 0 }
+                        "ev_level": { "hp": 4, "atk": 252, "def": 0, "spa": 0, "spd": 0, "spe": 252 }
                     }
                 },
                 {
                     "name": "Gengar",
-                    "lv": 70,
+                    "lv": 100,
                     "ability": "Cursed Body",
                     "nature": "Timid",
                     "item": "Focus Sash",
-                    "moves": ["Shadow Ball", "Sludge Bomb", "Thunderbolt", "Protect"],
+                    "moves": ["Shadow Ball", "Sludge Bomb", "Taunt", "Protect"],
                     "stats_meta": {
                         "ivs": { "hp": 31, "atk": 0, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
                         "ev_level": { "hp": 0, "atk": 0, "def": 0, "spa": 252, "spd": 4, "spe": 252 }
@@ -142,9 +166,9 @@ function getDefaultBattleData() {
                 }
             ],
             "lines": {
-                "start": "这是敌方主动换人开关测试场。关闭 ENEMY PIVOT AI 时，即使后排有免疫格斗的耿鬼，也不应主动换下班基拉斯。",
-                "lose": "敌方主动换人开关测试通过了。",
-                "win": "如果关闭 ENEMY PIVOT AI 后仍主动换人，请检查日志。"
+                "start": "SIM 回归测试：1) 首回合用戏法给快龙讲究围巾，若它先龙舞，后续应继续被锁在龙舞，不能突然逆鳞。2) 换巴布土拨用复生祈祷，PP 耗尽后讲究锁招应改为挣扎，不能借其他招式 PP 续杯。3) 换洗翠索罗亚克上场时，公开日志应显示甲贺忍蛙而不自爆真名。",
+                "lose": "回归测试通过。",
+                "win": "如果看到快龙龙舞后逆鳞、复生祈祷无限续杯，或索罗亚克出场自爆真名，就继续查。"
             }
         }
     };

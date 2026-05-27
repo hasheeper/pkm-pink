@@ -198,6 +198,7 @@ async function initGame() {
             // 检查玩家是否有 Mega 权限 (直接从 unlocks 读取)
             const playerCanMega = battle.playerUnlocks.enable_mega;
             battle.setPlayerParty(json.player.party, playerCanMega);
+            applyPlayerPresetFaints(json.player);
             battle.playerName = json.player.name || '主角';
             log(`<b>${battle.playerName}</b> 准备战斗！`);
 
@@ -804,10 +805,18 @@ function updateAllVisuals(forceSpriteAnim = false) {
                     console.log(`[GRUDGE UI] ${m.name} 被怨恨封印，按钮禁用`);
                 }
                 
-                // 【PP系统】PP 耗尽时禁用
+                const isChoiceLockedZeroPpMove = isChoiceItemName(p.item || '') &&
+                    p.choiceLockedMove &&
+                    moveMatchesChoiceLock(m, p.choiceLockedMove);
+
+                // 【PP系统】PP 耗尽时禁用；讲究锁定招式例外，点击后由 handleAttack 转为挣扎
                 if (m.pp !== undefined && m.pp <= 0) {
-                    isDisabled = true;
-                    console.log(`[PP UI] ${m.name} PP耗尽，按钮禁用`);
+                    if (isChoiceLockedZeroPpMove) {
+                        console.log(`[PP UI] ${m.name} PP耗尽但被讲究锁定，保留按钮以触发挣扎`);
+                    } else {
+                        isDisabled = true;
+                        console.log(`[PP UI] ${m.name} PP耗尽，按钮禁用`);
+                    }
                 }
                 
                 // 【环境图层系统】检查技能是否被环境禁用
@@ -1064,6 +1073,36 @@ async function handleStruggle() {
 
 function getBattleDisplayName(pokemon) {
     return pokemon?.displayCnName || pokemon?.cnName || pokemon?.name || '???';
+}
+
+function applyPlayerPresetFaints(playerJson) {
+    if (!playerJson || !Array.isArray(playerJson.faintedPartyIndexes)) return;
+
+    const teraFaintedIndexes = Array.isArray(playerJson.teraFaintedIndexes)
+        ? playerJson.teraFaintedIndexes
+        : [];
+    const appliedIndexes = [];
+
+    playerJson.faintedPartyIndexes.forEach((idx) => {
+        const partyMember = battle.playerParty?.[idx];
+        if (!partyMember || idx === battle.playerActive) return;
+
+        if (teraFaintedIndexes.includes(idx)) {
+            partyMember.isTerastallized = true;
+            partyMember.types = [partyMember.teraType];
+            battle.playerTeraUsed = true;
+        }
+
+        partyMember.currHp = 0;
+        partyMember.status = null;
+        partyMember.statusTurns = 0;
+        partyMember.volatile = {};
+        appliedIndexes.push(idx);
+    });
+
+    if (appliedIndexes.length > 0) {
+        console.log(`[DEFAULT DATA] Marked player party indexes as fainted: ${appliedIndexes.join(', ')}`);
+    }
 }
 
 function getStruggleMove() {
