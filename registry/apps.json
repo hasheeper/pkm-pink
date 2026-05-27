@@ -38,13 +38,12 @@
     },
     "era-main-converter": {
       "id": "era-main-converter",
-      "name": "ERA to PKM Main YAML",
+      "name": "ERA to PKM YAML Converter",
       "type": "tool",
-      "profile": "main",
       "container": "./containers/app.html?app=era-main-converter",
       "entry": "./apps/era-main-converter/index.html",
       "status": "active",
-      "notes": "Static converter for old ERA JSON into PKM Main initvar YAML."
+      "notes": "Static converter for old ERA JSON into PKM Main or Universal initvar YAML."
     },
     "map": {
       "id": "map",

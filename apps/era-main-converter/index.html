@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ERA to PKM Main YAML</title>
+    <title>ERA to PKM YAML</title>
     <style>
         * {
             box-sizing: border-box;
@@ -84,6 +84,43 @@
             justify-content: flex-end;
             gap: 8px;
             flex-wrap: wrap;
+        }
+
+        .segment {
+            display: inline-grid;
+            grid-auto-flow: column;
+            border: 1px solid var(--line-strong);
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--panel);
+        }
+
+        .segment input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .segment label {
+            min-height: 34px;
+            padding: 7px 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--muted);
+            font-weight: 800;
+            font-size: 13px;
+            border-right: 1px solid var(--line);
+        }
+
+        .segment label:last-child {
+            border-right: 0;
+        }
+
+        .segment input:checked + label {
+            color: #ffffff;
+            background: var(--text);
         }
 
         .btn {
@@ -292,10 +329,16 @@
     <div class="app">
         <header>
             <div class="brand">
-                <h1>ERA to PKM Main YAML</h1>
-                <span>PKM Main / MVU-ZOD</span>
+                <h1>ERA to PKM YAML</h1>
+                <span id="profileSubtitle">PKM Main / MVU-ZOD</span>
             </div>
             <div class="toolbar">
+                <div class="segment" role="radiogroup" aria-label="输出版本">
+                    <input id="profileMain" name="profile" type="radio" value="main" checked>
+                    <label for="profileMain">Main</label>
+                    <input id="profileUniversal" name="profile" type="radio" value="universal">
+                    <label for="profileUniversal">Universal</label>
+                </div>
                 <button class="btn" id="sampleBtn" type="button">示例</button>
                 <button class="btn primary" id="convertBtn" type="button">转换</button>
                 <button class="btn success" id="copyBtn" type="button">复制</button>
@@ -312,7 +355,7 @@
                         <span>粘贴旧变量</span>
                     </div>
                     <div class="options">
-                        <label class="check">
+                        <label class="check" id="keepMapCachesLabel">
                             <input id="keepMapCaches" type="checkbox">
                             <span>地图缓存</span>
                         </label>
@@ -324,8 +367,8 @@
             <section class="pane">
                 <div class="pane-head">
                     <div class="pane-title">
-                        <strong>Main YAML</strong>
-                        <span>初始世界书变量</span>
+                        <strong id="outputTitle">Main YAML</strong>
+                        <span id="outputHint">初始世界书变量</span>
                     </div>
                     <div class="options">
                         <label class="check">
@@ -365,20 +408,34 @@
                 enable_tera: false,
                 enable_proficiency_cap: false
             };
-            const DEFAULT_SETTINGS = {
-                enableAVS: true,
-                enableCommander: true,
-                enableEVO: true,
-                enableBGM: true,
-                enableSFX: true,
-                enableClash: false,
-                enableEnvironment: true,
-                enableBattleEnvironment: true,
-                enableBattlePerformanceMode: false,
-                enableBattlePortraitMode: false,
-                enableEnemyStrategicSwitching: true
+            const DEFAULT_SETTINGS_BY_PROFILE = {
+                main: {
+                    enableAVS: true,
+                    enableCommander: true,
+                    enableEVO: true,
+                    enableBGM: true,
+                    enableSFX: true,
+                    enableClash: false,
+                    enableEnvironment: true,
+                    enableBattleEnvironment: true,
+                    enableBattlePerformanceMode: false,
+                    enableBattlePortraitMode: false,
+                    enableEnemyStrategicSwitching: true
+                },
+                universal: {
+                    enableAVS: true,
+                    enableCommander: true,
+                    enableEVO: true,
+                    enableBGM: true,
+                    enableSFX: true,
+                    enableClash: false,
+                    enableEnvironment: true,
+                    enableBattlePerformanceMode: false,
+                    enableBattlePortraitMode: false,
+                    enableEnemyStrategicSwitching: true
+                }
             };
-            const DEFAULT_NPC_RECORDS = {
+            const DEFAULT_MAIN_NPC_RECORDS = {
                 gloria: { love: 0 },
                 rosa: { love: 0 },
                 dawn: { love: 0 },
@@ -412,8 +469,14 @@
             const els = {
                 input: document.getElementById("input"),
                 output: document.getElementById("output"),
+                profileMain: document.getElementById("profileMain"),
+                profileUniversal: document.getElementById("profileUniversal"),
+                profileSubtitle: document.getElementById("profileSubtitle"),
                 keepMapCaches: document.getElementById("keepMapCaches"),
+                keepMapCachesLabel: document.getElementById("keepMapCachesLabel"),
                 wrapStatData: document.getElementById("wrapStatData"),
+                outputTitle: document.getElementById("outputTitle"),
+                outputHint: document.getElementById("outputHint"),
                 sampleBtn: document.getElementById("sampleBtn"),
                 convertBtn: document.getElementById("convertBtn"),
                 copyBtn: document.getElementById("copyBtn"),
@@ -446,6 +509,18 @@
 
             function normalizeString(value, fallback = "") {
                 return typeof value === "string" && value.trim() ? value.trim() : fallback;
+            }
+
+            function getProfile() {
+                return els.profileUniversal.checked ? "universal" : "main";
+            }
+
+            function isUniversalProfile(profile) {
+                return profile === "universal";
+            }
+
+            function getDefaultSettings(profile) {
+                return clone(DEFAULT_SETTINGS_BY_PROFILE[profile] || DEFAULT_SETTINGS_BY_PROFILE.main, {});
             }
 
             function sumAndClamp(base, delta, min, max, fallback = 0) {
@@ -589,8 +664,20 @@
                 };
             }
 
-            function makeEmptySlot(slot) {
-                return {
+            function normalizeBonds(raw, friendship) {
+                const source = isObject(raw) ? raw : {};
+                if (source.bonds !== undefined && source.bonds !== null) {
+                    return clampNumber(source.bonds, 0, 255, 0);
+                }
+                const avs = friendship?.avs || normalizeFriendship(source.friendship || source.avs).avs;
+                const total = ["trust", "passion", "insight", "devotion"].reduce((sum, key) => {
+                    return sum + clampNumber(avs[key], 0, 255, 0);
+                }, 0);
+                return clampNumber(total / 4, 0, 255, 0);
+            }
+
+            function makeEmptySlot(slot, profile = "main") {
+                const base = {
                     slot,
                     name: null,
                     nickname: null,
@@ -614,6 +701,11 @@
                     },
                     notes: null
                 };
+                if (isUniversalProfile(profile)) {
+                    delete base.friendship;
+                    base.bonds = 0;
+                }
+                return base;
             }
 
             function normalizeStatsMeta(statsMeta, pokemon) {
@@ -634,11 +726,17 @@
                 };
             }
 
-            function normalizePokemon(raw, slot = null) {
-                if (!isObject(raw)) return makeEmptySlot(slot || 0);
+            function normalizePokemon(raw, slot = null, profile = "main") {
+                if (!isObject(raw)) return makeEmptySlot(slot || 0, profile);
                 const slotNumber = slot || clampNumber(raw.slot, 1, 999, 0) || 0;
                 const name = normalizeString(raw.name || raw.species || raw.nickname, "");
-                if (!name) return makeEmptySlot(slotNumber);
+                if (!name) return makeEmptySlot(slotNumber, profile);
+                const friendshipSeed = raw.friendship || raw.avs || (
+                    raw.bonds !== undefined && raw.bonds !== null
+                        ? { trust: raw.bonds, passion: raw.bonds, insight: raw.bonds, devotion: raw.bonds }
+                        : null
+                );
+                const friendship = normalizeFriendship(friendshipSeed);
                 const next = {
                     slot: slotNumber || null,
                     name,
@@ -655,30 +753,34 @@
                     teraType: raw.teraType || null,
                     isAce: true,
                     isLead: raw.isLead === true,
-                    friendship: normalizeFriendship(raw.friendship || raw.avs),
+                    friendship,
                     moves: normalizeMoves(raw.moves),
                     stats_meta: normalizeStatsMeta(raw.stats_meta, raw),
                     notes: raw.notes || null
                 };
+                if (isUniversalProfile(profile)) {
+                    delete next.friendship;
+                    next.bonds = normalizeBonds(raw, friendship);
+                }
                 return next;
             }
 
-            function normalizeTransferBuffer(value) {
+            function normalizeTransferBuffer(value, profile = "main") {
                 if (!isObject(value) || !value.name) return null;
-                const normalized = normalizePokemon(value, null);
+                const normalized = normalizePokemon(value, null, profile);
                 delete normalized.slot;
                 normalized.isLead = false;
                 return normalized;
             }
 
-            function normalizeParty(value) {
+            function normalizeParty(value, profile = "main") {
                 const src = isObject(value) ? value : {};
                 const rawSlots = Array.isArray(src.slots)
                     ? src.slots
                     : [src.slot1, src.slot2, src.slot3, src.slot4, src.slot5, src.slot6];
                 const slots = Array.from({ length: MAX_PARTY_SIZE }, (_, index) => {
                     const slotNumber = index + 1;
-                    return normalizePokemon(rawSlots[index] || makeEmptySlot(slotNumber), slotNumber);
+                    return normalizePokemon(rawSlots[index] || makeEmptySlot(slotNumber, profile), slotNumber, profile);
                 });
                 const explicitLead = slots.findIndex((pokemon) => pokemon.name && pokemon.isLead);
                 const firstFilled = slots.findIndex((pokemon) => pokemon.name);
@@ -689,34 +791,38 @@
                 });
                 return {
                     slots,
-                    transferBuffer: normalizeTransferBuffer(src.transferBuffer ?? src.transfer_buffer)
+                    transferBuffer: normalizeTransferBuffer(src.transferBuffer ?? src.transfer_buffer, profile)
                 };
             }
 
-            function normalizeBox(value) {
+            function normalizeBox(value, profile = "main") {
                 const src = isObject(value) ? value : {};
                 if (Array.isArray(src.boxes)) {
                     const boxes = src.boxes.map((box, index) => ({
                         id: normalizeString(box?.id, `box_${String(index + 1).padStart(2, "0")}`),
                         name: normalizeString(box?.name, `Box ${index + 1}`),
                         slots: Array.isArray(box?.slots)
-                            ? box.slots.map((pokemon) => normalizeTransferBuffer(pokemon)).filter(Boolean)
+                            ? box.slots.map((pokemon) => normalizeTransferBuffer(pokemon, profile)).filter(Boolean)
                             : []
                     }));
-                    return {
+                    const result = {
                         boxes: boxes.length ? boxes : [{ id: "box_01", name: "Box 1", slots: [] }],
                         indexes: isObject(src.indexes) ? clone(src.indexes, {}) : {}
                     };
+                    if (isUniversalProfile(profile)) delete result.indexes;
+                    return result;
                 }
                 const slots = Object.entries(src)
                     .filter(([key, pokemon]) => key.startsWith("storage_") && isObject(pokemon) && pokemon.name)
                     .sort(([left], [right]) => left.localeCompare(right))
-                    .map(([, pokemon]) => normalizeTransferBuffer(pokemon))
+                    .map(([, pokemon]) => normalizeTransferBuffer(pokemon, profile))
                     .filter(Boolean);
-                return {
+                const result = {
                     boxes: [{ id: "box_01", name: "Box 1", slots }],
                     indexes: {}
                 };
+                if (isUniversalProfile(profile)) delete result.indexes;
+                return result;
             }
 
             function normalizeWeatherGrid(value) {
@@ -737,6 +843,20 @@
                 const src = isObject(value) ? clone(value, {}) : {};
                 const loc = isObject(src.location) ? src.location : {};
                 const phenomenon = isObject(src.phenomenon) ? src.phenomenon : {};
+                if (isUniversalProfile(options.profile)) {
+                    return {
+                        location: {
+                            region: normalizeString(loc.region, ""),
+                            location: normalizeString(loc.location || loc.name, "")
+                        },
+                        time: {
+                            day: clampNumber(src.time?.day, 1, 99999, 1),
+                            period: normalizeString(src.time?.period, "morning"),
+                            day_advance: src.time?.day_advance || null,
+                            period_set: src.time?.period_set || null
+                        }
+                    };
+                }
                 return {
                     location: {
                         region: normalizeString(loc.region, ""),
@@ -756,47 +876,80 @@
                 };
             }
 
-            function normalizeNpcRecords(records) {
+            function deriveUniversalNpcStage(love) {
+                if (love <= 31) return -2;
+                if (love <= 63) return -1;
+                if (love <= 127) return 0;
+                if (love <= 159) return 1;
+                if (love <= 191) return 2;
+                if (love <= 223) return 3;
+                return 4;
+            }
+
+            function normalizeNpcRecords(records, profile = "main") {
                 const src = isObject(records) ? records : {};
                 const output = {};
-                Object.entries({ ...clone(DEFAULT_NPC_RECORDS, {}), ...src }).forEach(([key, record]) => {
+                const defaults = isUniversalProfile(profile) ? {} : clone(DEFAULT_MAIN_NPC_RECORDS, {});
+                Object.entries({ ...defaults, ...src }).forEach(([key, record]) => {
                     if (!key) return;
                     const rawLove = isObject(record) ? record.love : record;
                     const loveUp = isObject(record) ? record.love_up : 0;
-                    output[key] = { love: sumAndClamp(rawLove, loveUp, -100, 100, 0) };
+                    if (isUniversalProfile(profile)) {
+                        const love = sumAndClamp(rawLove, loveUp, 0, 255, 0);
+                        output[key] = { love, stage: deriveUniversalNpcStage(love) };
+                    } else {
+                        output[key] = { love: sumAndClamp(rawLove, loveUp, -100, 100, 0) };
+                    }
                 });
                 return output;
             }
 
             function makeDefaultPkmState(options) {
-                return {
-                    player: {
+                const profile = options.profile || "main";
+                const player = isUniversalProfile(profile)
+                    ? {
+                        name: "{{user}}",
+                        proficiency: 0,
+                        unlocks: clone(DEFAULT_UNLOCKS, {})
+                    }
+                    : {
                         name: "{{user}}",
                         trainerProficiency: 0,
                         proficiency: 0,
                         unlocks: clone(DEFAULT_UNLOCKS, {}),
                         bonds: {}
-                    },
-                    party: normalizeParty(null),
-                    box: {
+                    };
+                const box = isUniversalProfile(profile)
+                    ? {
+                        boxes: [{ id: "box_01", name: "Box 1", slots: [] }]
+                    }
+                    : {
                         boxes: [{ id: "box_01", name: "Box 1", slots: [] }],
                         indexes: {}
-                    },
+                    };
+                const state = {
+                    player,
+                    party: normalizeParty(null, profile),
+                    box,
                     world: normalizeWorld(null, options),
                     npcs: {
-                        records: normalizeNpcRecords(null)
+                        records: normalizeNpcRecords(null, profile)
                     },
-                    battle: {
+                    settings: getDefaultSettings(profile)
+                };
+                if (!isUniversalProfile(profile)) {
+                    state.battle = {
                         lastConfig: null,
                         lastResult: null,
                         pendingNarrative: null
-                    },
-                    settings: clone(DEFAULT_SETTINGS, {})
-                };
+                    };
+                }
+                return state;
             }
 
             function normalizePkmState(value, options) {
                 const source = isObject(value) ? clone(value, {}) : {};
+                const profile = options.profile || "main";
                 const base = makeDefaultPkmState(options);
                 const player = isObject(source.player) ? source.player : {};
                 const trainerProficiency = sumAndClamp(
@@ -811,31 +964,45 @@
                 const npcSource = isObject(source.npcs?.records)
                     ? source.npcs.records
                     : (isObject(worldSource?.npcs) ? worldSource.npcs : {});
-                return {
-                    player: {
+                const normalizedPlayer = isUniversalProfile(profile)
+                    ? {
+                        ...base.player,
+                        name: normalizeString(player.name, base.player.name),
+                        proficiency: trainerProficiency,
+                        unlocks: { ...clone(DEFAULT_UNLOCKS, {}), ...(isObject(player.unlocks) ? player.unlocks : {}) }
+                    }
+                    : {
                         ...base.player,
                         name: normalizeString(player.name, base.player.name),
                         trainerProficiency,
                         proficiency: trainerProficiency,
                         unlocks: { ...clone(DEFAULT_UNLOCKS, {}), ...(isObject(player.unlocks) ? player.unlocks : {}) },
                         bonds: isObject(player.bonds) ? clone(player.bonds, {}) : {}
-                    },
-                    party: normalizeParty(source.party || player.party),
-                    box: normalizeBox(source.box || player.box || player.party?.box),
+                    };
+                const settings = {
+                    ...getDefaultSettings(profile),
+                    ...(isObject(source.settings) ? source.settings : {}),
+                    ...(isObject(player.settings) ? player.settings : {})
+                };
+                if (isUniversalProfile(profile)) delete settings.enableBattleEnvironment;
+
+                const state = {
+                    player: normalizedPlayer,
+                    party: normalizeParty(source.party || player.party, profile),
+                    box: normalizeBox(source.box || player.box || player.party?.box, profile),
                     world,
                     npcs: {
-                        records: normalizeNpcRecords(npcSource)
+                        records: normalizeNpcRecords(npcSource, profile)
                     },
-                    battle: {
+                    settings
+                };
+                if (!isUniversalProfile(profile)) {
+                    state.battle = {
                         ...base.battle,
                         ...(isObject(source.battle) ? source.battle : {})
-                    },
-                    settings: {
-                        ...clone(DEFAULT_SETTINGS, {}),
-                        ...(isObject(source.settings) ? source.settings : {}),
-                        ...(isObject(player.settings) ? player.settings : {})
-                    }
-                };
+                    };
+                }
+                return state;
             }
 
             function migrateEraToPkmState(eraVars, options) {
@@ -950,7 +1117,9 @@
                 const boxCount = pkm.box.boxes.reduce((total, box) => total + (Array.isArray(box.slots) ? box.slots.length : 0), 0);
                 els.partyMetric.textContent = `队伍 ${partyCount}/6`;
                 els.boxMetric.textContent = `盒子 ${boxCount}`;
-                els.worldMetric.textContent = options.keepMapCaches ? "world 含缓存" : "world 简化";
+                els.worldMetric.textContent = isUniversalProfile(options.profile)
+                    ? "Universal world"
+                    : (options.keepMapCaches ? "world 含缓存" : "world 简化");
                 return { partyCount, boxCount };
             }
 
@@ -959,18 +1128,38 @@
                 els.status.className = `status ${type}`.trim();
             }
 
+            function getCurrentOptions() {
+                const profile = getProfile();
+                return {
+                    profile,
+                    keepMapCaches: !isUniversalProfile(profile) && els.keepMapCaches.checked,
+                    wrapStatData: els.wrapStatData.checked
+                };
+            }
+
+            function syncProfileUi() {
+                const profile = getProfile();
+                const isUniversal = isUniversalProfile(profile);
+                els.profileSubtitle.textContent = isUniversal ? "PKM Universal / MVU-ZOD" : "PKM Main / MVU-ZOD";
+                els.outputTitle.textContent = isUniversal ? "Universal YAML" : "Main YAML";
+                els.outputHint.textContent = isUniversal ? "精简版初始世界书变量" : "初始世界书变量";
+                els.keepMapCaches.disabled = isUniversal;
+                els.keepMapCachesLabel.style.opacity = isUniversal ? "0.45" : "1";
+                els.keepMapCachesLabel.title = isUniversal ? "Universal schema 不保留地图天气/刷新缓存" : "";
+                if (isUniversal) els.keepMapCaches.checked = false;
+                summarize(makeDefaultPkmState(getCurrentOptions()), getCurrentOptions());
+            }
+
             function runConvert() {
                 try {
-                    const options = {
-                        keepMapCaches: els.keepMapCaches.checked,
-                        wrapStatData: els.wrapStatData.checked
-                    };
+                    const options = getCurrentOptions();
                     const raw = parseInput(els.input.value);
                     const pkm = convert(raw, options);
                     const root = options.wrapStatData ? { stat_data: { pkm } } : { pkm };
                     els.output.value = dumpYaml(root) + "\n";
                     const summary = summarize(pkm, options);
-                    setStatus(`转换完成：${summary.partyCount} 只队伍宝可梦，Main YAML 已生成。`, "ok");
+                    const profileLabel = isUniversalProfile(options.profile) ? "Universal" : "Main";
+                    setStatus(`转换完成：${summary.partyCount} 只队伍宝可梦，${profileLabel} YAML 已生成。`, "ok");
                 } catch (error) {
                     setStatus(`转换失败：${error.message}`, "error");
                 }
@@ -983,12 +1172,12 @@
                 }
                 try {
                     await navigator.clipboard.writeText(els.output.value);
-                    setStatus("已复制 Main YAML。", "ok");
+                    setStatus(`已复制 ${isUniversalProfile(getProfile()) ? "Universal" : "Main"} YAML。`, "ok");
                 } catch (_) {
                     els.output.focus();
                     els.output.select();
                     document.execCommand("copy");
-                    setStatus("已复制 Main YAML。", "ok");
+                    setStatus(`已复制 ${isUniversalProfile(getProfile()) ? "Universal" : "Main"} YAML。`, "ok");
                 }
             }
 
@@ -1001,7 +1190,7 @@
                 const url = URL.createObjectURL(blob);
                 const anchor = document.createElement("a");
                 anchor.href = url;
-                anchor.download = "pkm-main-initvar.yaml";
+                anchor.download = isUniversalProfile(getProfile()) ? "pkm-universal-initvar.yaml" : "pkm-main-initvar.yaml";
                 document.body.append(anchor);
                 anchor.click();
                 anchor.remove();
@@ -1077,10 +1266,21 @@
             els.copyBtn.addEventListener("click", copyOutput);
             els.downloadBtn.addEventListener("click", downloadOutput);
             els.sampleBtn.addEventListener("click", loadSample);
+            [els.profileMain, els.profileUniversal].forEach((radio) => {
+                radio.addEventListener("change", () => {
+                    syncProfileUi();
+                    if (els.input.value.trim()) runConvert();
+                });
+            });
+            [els.keepMapCaches, els.wrapStatData].forEach((input) => {
+                input.addEventListener("change", () => {
+                    if (els.input.value.trim()) runConvert();
+                });
+            });
             els.clearBtn.addEventListener("click", () => {
                 els.input.value = "";
                 els.output.value = "";
-                summarize(makeDefaultPkmState({ keepMapCaches: false }), { keepMapCaches: false });
+                summarize(makeDefaultPkmState(getCurrentOptions()), getCurrentOptions());
                 setStatus("等待输入。");
             });
             els.input.addEventListener("keydown", (event) => {
@@ -1090,7 +1290,7 @@
                 }
             });
 
-            summarize(makeDefaultPkmState({ keepMapCaches: false }), { keepMapCaches: false });
+            syncProfileUi();
         }());
     </script>
 </body>
