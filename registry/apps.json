@@ -36,6 +36,16 @@
       "status": "legacy",
       "notes": "Mini version. Map/transit/social removed. Last commit 2026-02-03. May be deprecated in favor of dashboard-main."
     },
+    "era-main-converter": {
+      "id": "era-main-converter",
+      "name": "ERA to PKM Main YAML",
+      "type": "tool",
+      "profile": "main",
+      "container": "./containers/app.html?app=era-main-converter",
+      "entry": "./apps/era-main-converter/index.html",
+      "status": "active",
+      "notes": "Static converter for old ERA JSON into PKM Main initvar YAML."
+    },
     "map": {
       "id": "map",
       "name": "RHODIA Tactical Map",

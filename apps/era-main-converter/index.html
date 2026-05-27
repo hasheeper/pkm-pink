@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERA to PKM Main YAML</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        :root {
+            color-scheme: light;
+            --bg: #f5f7fb;
+            --panel: #ffffff;
+            --panel-soft: #eef3f8;
+            --text: #17202a;
+            --muted: #637083;
+            --line: #d6dde8;
+            --line-strong: #b7c2d2;
+            --blue: #2563eb;
+            --green: #0f8a5f;
+            --red: #b42318;
+            --amber: #b45309;
+            --shadow: 0 16px 40px rgba(31, 41, 55, 0.10);
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Inter, "Noto Sans SC", "Microsoft YaHei", Arial, sans-serif;
+        }
+
+        button,
+        textarea,
+        input {
+            font: inherit;
+        }
+
+        .app {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            min-height: 100vh;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 16px 22px;
+            border-bottom: 1px solid var(--line);
+            background: rgba(255, 255, 255, 0.86);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+
+        .brand {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 180px;
+        }
+
+        .brand h1 {
+            margin: 0;
+            font-size: 18px;
+            line-height: 1.2;
+            letter-spacing: 0;
+        }
+
+        .brand span {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            border: 1px solid var(--line-strong);
+            background: var(--panel);
+            color: var(--text);
+            min-height: 36px;
+            padding: 7px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-weight: 700;
+            transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+        }
+
+        .btn:hover {
+            border-color: #8fa0b8;
+            background: #f8fafc;
+        }
+
+        .btn.primary {
+            border-color: var(--blue);
+            background: var(--blue);
+            color: #ffffff;
+        }
+
+        .btn.primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn.success {
+            border-color: var(--green);
+            color: var(--green);
+        }
+
+        .btn.danger {
+            border-color: #f0b4ae;
+            color: var(--red);
+        }
+
+        .main {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 16px;
+            padding: 16px;
+        }
+
+        .pane {
+            min-width: 0;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            display: grid;
+            grid-template-rows: auto 1fr;
+            overflow: hidden;
+        }
+
+        .pane-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--line);
+            background: #fbfcfe;
+        }
+
+        .pane-title {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .pane-title strong {
+            font-size: 14px;
+        }
+
+        .pane-title span {
+            color: var(--muted);
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 560px;
+            height: calc(100vh - 162px);
+            resize: none;
+            border: 0;
+            outline: none;
+            padding: 14px;
+            background: #ffffff;
+            color: #111827;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+            font-size: 12px;
+            line-height: 1.55;
+            tab-size: 2;
+        }
+
+        #output {
+            background: #fbfcfe;
+        }
+
+        .options {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .check {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 13px;
+            color: var(--muted);
+            user-select: none;
+        }
+
+        .check input {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--blue);
+        }
+
+        footer {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 16px 14px;
+        }
+
+        .status {
+            min-height: 24px;
+            color: var(--muted);
+            font-size: 13px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .status.ok {
+            color: var(--green);
+        }
+
+        .status.warn {
+            color: var(--amber);
+        }
+
+        .status.error {
+            color: var(--red);
+        }
+
+        .metrics {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .metric {
+            border: 1px solid var(--line);
+            background: var(--panel-soft);
+            border-radius: 8px;
+            padding: 4px 8px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        @media (max-width: 900px) {
+            header {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .toolbar {
+                justify-content: flex-start;
+            }
+
+            .main {
+                grid-template-columns: 1fr;
+            }
+
+            textarea {
+                height: 44vh;
+                min-height: 320px;
+            }
+
+            footer {
+                grid-template-columns: 1fr;
+            }
+
+            .metrics {
+                justify-content: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <header>
+            <div class="brand">
+                <h1>ERA to PKM Main YAML</h1>
+                <span>PKM Main / MVU-ZOD</span>
+            </div>
+            <div class="toolbar">
+                <button class="btn" id="sampleBtn" type="button">示例</button>
+                <button class="btn primary" id="convertBtn" type="button">转换</button>
+                <button class="btn success" id="copyBtn" type="button">复制</button>
+                <button class="btn" id="downloadBtn" type="button">下载</button>
+                <button class="btn danger" id="clearBtn" type="button">清空</button>
+            </div>
+        </header>
+
+        <main class="main">
+            <section class="pane">
+                <div class="pane-head">
+                    <div class="pane-title">
+                        <strong>ERA JSON</strong>
+                        <span>粘贴旧变量</span>
+                    </div>
+                    <div class="options">
+                        <label class="check">
+                            <input id="keepMapCaches" type="checkbox">
+                            <span>地图缓存</span>
+                        </label>
+                    </div>
+                </div>
+                <textarea id="input" spellcheck="false" placeholder='{"settings":{...},"player":{...},"world_state":{...}}'></textarea>
+            </section>
+
+            <section class="pane">
+                <div class="pane-head">
+                    <div class="pane-title">
+                        <strong>Main YAML</strong>
+                        <span>初始世界书变量</span>
+                    </div>
+                    <div class="options">
+                        <label class="check">
+                            <input id="wrapStatData" type="checkbox">
+                            <span>stat_data 包裹</span>
+                        </label>
+                    </div>
+                </div>
+                <textarea id="output" spellcheck="false" readonly></textarea>
+            </section>
+        </main>
+
+        <footer>
+            <div id="status" class="status">等待输入。</div>
+            <div class="metrics">
+                <span id="partyMetric" class="metric">队伍 0/6</span>
+                <span id="boxMetric" class="metric">盒子 0</span>
+                <span id="worldMetric" class="metric">world 简化</span>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        (function () {
+            "use strict";
+
+            const MAX_PARTY_SIZE = 6;
+            const STAT_KEYS = ["hp", "atk", "def", "spa", "spd", "spe"];
+            const PERIODS = ["dawn", "morning", "noon", "afternoon", "evening", "night", "midnight"];
+            const DEFAULT_UNLOCKS = {
+                enable_bond: false,
+                enable_styles: false,
+                enable_insight: false,
+                enable_mega: false,
+                enable_z_move: false,
+                enable_dynamax: false,
+                enable_tera: false,
+                enable_proficiency_cap: false
+            };
+            const DEFAULT_SETTINGS = {
+                enableAVS: true,
+                enableCommander: true,
+                enableEVO: true,
+                enableBGM: true,
+                enableSFX: true,
+                enableClash: false,
+                enableEnvironment: true,
+                enableBattleEnvironment: true,
+                enableBattlePerformanceMode: false,
+                enableBattlePortraitMode: false,
+                enableEnemyStrategicSwitching: true
+            };
+            const DEFAULT_NPC_RECORDS = {
+                gloria: { love: 0 },
+                rosa: { love: 0 },
+                dawn: { love: 0 },
+                akari: { love: 0 },
+                serena: { love: 0 },
+                may: { love: 0 },
+                selene: { love: 0 },
+                juliana: { love: 0 },
+                lusamine: { love: 0 },
+                lillie: { love: 0 },
+                mallow: { love: 0 },
+                lana: { love: 0 },
+                irida: { love: 0 },
+                lacey: { love: 0 },
+                misty: { love: 0 },
+                sonia: { love: 0 },
+                hex: { love: 0 },
+                roxie: { love: 0 },
+                iono: { love: 0 },
+                erika: { love: 0 },
+                nessa: { love: 0 },
+                marnie: { love: 0 },
+                acerola: { love: 0 },
+                bea: { love: 0 },
+                skyla: { love: 0 },
+                iris: { love: 0 },
+                nemona: { love: 0 },
+                cynthia: { love: 0 }
+            };
+
+            const els = {
+                input: document.getElementById("input"),
+                output: document.getElementById("output"),
+                keepMapCaches: document.getElementById("keepMapCaches"),
+                wrapStatData: document.getElementById("wrapStatData"),
+                sampleBtn: document.getElementById("sampleBtn"),
+                convertBtn: document.getElementById("convertBtn"),
+                copyBtn: document.getElementById("copyBtn"),
+                downloadBtn: document.getElementById("downloadBtn"),
+                clearBtn: document.getElementById("clearBtn"),
+                status: document.getElementById("status"),
+                partyMetric: document.getElementById("partyMetric"),
+                boxMetric: document.getElementById("boxMetric"),
+                worldMetric: document.getElementById("worldMetric")
+            };
+
+            function isObject(value) {
+                return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+            }
+
+            function clone(value, fallback = null) {
+                if (value === undefined || value === null) return fallback;
+                try {
+                    return JSON.parse(JSON.stringify(value));
+                } catch (_) {
+                    return fallback;
+                }
+            }
+
+            function clampNumber(value, min, max, fallback = 0) {
+                const n = Number(value);
+                if (!Number.isFinite(n)) return fallback;
+                return Math.max(min, Math.min(max, Math.round(n)));
+            }
+
+            function normalizeString(value, fallback = "") {
+                return typeof value === "string" && value.trim() ? value.trim() : fallback;
+            }
+
+            function sumAndClamp(base, delta, min, max, fallback = 0) {
+                const start = clampNumber(base, min, max, fallback);
+                const add = Number(delta);
+                return clampNumber(start + (Number.isFinite(add) ? add : 0), min, max, start);
+            }
+
+            function normalizeMoves(value) {
+                if (Array.isArray(value)) {
+                    return Array.from({ length: 4 }, (_, index) => value[index] || null);
+                }
+                if (isObject(value)) {
+                    return [value.move1, value.move2, value.move3, value.move4].map((move) => move || null);
+                }
+                return [null, null, null, null];
+            }
+
+            function normalizeIvs(value) {
+                const src = isObject(value) ? value : {};
+                const output = {};
+                STAT_KEYS.forEach((key) => {
+                    const raw = src[key];
+                    const n = Number(raw);
+                    output[key] = Number.isFinite(n) ? clampNumber(n, 0, 31, null) : null;
+                });
+                return output;
+            }
+
+            function calculateDerivedTime(day) {
+                const normalizedDay = Math.max(1, Math.round(Number(day) || 1));
+                const dayOfYear = ((normalizedDay - 1) % 365) + 1;
+                return {
+                    year: Math.floor((normalizedDay - 1) / 365) + 1,
+                    dayOfYear,
+                    month: Math.floor((dayOfYear - 1) / 30) + 1,
+                    dayOfMonth: ((dayOfYear - 1) % 30) + 1,
+                    week: Math.floor((normalizedDay - 1) / 7) + 1,
+                    dayOfWeek: (normalizedDay - 1) % 7
+                };
+            }
+
+            function parseTimeAdvance(value) {
+                if (value === null || value === undefined || value === "") return null;
+                if (typeof value === "number") return { days: value };
+                const text = String(value).trim().toLowerCase();
+                if (text === "next_period" || text === "next period" || text === "nextperiod") return { periods: 1 };
+                if (text === "nextday" || text === "next_day" || text === "next day") return { nextDay: true };
+                const compoundMatch = text.match(/^(\d+)\s*(day|days|week|weeks|month|months)[_\s]+(\w+)$/);
+                if (compoundMatch && PERIODS.includes(compoundMatch[3])) {
+                    const valueNumber = Number(compoundMatch[1]);
+                    const unit = compoundMatch[2];
+                    const days = unit.startsWith("week")
+                        ? valueNumber * 7
+                        : unit.startsWith("month")
+                            ? valueNumber * 30
+                            : valueNumber;
+                    return { days, toPeriod: compoundMatch[3] };
+                }
+                const periodMatch = text.match(/^(\d+)\s*periods?$/);
+                if (periodMatch) return { periods: Number(periodMatch[1]) };
+                const dayMatch = text.match(/^(\d+)\s*(day|days|week|weeks|month|months)$/);
+                if (dayMatch) {
+                    const valueNumber = Number(dayMatch[1]);
+                    const unit = dayMatch[2];
+                    return {
+                        days: unit.startsWith("week")
+                            ? valueNumber * 7
+                            : unit.startsWith("month")
+                                ? valueNumber * 30
+                                : valueNumber
+                    };
+                }
+                const skipMatch = text.match(/^skip[_\s]?to[_\s]?(\w+)$/);
+                if (skipMatch && PERIODS.includes(skipMatch[1])) return { skipTo: skipMatch[1] };
+                return null;
+            }
+
+            function applyTimeAdvance(time, advance) {
+                let day = Math.max(1, Math.round(Number(time?.day) || 1));
+                let period = PERIODS.includes(time?.period) ? time.period : "morning";
+                if (!advance) return { day, period };
+                if (advance.nextDay) {
+                    return { day: day + 1, period: "morning" };
+                }
+                if (advance.days) {
+                    day += Math.max(0, Math.round(advance.days));
+                    if (PERIODS.includes(advance.toPeriod)) period = advance.toPeriod;
+                }
+                if (advance.periods) {
+                    const total = PERIODS.indexOf(period) + Math.max(0, Math.round(advance.periods));
+                    day += Math.floor(total / PERIODS.length);
+                    period = PERIODS[total % PERIODS.length];
+                }
+                if (advance.skipTo) {
+                    const current = PERIODS.indexOf(period);
+                    const target = PERIODS.indexOf(advance.skipTo);
+                    if (target <= current) day += 1;
+                    period = advance.skipTo;
+                }
+                return { day, period };
+            }
+
+            function applyPeriodSet(time, targetPeriod) {
+                let day = Math.max(1, Math.round(Number(time?.day) || 1));
+                let period = PERIODS.includes(time?.period) ? time.period : "morning";
+                const target = String(targetPeriod || "").toLowerCase();
+                if (!PERIODS.includes(target)) return { day, period };
+                if (PERIODS.indexOf(target) < PERIODS.indexOf(period)) day += 1;
+                return { day, period: target };
+            }
+
+            function normalizeTime(value) {
+                const raw = isObject(value) ? clone(value, {}) : {};
+                let next = {
+                    day: clampNumber(raw.day, 1, 99999, 1),
+                    period: PERIODS.includes(raw.period) ? raw.period : "morning"
+                };
+                if (raw.day_advance) next = { ...next, ...applyTimeAdvance(next, parseTimeAdvance(raw.day_advance)) };
+                if (raw.period_set) next = { ...next, ...applyPeriodSet(next, raw.period_set) };
+                return {
+                    day: next.day,
+                    period: next.period,
+                    derived: calculateDerivedTime(next.day),
+                    day_advance: null,
+                    period_set: null
+                };
+            }
+
+            function normalizeFriendship(value) {
+                const src = isObject(value) ? value : {};
+                const avsRaw = isObject(src.avs) ? src.avs : src;
+                const avUp = isObject(src.av_up) ? src.av_up : {};
+                return {
+                    avs: {
+                        trust: sumAndClamp(avsRaw.trust, avUp.trust, 0, 255, 0),
+                        passion: sumAndClamp(avsRaw.passion, avUp.passion, 0, 255, 0),
+                        insight: sumAndClamp(avsRaw.insight, avUp.insight, 0, 255, 0),
+                        devotion: sumAndClamp(avsRaw.devotion, avUp.devotion, 0, 255, 0)
+                    }
+                };
+            }
+
+            function makeEmptySlot(slot) {
+                return {
+                    slot,
+                    name: null,
+                    nickname: null,
+                    species: null,
+                    gender: null,
+                    lv: null,
+                    quality: null,
+                    nature: null,
+                    ability: null,
+                    shiny: false,
+                    item: null,
+                    mechanic: null,
+                    teraType: null,
+                    isAce: false,
+                    isLead: false,
+                    friendship: normalizeFriendship(null),
+                    moves: normalizeMoves(null),
+                    stats_meta: {
+                        ivs: normalizeIvs(null),
+                        ev_level: 0
+                    },
+                    notes: null
+                };
+            }
+
+            function normalizeStatsMeta(statsMeta, pokemon) {
+                const src = isObject(statsMeta) ? clone(statsMeta, {}) : {};
+                const hasPokemon = isObject(pokemon) && Boolean(pokemon.name || pokemon.species || pokemon.nickname);
+                const lv = clampNumber(pokemon?.lv ?? pokemon?.level, 1, 100, 5);
+                const calculatedEv = hasPokemon ? Math.min(252, Math.floor(lv * 2.5)) : 0;
+                const rawEv = Number(src.ev_level);
+                const rawUp = Number(src.ev_up);
+                const baseEv = Number.isFinite(rawEv) ? rawEv : calculatedEv;
+                const withUp = baseEv + (Number.isFinite(rawUp) ? rawUp : 0);
+                const evLevel = hasPokemon
+                    ? Math.max(clampNumber(withUp, 0, 252, 0), calculatedEv)
+                    : 0;
+                return {
+                    ivs: normalizeIvs(src.ivs),
+                    ev_level: evLevel
+                };
+            }
+
+            function normalizePokemon(raw, slot = null) {
+                if (!isObject(raw)) return makeEmptySlot(slot || 0);
+                const slotNumber = slot || clampNumber(raw.slot, 1, 999, 0) || 0;
+                const name = normalizeString(raw.name || raw.species || raw.nickname, "");
+                if (!name) return makeEmptySlot(slotNumber);
+                const next = {
+                    slot: slotNumber || null,
+                    name,
+                    nickname: raw.nickname || null,
+                    species: normalizeString(raw.species, name),
+                    gender: raw.gender || null,
+                    lv: clampNumber(raw.lv ?? raw.level, 1, 100, 5),
+                    quality: raw.quality || null,
+                    nature: raw.nature || null,
+                    ability: raw.ability || null,
+                    shiny: raw.shiny === true,
+                    item: raw.item || null,
+                    mechanic: raw.mechanic || null,
+                    teraType: raw.teraType || null,
+                    isAce: true,
+                    isLead: raw.isLead === true,
+                    friendship: normalizeFriendship(raw.friendship || raw.avs),
+                    moves: normalizeMoves(raw.moves),
+                    stats_meta: normalizeStatsMeta(raw.stats_meta, raw),
+                    notes: raw.notes || null
+                };
+                return next;
+            }
+
+            function normalizeTransferBuffer(value) {
+                if (!isObject(value) || !value.name) return null;
+                const normalized = normalizePokemon(value, null);
+                delete normalized.slot;
+                normalized.isLead = false;
+                return normalized;
+            }
+
+            function normalizeParty(value) {
+                const src = isObject(value) ? value : {};
+                const rawSlots = Array.isArray(src.slots)
+                    ? src.slots
+                    : [src.slot1, src.slot2, src.slot3, src.slot4, src.slot5, src.slot6];
+                const slots = Array.from({ length: MAX_PARTY_SIZE }, (_, index) => {
+                    const slotNumber = index + 1;
+                    return normalizePokemon(rawSlots[index] || makeEmptySlot(slotNumber), slotNumber);
+                });
+                const explicitLead = slots.findIndex((pokemon) => pokemon.name && pokemon.isLead);
+                const firstFilled = slots.findIndex((pokemon) => pokemon.name);
+                slots.forEach((pokemon, index) => {
+                    pokemon.slot = index + 1;
+                    pokemon.isAce = Boolean(pokemon.name);
+                    pokemon.isLead = Boolean(pokemon.name) && index === (explicitLead >= 0 ? explicitLead : firstFilled);
+                });
+                return {
+                    slots,
+                    transferBuffer: normalizeTransferBuffer(src.transferBuffer ?? src.transfer_buffer)
+                };
+            }
+
+            function normalizeBox(value) {
+                const src = isObject(value) ? value : {};
+                if (Array.isArray(src.boxes)) {
+                    const boxes = src.boxes.map((box, index) => ({
+                        id: normalizeString(box?.id, `box_${String(index + 1).padStart(2, "0")}`),
+                        name: normalizeString(box?.name, `Box ${index + 1}`),
+                        slots: Array.isArray(box?.slots)
+                            ? box.slots.map((pokemon) => normalizeTransferBuffer(pokemon)).filter(Boolean)
+                            : []
+                    }));
+                    return {
+                        boxes: boxes.length ? boxes : [{ id: "box_01", name: "Box 1", slots: [] }],
+                        indexes: isObject(src.indexes) ? clone(src.indexes, {}) : {}
+                    };
+                }
+                const slots = Object.entries(src)
+                    .filter(([key, pokemon]) => key.startsWith("storage_") && isObject(pokemon) && pokemon.name)
+                    .sort(([left], [right]) => left.localeCompare(right))
+                    .map(([, pokemon]) => normalizeTransferBuffer(pokemon))
+                    .filter(Boolean);
+                return {
+                    boxes: [{ id: "box_01", name: "Box 1", slots }],
+                    indexes: {}
+                };
+            }
+
+            function normalizeWeatherGrid(value) {
+                const src = isObject(value) ? value : {};
+                const output = {};
+                Object.entries(src).forEach(([key, cell]) => {
+                    if (!key) return;
+                    if (typeof cell === "string" && cell.trim()) {
+                        output[key] = cell.trim();
+                    } else if (isObject(cell) && typeof cell.weather === "string" && cell.weather.trim()) {
+                        output[key] = cell.weather.trim();
+                    }
+                });
+                return output;
+            }
+
+            function normalizeWorld(value, options) {
+                const src = isObject(value) ? clone(value, {}) : {};
+                const loc = isObject(src.location) ? src.location : {};
+                const phenomenon = isObject(src.phenomenon) ? src.phenomenon : {};
+                return {
+                    location: {
+                        region: normalizeString(loc.region, ""),
+                        location: normalizeString(loc.location || loc.name, ""),
+                        x: clampNumber(loc.x, -99999, 99999, -4),
+                        y: clampNumber(loc.y, -99999, 99999, -5)
+                    },
+                    time: normalizeTime(src.time),
+                    weatherGrid: options.keepMapCaches ? normalizeWeatherGrid(src.weatherGrid ?? src.weather_grid) : {},
+                    pokemonSpawns: options.keepMapCaches
+                        ? clone(src.pokemonSpawns ?? src.pokemon_spawns, {})
+                        : {},
+                    phenomenon: {
+                        active_type: normalizeString(phenomenon.active_type, "clear"),
+                        active_region: normalizeString(phenomenon.active_region, "none")
+                    }
+                };
+            }
+
+            function normalizeNpcRecords(records) {
+                const src = isObject(records) ? records : {};
+                const output = {};
+                Object.entries({ ...clone(DEFAULT_NPC_RECORDS, {}), ...src }).forEach(([key, record]) => {
+                    if (!key) return;
+                    const rawLove = isObject(record) ? record.love : record;
+                    const loveUp = isObject(record) ? record.love_up : 0;
+                    output[key] = { love: sumAndClamp(rawLove, loveUp, -100, 100, 0) };
+                });
+                return output;
+            }
+
+            function makeDefaultPkmState(options) {
+                return {
+                    player: {
+                        name: "{{user}}",
+                        trainerProficiency: 0,
+                        proficiency: 0,
+                        unlocks: clone(DEFAULT_UNLOCKS, {}),
+                        bonds: {}
+                    },
+                    party: normalizeParty(null),
+                    box: {
+                        boxes: [{ id: "box_01", name: "Box 1", slots: [] }],
+                        indexes: {}
+                    },
+                    world: normalizeWorld(null, options),
+                    npcs: {
+                        records: normalizeNpcRecords(null)
+                    },
+                    battle: {
+                        lastConfig: null,
+                        lastResult: null,
+                        pendingNarrative: null
+                    },
+                    settings: clone(DEFAULT_SETTINGS, {})
+                };
+            }
+
+            function normalizePkmState(value, options) {
+                const source = isObject(value) ? clone(value, {}) : {};
+                const base = makeDefaultPkmState(options);
+                const player = isObject(source.player) ? source.player : {};
+                const trainerProficiency = sumAndClamp(
+                    player.trainerProficiency ?? player.proficiency,
+                    player.proficiency_up,
+                    0,
+                    255,
+                    0
+                );
+                const worldSource = source.world || source.world_state;
+                const world = normalizeWorld(worldSource, options);
+                const npcSource = isObject(source.npcs?.records)
+                    ? source.npcs.records
+                    : (isObject(worldSource?.npcs) ? worldSource.npcs : {});
+                return {
+                    player: {
+                        ...base.player,
+                        name: normalizeString(player.name, base.player.name),
+                        trainerProficiency,
+                        proficiency: trainerProficiency,
+                        unlocks: { ...clone(DEFAULT_UNLOCKS, {}), ...(isObject(player.unlocks) ? player.unlocks : {}) },
+                        bonds: isObject(player.bonds) ? clone(player.bonds, {}) : {}
+                    },
+                    party: normalizeParty(source.party || player.party),
+                    box: normalizeBox(source.box || player.box || player.party?.box),
+                    world,
+                    npcs: {
+                        records: normalizeNpcRecords(npcSource)
+                    },
+                    battle: {
+                        ...base.battle,
+                        ...(isObject(source.battle) ? source.battle : {})
+                    },
+                    settings: {
+                        ...clone(DEFAULT_SETTINGS, {}),
+                        ...(isObject(source.settings) ? source.settings : {}),
+                        ...(isObject(player.settings) ? player.settings : {})
+                    }
+                };
+            }
+
+            function migrateEraToPkmState(eraVars, options) {
+                const era = isObject(eraVars) ? eraVars : {};
+                return normalizePkmState({
+                    player: era.player || {},
+                    party: era.player?.party || {},
+                    box: era.player?.box || era.player?.party?.box || {},
+                    world: era.world_state || {},
+                    npcs: { records: era.world_state?.npcs || {} },
+                    settings: era.settings || {}
+                }, options);
+            }
+
+            function extractJsonText(text) {
+                let value = String(text || "").trim();
+                if (value.startsWith("```")) {
+                    value = value.replace(/^```(?:json|javascript|js)?\s*/i, "").replace(/\s*```$/i, "").trim();
+                }
+                const first = value.indexOf("{");
+                const last = value.lastIndexOf("}");
+                if (first >= 0 && last > first) return value.slice(first, last + 1);
+                return value;
+            }
+
+            function parseInput(text) {
+                const jsonText = extractJsonText(text);
+                if (!jsonText) throw new Error("没有可解析的 JSON。");
+                return JSON.parse(jsonText);
+            }
+
+            function convert(raw, options) {
+                if (raw?.stat_data?.pkm) return normalizePkmState(raw.stat_data.pkm, options);
+                if (raw?.pkm) return normalizePkmState(raw.pkm, options);
+                return migrateEraToPkmState(raw, options);
+            }
+
+            function isScalar(value) {
+                return value === null || ["string", "number", "boolean"].includes(typeof value);
+            }
+
+            function formatScalar(value) {
+                if (value === null || value === undefined) return "null";
+                if (typeof value === "boolean") return value ? "true" : "false";
+                if (typeof value === "number") return Number.isFinite(value) ? String(value) : "null";
+                const text = String(value);
+                if (text === "") return "\"\"";
+                const reserved = /^(null|true|false|yes|no|on|off|nan|inf|-inf)$/i;
+                const plain = /^[A-Za-z0-9_./:-]+$/.test(text) && !reserved.test(text);
+                return plain ? text : JSON.stringify(text);
+            }
+
+            function dumpYaml(value, indent = 0) {
+                const sp = " ".repeat(indent);
+                if (Array.isArray(value)) return dumpYamlArray(value, indent);
+                if (!isObject(value)) return `${sp}${formatScalar(value)}`;
+                const entries = Object.entries(value);
+                if (!entries.length) return `${sp}{}`;
+                return entries.map(([key, child]) => dumpYamlEntry(key, child, indent)).join("\n");
+            }
+
+            function dumpYamlEntry(key, value, indent) {
+                const sp = " ".repeat(indent);
+                if (isScalar(value)) return `${sp}${key}: ${formatScalar(value)}`;
+                if (Array.isArray(value)) {
+                    if (!value.length) return `${sp}${key}: []`;
+                    return `${sp}${key}:\n${dumpYamlArray(value, indent + 2)}`;
+                }
+                if (isObject(value)) {
+                    const entries = Object.entries(value);
+                    if (!entries.length) return `${sp}${key}: {}`;
+                    return `${sp}${key}:\n${dumpYaml(value, indent + 2)}`;
+                }
+                return `${sp}${key}: null`;
+            }
+
+            function dumpYamlArray(array, indent) {
+                const sp = " ".repeat(indent);
+                if (!array.length) return `${sp}[]`;
+                return array.map((item) => {
+                    if (isScalar(item)) return `${sp}- ${formatScalar(item)}`;
+                    if (Array.isArray(item)) {
+                        return `${sp}-\n${dumpYamlArray(item, indent + 2)}`;
+                    }
+                    if (isObject(item)) {
+                        const entries = Object.entries(item);
+                        if (!entries.length) return `${sp}- {}`;
+                        const [first, ...rest] = entries;
+                        const lines = [];
+                        if (isScalar(first[1])) {
+                            lines.push(`${sp}- ${first[0]}: ${formatScalar(first[1])}`);
+                        } else if (Array.isArray(first[1])) {
+                            lines.push(first[1].length
+                                ? `${sp}- ${first[0]}:\n${dumpYamlArray(first[1], indent + 4)}`
+                                : `${sp}- ${first[0]}: []`);
+                        } else {
+                            lines.push(isObject(first[1]) && Object.keys(first[1]).length
+                                ? `${sp}- ${first[0]}:\n${dumpYaml(first[1], indent + 4)}`
+                                : `${sp}- ${first[0]}: {}`);
+                        }
+                        rest.forEach(([key, value]) => {
+                            lines.push(dumpYamlEntry(key, value, indent + 2));
+                        });
+                        return lines.join("\n");
+                    }
+                    return `${sp}- null`;
+                }).join("\n");
+            }
+
+            function summarize(pkm, options) {
+                const partyCount = pkm.party.slots.filter((pokemon) => pokemon.name).length;
+                const boxCount = pkm.box.boxes.reduce((total, box) => total + (Array.isArray(box.slots) ? box.slots.length : 0), 0);
+                els.partyMetric.textContent = `队伍 ${partyCount}/6`;
+                els.boxMetric.textContent = `盒子 ${boxCount}`;
+                els.worldMetric.textContent = options.keepMapCaches ? "world 含缓存" : "world 简化";
+                return { partyCount, boxCount };
+            }
+
+            function setStatus(text, type = "") {
+                els.status.textContent = text;
+                els.status.className = `status ${type}`.trim();
+            }
+
+            function runConvert() {
+                try {
+                    const options = {
+                        keepMapCaches: els.keepMapCaches.checked,
+                        wrapStatData: els.wrapStatData.checked
+                    };
+                    const raw = parseInput(els.input.value);
+                    const pkm = convert(raw, options);
+                    const root = options.wrapStatData ? { stat_data: { pkm } } : { pkm };
+                    els.output.value = dumpYaml(root) + "\n";
+                    const summary = summarize(pkm, options);
+                    setStatus(`转换完成：${summary.partyCount} 只队伍宝可梦，Main YAML 已生成。`, "ok");
+                } catch (error) {
+                    setStatus(`转换失败：${error.message}`, "error");
+                }
+            }
+
+            async function copyOutput() {
+                if (!els.output.value.trim()) {
+                    setStatus("没有可复制的输出。", "warn");
+                    return;
+                }
+                try {
+                    await navigator.clipboard.writeText(els.output.value);
+                    setStatus("已复制 Main YAML。", "ok");
+                } catch (_) {
+                    els.output.focus();
+                    els.output.select();
+                    document.execCommand("copy");
+                    setStatus("已复制 Main YAML。", "ok");
+                }
+            }
+
+            function downloadOutput() {
+                if (!els.output.value.trim()) {
+                    setStatus("没有可下载的输出。", "warn");
+                    return;
+                }
+                const blob = new Blob([els.output.value], { type: "text/yaml;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const anchor = document.createElement("a");
+                anchor.href = url;
+                anchor.download = "pkm-main-initvar.yaml";
+                document.body.append(anchor);
+                anchor.click();
+                anchor.remove();
+                URL.revokeObjectURL(url);
+                setStatus("已生成下载文件。", "ok");
+            }
+
+            function loadSample() {
+                els.input.value = JSON.stringify({
+                    settings: {
+                        enableAVS: true,
+                        enableCommander: true,
+                        enableEVO: true,
+                        enableEnvironment: true
+                    },
+                    player: {
+                        name: "Yota",
+                        trainerProficiency: 6,
+                        proficiency_up: 0,
+                        unlocks: {
+                            enable_bond: false,
+                            enable_styles: false,
+                            enable_insight: false,
+                            enable_mega: false,
+                            enable_z_move: false,
+                            enable_dynamax: false,
+                            enable_tera: false,
+                            enable_proficiency_cap: false
+                        },
+                        party: {
+                            slot1: {
+                                slot: 1,
+                                name: "Sprigatito",
+                                gender: "F",
+                                lv: 8,
+                                quality: "medium",
+                                nature: "Jolly",
+                                friendship: {
+                                    avs: { trust: 2, passion: 2, insight: 1, devotion: 0 },
+                                    av_up: { trust: 0, passion: 0, insight: 0, devotion: 0 }
+                                },
+                                moves: {
+                                    move1: "Scratch",
+                                    move2: "Tail Whip",
+                                    move3: "Leafage",
+                                    move4: null
+                                },
+                                stats_meta: {
+                                    ivs: { hp: 31, atk: 3, def: 13, spa: 22, spd: 24, spe: 27 },
+                                    ev_level: 16
+                                }
+                            }
+                        },
+                        box: {}
+                    },
+                    world_state: {
+                        location: { region: "B", x: -17, y: -21 },
+                        time: { day: 1, period: "night" },
+                        phenomenon: { active_type: "clear", active_region: "none" },
+                        weather_grid: {
+                            "21_30": { weather: "clear" }
+                        },
+                        npcs: {
+                            dawn: { love: 12, love_up: 0 },
+                            iono: { love: 1 }
+                        }
+                    }
+                }, null, 2);
+                runConvert();
+            }
+
+            els.convertBtn.addEventListener("click", runConvert);
+            els.copyBtn.addEventListener("click", copyOutput);
+            els.downloadBtn.addEventListener("click", downloadOutput);
+            els.sampleBtn.addEventListener("click", loadSample);
+            els.clearBtn.addEventListener("click", () => {
+                els.input.value = "";
+                els.output.value = "";
+                summarize(makeDefaultPkmState({ keepMapCaches: false }), { keepMapCaches: false });
+                setStatus("等待输入。");
+            });
+            els.input.addEventListener("keydown", (event) => {
+                if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                    event.preventDefault();
+                    runConvert();
+                }
+            });
+
+            summarize(makeDefaultPkmState({ keepMapCaches: false }), { keepMapCaches: false });
+        }());
+    </script>
+</body>
+</html>
