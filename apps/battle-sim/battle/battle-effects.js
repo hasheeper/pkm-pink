@@ -307,8 +307,8 @@ export function applyMoveSecondaryEffects(user, target, move, damageDealt = 0, b
         // 【注意】单打模式下，AI 方被强制换人时自动随机选择
         const isTargetPlayer = !isPlayer;
         if (isTargetPlayer) {
-            // 玩家被强制换人 - 标记状态，由 UI 处理
-            battle.playerForcedSwitch = true;
+            // 玩家被强制换人：只返回本次 phaze 结果，由当前回合流程消费。
+            // playerForcedSwitch 保留给魔法镜反弹等非 phaze 返回路径，避免残留到下一回合。
             logs.push(`<span style="color:#e74c3c">⚡ 必须更换宝可梦!</span>`);
         } else {
             // AI 被强制换人 - 自动随机选择

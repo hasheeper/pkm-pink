@@ -3086,16 +3086,19 @@ async function handleAttack(moveIndex, options = {}) {
         }
         
         // 【新增】敌方使用强制换人技能 (Roar/Dragon Tail/Circle Throw) 后，玩家被迫换人
-        if (enemyResult?.phaze && p.isAlive() && hasAliveSwitch(battle.playerParty, battle.playerActive)) {
-            console.log('[handleAttack] Player forced to switch by phaze move');
-            battle.phase = 'force_switch';
-            renderSwitchMenu(false);
-            // 等待玩家选择换人
-            await new Promise((resolve) => {
-                battle.forceSwitchResolve = resolve;
-            });
-            p = battle.getPlayer();
-            console.log('[handleAttack] Player phaze switch complete, new pokemon:', p?.cnName);
+        if (enemyResult?.phaze) {
+            if (p.isAlive() && hasAliveSwitch(battle.playerParty, battle.playerActive)) {
+                console.log('[handleAttack] Player forced to switch by phaze move');
+                battle.phase = 'force_switch';
+                renderSwitchMenu(false);
+                // 等待玩家选择换人
+                await new Promise((resolve) => {
+                    battle.forceSwitchResolve = resolve;
+                });
+                p = battle.getPlayer();
+                console.log('[handleAttack] Player phaze switch complete, new pokemon:', p?.cnName);
+            }
+            battle.playerForcedSwitch = false;
         }
         
         if (!p.isAlive()) {
@@ -3148,16 +3151,19 @@ async function handleAttack(moveIndex, options = {}) {
         }
         
         // 【新增】敌方先动使用强制换人技能 (Roar/Dragon Tail/Circle Throw) 后，玩家被迫换人
-        if (enemyResult?.phaze && p.isAlive() && hasAliveSwitch(battle.playerParty, battle.playerActive)) {
-            console.log('[handleAttack] Player forced to switch by phaze move (enemy-first branch)');
-            battle.phase = 'force_switch';
-            renderSwitchMenu(false);
-            // 等待玩家选择换人
-            await new Promise((resolve) => {
-                battle.forceSwitchResolve = resolve;
-            });
-            p = battle.getPlayer();
-            console.log('[handleAttack] Player phaze switch complete, new pokemon:', p?.cnName);
+        if (enemyResult?.phaze) {
+            if (p.isAlive() && hasAliveSwitch(battle.playerParty, battle.playerActive)) {
+                console.log('[handleAttack] Player forced to switch by phaze move (enemy-first branch)');
+                battle.phase = 'force_switch';
+                renderSwitchMenu(false);
+                // 等待玩家选择换人
+                await new Promise((resolve) => {
+                    battle.forceSwitchResolve = resolve;
+                });
+                p = battle.getPlayer();
+                console.log('[handleAttack] Player phaze switch complete, new pokemon:', p?.cnName);
+            }
+            battle.playerForcedSwitch = false;
         }
         
         if (!p.isAlive()) {

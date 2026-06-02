@@ -57,6 +57,15 @@ function findChoiceLockedMove(pokemon) {
     return (pokemon.moves || []).find(m => moveMatchesChoiceLock(m, pokemon.choiceLockedMove)) || null;
 }
 
+function hasAliveSwitchFor(party, currentIndex) {
+    if (typeof window !== 'undefined' && typeof window.hasAliveSwitch === 'function') {
+        return window.hasAliveSwitch(party, currentIndex);
+    }
+    return Array.isArray(party) && party.some((pm, idx) =>
+        idx !== currentIndex && pm && typeof pm.isAlive === 'function' && pm.isAlive() && pm.currHp > 0
+    );
+}
+
 function primeIllusionDisplay(pokemon, opponent) {
     if (!pokemon || pokemon.ability !== 'Illusion' || pokemon.illusionActive) return;
     if (typeof AbilityHandlers === 'undefined') return;
@@ -705,7 +714,24 @@ export async function enemyTurn() {
     }
 
     // 执行敌方回合
-    await executeEnemyTurn(e, p, move);
+    const enemyResult = await executeEnemyTurn(e, p, move);
+
+    if (enemyResult?.phaze) {
+        if (p.isAlive() && hasAliveSwitchFor(battle.playerParty, battle.playerActive)) {
+            console.log('[enemyTurn] Player forced to switch by phaze move');
+            battle.phase = 'force_switch';
+            if (typeof window.renderSwitchMenu === 'function') {
+                window.renderSwitchMenu(false);
+            }
+            await new Promise((resolve) => {
+                battle.forceSwitchResolve = resolve;
+            });
+            console.log('[enemyTurn] Player phaze switch complete, new pokemon:', battle.getPlayer()?.cnName);
+        }
+        battle.playerForcedSwitch = false;
+        battle.locked = false;
+        return;
+    }
 
     // 【BUG修复】检查敌方是否因自身反伤（如挣扎）倒下
     if (!e.isAlive()) {

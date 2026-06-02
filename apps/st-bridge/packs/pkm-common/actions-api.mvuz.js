@@ -161,11 +161,12 @@
           }
         case 'box.depositTransferBuffer':
           return patchState((state) => {
-            const pokemon = normalizeTransferBuffer(state.party.transferBuffer);
+            const pokemon = normalizeTransferBuffer(state.party.transferBuffer || state.party.transfer_buffer);
             if (!pokemon) return state;
             if (!state.box.boxes?.length) state.box.boxes = [{ id: 'box_01', name: 'Box 1', slots: [] }];
             state.box.boxes[0].slots.push(pokemon);
             state.party.transferBuffer = null;
+            if ('transfer_buffer' in state.party) state.party.transfer_buffer = null;
             return state;
           }, actionWriteOptions(action, writeOptions, ['/pkm/party/transferBuffer', '/pkm/box/boxes/0/slots']));
         case 'box.applyTransferMutation':

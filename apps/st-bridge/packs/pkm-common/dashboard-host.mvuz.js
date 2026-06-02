@@ -640,7 +640,7 @@
 
     async function handleTransferBuffer() {
       const state = await loadMvuzState();
-      const transfer = state?.party?.transferBuffer;
+      const transfer = state?.party?.transferBuffer || state?.party?.transfer_buffer;
       if (transfer?.name) {
         const signature = JSON.stringify({
           floorKey: getCurrentFloorKey(),
@@ -841,6 +841,8 @@
       bindRefresh('message_received', 'messageReceived');
       bindRefresh('generation_ended', 'generationEnded');
       bindRefresh('message_updated', 'messageUpdated');
+      bindRefresh('mag_variable_update_ended', 'mvuVariableUpdateEnded');
+      bindRefresh('mag_variable_update_ended_for_zod', 'mvuZodVariableUpdateEnded');
       ROOT.eventOn('CHAT_CHANGED', () => {
         iframeInitialized = false;
         invalidateStateReadCache();

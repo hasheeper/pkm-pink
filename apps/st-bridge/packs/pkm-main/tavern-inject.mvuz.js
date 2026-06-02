@@ -213,6 +213,7 @@
     dashboardPath: 'apps/dashboard-main/index.html',
     dashboardUrlGlobal: 'PKM_MAIN_DASHBOARD_URL',
     defaultGreetingSource: 'greeting-main',
+    enableTransferBufferCheck: true,
     adaptDashboardState,
     handleMessage
   });
