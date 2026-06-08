@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * =============================================
  * BATTLE ENGINE - 战斗核心引擎
@@ -204,7 +205,7 @@ export function normalizePokemonName(rawName) {
  * 从 Pokemon Showdown POKEDEX 获取宝可梦数据 (带智能回退机制)
  * 策略: 规范化名称 -> 直接查找 -> 修正后缀 -> 回退到基础形态
  * @param {string} name - 英文名 (如 'Pikachu')
- * @returns {object|null}
+ * @returns {{ name: string, types: string[], baseStats: StatTable } | null}
  */
 export function getPokemonData(name) {
     if (typeof POKEDEX === 'undefined') return null;
@@ -274,7 +275,7 @@ export function getPokemonData(name) {
 /**
  * 从 Pokemon Showdown MOVES 获取技能数据
  * @param {string} name - 英文名 (如 'Thunderbolt')
- * @returns {object} 包含所有原始数据 + 标准化字段
+ * @returns {MoveData}
  */
 export function getMoveData(name) {
     const id = name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -318,13 +319,10 @@ export function getMoveData(name) {
 /**
  * 计算能力值 (支持新版 stats_meta 格式)
  * 
- * @param {object} baseStats - { hp, atk, def, spa, spd, spe }
+ * @param {StatTable} baseStats - { hp, atk, def, spa, spd, spe }
  * @param {number} level - 等级
- * @param {object} options - 可选参数
- * @param {object} options.ivs - 个体值对象 { hp, atk, def, spa, spd, spe }，默认全31
- * @param {number} options.ev_level - 统一努力值等级 (0~252)，会同时加到六项
- * @param {string} options.nature - 性格名称，用于修正能力值
- * @returns {object} 计算后的能力值 { hp, atk, def, spa, spd, spe }
+ * @param {{ ivs?: StatTable, ev_level?: number | number[] | StatTable, nature?: string } | number} options - 可选参数
+ * @returns {Required<StatTable>} 计算后的能力值 { hp, atk, def, spa, spd, spe }
  */
 export function calcStats(baseStats, level, options = {}) {
     // 兼容旧版调用: calcStats(baseStats, level, iv, ev)
@@ -482,6 +480,13 @@ export class Pokemon {
      */
     _initCore(name, types, baseStats, level, moveNames, config = {}) {
         this.name = name;
+        this.isMega = false;
+        this.isTransformed = false;
+        this.isUnofficialMega = false;
+        this.canMegaEvolve = false;
+        this.avsEvolutionBoost = false;
+        this.hasEvolvedThisBattle = false;
+        this.originalName = undefined;
         // 使用增强版 Locale 工具获取中文名（支持智能后缀解析）
         if (typeof window !== 'undefined' && window.Locale) {
             // Locale.get 现在会自动处理 "Zoroark-Hisui" -> "索罗亚克-洗翠" 这类转换
@@ -1263,9 +1268,9 @@ export class Pokemon {
 
 /**
  * 核心：判断当前宝可梦能否行动
- * @param {Pokemon} pokemon
- * @param {Object} move - 可选，要使用的招式（用于挑衅/再来一次/定身法检查）
- * @returns {{ can: boolean, msg: string, forcedMove: Object|null }}
+ * @param {PokemonLike} pokemon
+ * @param {MoveData | null} move - 可选，要使用的招式（用于挑衅/再来一次/定身法检查）
+ * @returns {{ can: boolean, msg: string, forcedMove?: MoveData | string | null }}
  */
 export function checkCanMove(pokemon, move = null) {
     // 1. 畏缩 (Flinch) - 本回合无法行动，用完即清
@@ -1572,6 +1577,12 @@ export class BattleState {
             mudSport: 0,    // 玩泥巴剩余回合
             waterSport: 0   // 玩水剩余回合
         };
+        this.weather = null;
+        this.weatherTurns = 0;
+        this.environmentWeather = null;
+        this.terrain = null;
+        this.terrainTurns = 0;
+        this.destinyBondCauser = undefined;
         
         // 玩家侧状态 (Player Side)
         this.playerSide = {

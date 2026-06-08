@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * ===========================================
  * PP-SYSTEM.JS - 技能 PP 管理系统 (完整版)
@@ -13,6 +14,17 @@
  * - Transform: 复制招式 PP 强制设为 5
  */
 
+/**
+ * @param {string | MoveData | null | undefined} moveRef
+ * @returns {string | null}
+ */
+function getLastMoveName(moveRef) {
+    if (!moveRef) return null;
+    if (typeof moveRef === 'string') return moveRef;
+    return moveRef.name || null;
+}
+
+/** @type {PPSystemLike} */
 const PPSystem = {
 
     // =========================================================
@@ -21,6 +33,8 @@ const PPSystem = {
 
     /**
      * 检查招式是否还有 PP
+     * @param {PPMoveLike | null | undefined} move
+     * @returns {boolean}
      */
     hasPP(move) {
         if (!move) return false;
@@ -31,6 +45,8 @@ const PPSystem = {
 
     /**
      * 检查宝可梦是否所有招式 PP 都耗尽
+     * @param {PokemonLike | null | undefined} pokemon
+     * @returns {boolean}
      */
     allPPDepleted(pokemon) {
         if (!pokemon || !pokemon.moves || pokemon.moves.length === 0) return true;
@@ -39,6 +55,9 @@ const PPSystem = {
 
     /**
      * 在宝可梦的 moves 数组中查找对应招式对象 (by name)
+     * @param {PokemonLike | null | undefined} pokemon
+     * @param {string | null | undefined} moveName
+     * @returns {PPMoveLike | null}
      */
     findMove(pokemon, moveName) {
         if (!pokemon || !pokemon.moves || !moveName) return null;
@@ -52,10 +71,10 @@ const PPSystem = {
 
     /**
      * 核心扣除函数
-     * @param {Pokemon} user - 使用招式的宝可梦
-     * @param {object} move - 使用的招式对象
-     * @param {Pokemon} [target] - 招式目标 (用于 Pressure 判定)
-     * @returns {{ success: boolean, logs: string[] }}
+     * @param {PokemonLike | null | undefined} user - 使用招式的宝可梦
+     * @param {PPMoveLike | MoveData | null | undefined} move - 使用的招式对象
+     * @param {PokemonLike | null} [target] - 招式目标 (用于 Pressure 判定)
+     * @returns {PPDeductResult}
      */
     deductPP(user, move, target) {
         const logs = [];
@@ -110,12 +129,12 @@ const PPSystem = {
 
     /**
      * 怨恨 (Spite): 减少目标最后使用的招式 4 点 PP
-     * @param {Pokemon} target - 被怨恨的目标
+     * @param {PokemonLike | null | undefined} target - 被怨恨的目标
      * @returns {string[]} 日志
      */
     applySpite(target) {
         const logs = [];
-        const lastMoveName = target?.lastBaseMoveUsed || target?.lastMoveUsed;
+        const lastMoveName = target?.lastBaseMoveUsed || getLastMoveName(target?.lastMoveUsed);
         if (!target || !lastMoveName) {
             logs.push(`<span style="color:#aaa">但是失败了！</span>`);
             return logs;
@@ -145,13 +164,13 @@ const PPSystem = {
     /**
      * 怨念 (Grudge): 使用者濒死时，攻击者的该招式 PP 清零
      * 调用时机: 在 onFaint 结算中，检查被击倒者是否有 grudge volatile
-     * @param {Pokemon} fainted - 被击倒的宝可梦 (拥有 Grudge 状态)
-     * @param {Pokemon} attacker - 击倒者
+     * @param {PokemonLike | null | undefined} fainted - 被击倒的宝可梦 (拥有 Grudge 状态)
+     * @param {PokemonLike | null | undefined} attacker - 击倒者
      * @returns {string[]} 日志
      */
     applyGrudge(fainted, attacker) {
         const logs = [];
-        const lastMoveName = attacker?.lastBaseMoveUsed || attacker?.lastMoveUsed;
+        const lastMoveName = attacker?.lastBaseMoveUsed || getLastMoveName(attacker?.lastMoveUsed);
         if (!fainted || !attacker || !lastMoveName) return logs;
 
         // 检查 grudge volatile
@@ -173,7 +192,7 @@ const PPSystem = {
 
     /**
      * 设置 Grudge volatile (使用怨念招式时调用)
-     * @param {Pokemon} user
+     * @param {PokemonLike | null | undefined} user
      */
     setGrudge(user) {
         if (!user) return;
@@ -184,12 +203,12 @@ const PPSystem = {
 
     /**
      * 诡异咒语 (Eerie Spell): 减少目标最后使用的招式 3 点 PP
-     * @param {Pokemon} target
+     * @param {PokemonLike | null | undefined} target
      * @returns {string[]} 日志
      */
     applyEerieSpell(target) {
         const logs = [];
-        const lastMoveName = target?.lastBaseMoveUsed || target?.lastMoveUsed;
+        const lastMoveName = target?.lastBaseMoveUsed || getLastMoveName(target?.lastMoveUsed);
         if (!target || !lastMoveName) return logs;
 
         const move = this.findMove(target, lastMoveName);
@@ -211,12 +230,12 @@ const PPSystem = {
 
     /**
      * 超极巨损耗 (G-Max Depletion): 减少目标最后使用的招式 2 点 PP
-     * @param {Pokemon} target
+     * @param {PokemonLike | null | undefined} target
      * @returns {string[]} 日志
      */
     applyGMaxDepletion(target) {
         const logs = [];
-        const lastMoveName = target?.lastBaseMoveUsed || target?.lastMoveUsed;
+        const lastMoveName = target?.lastBaseMoveUsed || getLastMoveName(target?.lastMoveUsed);
         if (!target || !lastMoveName) return logs;
 
         const move = this.findMove(target, lastMoveName);
@@ -242,8 +261,8 @@ const PPSystem = {
 
     /**
      * 零余果 (Leppa Berry): PP 降为 0 时恢复 10 点
-     * @param {Pokemon} pokemon
-     * @param {object} move - PP 刚变为 0 的招式
+     * @param {PokemonLike | null | undefined} pokemon
+     * @param {PPMoveLike | null | undefined} move - PP 刚变为 0 的招式
      * @returns {string|null} 日志
      */
     checkLeppaBerry(pokemon, move) {
@@ -261,7 +280,7 @@ const PPSystem = {
 
     /**
      * 恢复指定招式的 PP
-     * @param {object} move
+     * @param {PPMoveLike | null | undefined} move
      * @param {number} [amount] - 恢复量（默认全部恢复）
      */
     restorePP(move, amount) {
@@ -275,7 +294,7 @@ const PPSystem = {
 
     /**
      * 恢复宝可梦所有招式的 PP
-     * @param {Pokemon} pokemon
+     * @param {PokemonLike | null | undefined} pokemon
      */
     restoreAllPP(pokemon) {
         if (!pokemon || !pokemon.moves) return;
@@ -286,7 +305,7 @@ const PPSystem = {
     /**
      * 新月舞 (Lunar Dance) / 治愈愿望: 下只上场的宝可梦 HP/PP/状态 全回复
      * 设置标记，在换人时触发
-     * @param {object} battle
+     * @param {BattleStateLike | null | undefined} battle
      * @param {boolean} isPlayer
      */
     setLunarDanceHeal(battle, isPlayer) {
@@ -301,8 +320,8 @@ const PPSystem = {
 
     /**
      * 在换人时检查并应用 Lunar Dance 回复
-     * @param {Pokemon} pokemon - 刚换入的宝可梦
-     * @param {object} battle
+     * @param {PokemonLike | null | undefined} pokemon - 刚换入的宝可梦
+     * @param {BattleStateLike | null | undefined} battle
      * @param {boolean} isPlayer
      * @returns {string[]} 日志
      */
@@ -330,8 +349,8 @@ const PPSystem = {
 
     /**
      * 变身 (Transform): 复制目标招式列表，所有招式 PP 强制设为 5
-     * @param {Pokemon} user - 变身者
-     * @param {Pokemon} target - 被复制的目标
+     * @param {PokemonLike | null | undefined} user - 变身者
+     * @param {PokemonLike | null | undefined} target - 被复制的目标
      * @returns {string[]} 日志
      */
     applyTransformPP(user, target) {
@@ -356,7 +375,7 @@ const PPSystem = {
     /**
      * 王牌 (Trump Card): 根据剩余 PP 计算威力
      * 判定时机: PP 已被扣除后的剩余量
-     * @param {Pokemon} user
+     * @param {PokemonLike | null | undefined} user
      * @returns {number} 威力
      */
     getTrumpCardPower(user) {
@@ -378,7 +397,7 @@ const PPSystem = {
 
     /**
      * 创建挣扎招式对象
-     * @returns {object}
+     * @returns {PPMoveLike}
      */
     createStruggle() {
         return {
@@ -397,8 +416,8 @@ const PPSystem = {
 
     /**
      * 获取可用招式列表 (过滤 PP=0 的招式)
-     * @param {Pokemon} pokemon
-     * @returns {object[]} 可用招式数组
+     * @param {PokemonLike | null | undefined} pokemon
+     * @returns {PPMoveLike[]} 可用招式数组
      */
     getUsableMoves(pokemon) {
         if (!pokemon || !pokemon.moves) return [];
@@ -407,6 +426,8 @@ const PPSystem = {
 };
 
 // 挂载到全局
-window.PPSystem = PPSystem;
+if (typeof window !== 'undefined') {
+    window.PPSystem = PPSystem;
+}
 
 export default PPSystem;

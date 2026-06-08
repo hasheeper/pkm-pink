@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * =============================================
  * MOVE HANDLERS - 技能处理器 (策略模式)
@@ -23,7 +24,7 @@
 
 /**
  * 【统一回复函数】处理 HP 回复，自动应用环境图层修正
- * @param {Pokemon} pokemon 要回复的宝可梦
+ * @param {PokemonLike} pokemon 要回复的宝可梦
  * @param {number} baseAmount 基础回复量
  * @param {string} source 回复来源（用于日志）
  * @returns {number} 实际回复量
@@ -67,11 +68,11 @@ function applyHeal(pokemon, baseAmount, source = 'move') {
 /**
  * 处理蓄力技能的 onUse 钩子
  * 统一处理天气联动、强力香草、蓄力状态等逻辑
- * @param {Pokemon} attacker 攻击方
+ * @param {PokemonLike} attacker 攻击方
  * @param {string} moveName 技能名称
- * @param {object} battle 战斗状态
- * @param {Array} logs 日志数组
- * @returns {object} { skipDamage, charging, released }
+ * @param {BattleStateLike | null} battle 战斗状态
+ * @param {string[]} logs 日志数组
+ * @returns {{ skipDamage?: boolean, charging?: boolean, released?: boolean }}
  */
 function handleChargeMoveOnUse(attacker, moveName, battle, logs) {
     // 获取蓄力配置
@@ -238,6 +239,7 @@ export function canKnockOff(pokemon) {
     return true;
 }
 
+/** @type {Record<string, MoveHandler>} */
 export const MoveHandlers = {
     
     // ============================================
@@ -6131,9 +6133,9 @@ export const MoveHandlers = {
     },
     
     // ============================================
-    // 【跳过类：双打专用/复杂复制技】
+    // 【单打降级类：双打专用/复杂复制技】
     // Mimic, Sketch: 复制招式，单打中意义不大且实现复杂
-    // Ally Switch, Instruct, After You, Quash: 双打专用
+    // Ally Switch, Instruct, After You, Quash: 双打行动/位置机制，当前单打流程中失败处理
     // ============================================
     
     'Mimic': {
@@ -6150,6 +6152,38 @@ export const MoveHandlers = {
             return {};
         },
         description: '永久学习对手的招式（简化处理）'
+    },
+
+    'After You': {
+        onUse: (user, target, logs) => {
+            logs.push(`${user.cnName} 使用了您先请! 但单打中没有同伴可以提前行动!`);
+            return { failed: true };
+        },
+        description: '双打行动顺序招式（单打无效）'
+    },
+
+    'Ally Switch': {
+        onUse: (user, target, logs) => {
+            logs.push(`${user.cnName} 使用了交换场地! 但单打中没有同伴可以交换位置!`);
+            return { failed: true };
+        },
+        description: '双打位置交换招式（单打无效）'
+    },
+
+    'Instruct': {
+        onUse: (user, target, logs) => {
+            logs.push(`${user.cnName} 使用了号令! 但单打中没有同伴可以再次行动!`);
+            return { failed: true };
+        },
+        description: '双打指令招式（单打无效）'
+    },
+
+    'Quash': {
+        onUse: (user, target, logs) => {
+            logs.push(`${user.cnName} 使用了延后! 但当前单打回合流程不支持改变已决定的行动顺序!`);
+            return { failed: true };
+        },
+        description: '双打行动顺序招式（单打无效）'
     }
 };
 

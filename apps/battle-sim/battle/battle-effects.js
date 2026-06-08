@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * ===========================================
  * BATTLE-EFFECTS.JS - 招式副作用处理
@@ -18,13 +19,13 @@
 
 /**
  * 处理技能带来的副作用（能力升降、反伤、吸血）
- * @param {Pokemon} user 攻击方
- * @param {Pokemon} target 受击方
- * @param {object} move 技能数据
+ * @param {PokemonLike} user 攻击方
+ * @param {PokemonLike} target 受击方
+ * @param {MoveData} move 技能数据
  * @param {number} damageDealt 实际造成的伤害（用于计算反伤/吸血）
- * @param {object} battle 战斗状态
+ * @param {BattleStateLike | null} battle 战斗状态
  * @param {boolean} isPlayer 是否为玩家
- * @returns {object} { logs: Array, pivot: boolean }
+ * @returns {{ logs: string[], pivot: boolean, phaze?: boolean, passBoosts?: boolean, revivalChoice?: boolean, charging?: boolean }}
  */
 export function applyMoveSecondaryEffects(user, target, move, damageDealt = 0, battle = null, isPlayer = false) {
     let logs = [];

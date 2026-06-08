@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * ===========================================
  * BATTLE-DAMAGE.JS - 伤害系统
@@ -18,11 +19,11 @@
 
 /**
  * 伤害计算与应用 (含多段攻击、反伤、吸血、能力变化)
- * @param {Object} attacker 攻击方
- * @param {Object} defender 防御方
- * @param {Object} move 招式
+ * @param {PokemonLike} attacker 攻击方
+ * @param {PokemonLike} defender 防御方
+ * @param {MoveData} move 招式
  * @param {string} spriteIdRef 目标精灵图 ID ('player-sprite' 或 'enemy-sprite')
- * @returns {Object} 伤害结果
+ * @returns {DamageResult}
  */
 export function applyDamage(attacker, defender, move, spriteIdRef) {
   try {

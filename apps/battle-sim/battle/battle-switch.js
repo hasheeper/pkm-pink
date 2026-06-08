@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * ===========================================
  * BATTLE-SWITCH.JS - 换人系统
@@ -16,6 +17,9 @@
 
 /**
  * 检查是否有可换入的存活宝可梦
+ * @param {PokemonLike[]} party
+ * @param {number} currentIndex
+ * @returns {boolean}
  */
 export function hasAliveSwitch(party, currentIndex) {
     return party.some((pm, idx) => 
@@ -25,6 +29,8 @@ export function hasAliveSwitch(party, currentIndex) {
 
 /**
  * 辅助函数：等待
+ * @param {number} ms
+ * @returns {Promise<void>}
  */
 function wait(ms) { 
     return new Promise(r => setTimeout(r, ms)); 
@@ -32,6 +38,7 @@ function wait(ms) {
 
 /**
  * 辅助函数：日志输出
+ * @param {string} msg
  */
 function log(msg) {
     if (typeof window !== 'undefined' && typeof window.log === 'function') {
@@ -41,10 +48,18 @@ function log(msg) {
     }
 }
 
+/**
+ * @param {PokemonLike | null | undefined} pokemon
+ * @returns {string}
+ */
 function getBattleDisplayName(pokemon) {
     return pokemon?.displayCnName || pokemon?.cnName || pokemon?.name || '???';
 }
 
+/**
+ * @param {PokemonLike | null | undefined} pokemon
+ * @param {PokemonLike | null | undefined} opponent
+ */
 function primeIllusionDisplay(pokemon, opponent) {
     if (!pokemon || pokemon.ability !== 'Illusion' || pokemon.illusionActive) return;
     if (typeof AbilityHandlers === 'undefined') return;
@@ -56,6 +71,7 @@ function primeIllusionDisplay(pokemon, opponent) {
 
 /**
  * 辅助函数：更新视觉
+ * @param {boolean | string} [forceSpriteAnim]
  */
 function updateAllVisuals(forceSpriteAnim) {
     if (typeof window !== 'undefined' && typeof window.updateAllVisuals === 'function') {
@@ -70,6 +86,7 @@ function updateAllVisuals(forceSpriteAnim) {
 /**
  * 处理玩家 Pivot 换人（U-turn/Volt Switch 等）
  * 使用 Promise 等待玩家选择
+ * @returns {Promise<unknown>}
  */
 export function handlePlayerPivot() {
     const battle = window.battle;
@@ -92,6 +109,8 @@ export function handlePlayerPivot() {
 
 /**
  * 处理敌方 Pivot 换人（AI 自动选择）
+ * @param {boolean} [passBoosts]
+ * @returns {Promise<void>}
  */
 export async function handleEnemyPivot(passBoosts = false) {
     const battle = window.battle;
@@ -246,6 +265,8 @@ export async function handleEnemyPivot(passBoosts = false) {
 
 /**
  * 处理敌方倒下
+ * @param {PokemonLike} e
+ * @returns {Promise<void>}
  */
 export async function handleEnemyFainted(e) {
     if (typeof window.playSFX === 'function') window.playSFX('FAINT');
@@ -259,7 +280,7 @@ export async function handleEnemyFainted(e) {
     e.timesAttacked = 0;
     
     // === 清理特殊形态视觉效果（极巨化/钛晶化/超级进化/羁绊共鸣） ===
-    const enemySpriteEl = document.getElementById('enemy-sprite');
+    const enemySpriteEl = /** @type {HTMLImageElement | null} */ (document.getElementById('enemy-sprite'));
     
     // 极巨化清理
     if (e.isDynamaxed) {
@@ -557,6 +578,8 @@ export async function handleEnemyFainted(e) {
 
 /**
  * 处理玩家倒下
+ * @param {PokemonLike} p
+ * @returns {Promise<void>}
  */
 export async function handlePlayerFainted(p) {
     if (typeof window.playSFX === 'function') window.playSFX('FAINT');
@@ -570,7 +593,7 @@ export async function handlePlayerFainted(p) {
     p.timesAttacked = 0;
     
     // === 清理特殊形态视觉效果（极巨化/钛晶化/超级进化/羁绊共鸣） ===
-    const playerSpriteEl = document.getElementById('player-sprite');
+    const playerSpriteEl = /** @type {HTMLImageElement | null} */ (document.getElementById('player-sprite'));
     
     // 极巨化清理
     if (p.isDynamaxed) {
@@ -722,6 +745,8 @@ export async function handlePlayerFainted(p) {
 
 /**
  * 触发入场特性 (威吓、天气等)
+ * @param {PokemonLike} pokemon
+ * @param {PokemonLike} opponent
  */
 export function triggerEntryAbilities(pokemon, opponent) {
     const battle = window.battle;
@@ -792,7 +817,7 @@ export function triggerEntryAbilities(pokemon, opponent) {
 
 /**
  * 检查玩家是否可以换人（考虑抓人特性和状态）
- * @returns {Object} { canSwitch: boolean, reason?: string }
+ * @returns {SwitchFlowResult} { canSwitch: boolean, reason?: string }
  */
 export function canPlayerSwitch() {
     const battle = window.battle;
@@ -813,7 +838,7 @@ export function canPlayerSwitch() {
 
 /**
  * 检查敌方是否可以换人（考虑抓人特性和状态）
- * @returns {Object} { canSwitch: boolean, reason?: string }
+ * @returns {SwitchFlowResult} { canSwitch: boolean, reason?: string }
  */
 export function canEnemySwitch() {
     const battle = window.battle;

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * =============================================
  * AI ENGINE - 宝可梦战斗 AI 系统
@@ -65,6 +66,10 @@ const AI_ABILITY_TRAITS = {
 // 反强化技能列表（面对高威胁时优先使用）
 const AI_COUNTER_MOVES = ['Haze', 'Clear Smog', 'Roar', 'Whirlwind', 'Dragon Tail', 'Circle Throw', 'Topsy-Turvy', 'Spectral Thief'];
 
+/**
+ * @param {PokemonLike} pokemon
+ * @returns {PokemonLike}
+ */
 function getAIPerceivedPokemon(pokemon) {
     if (!pokemon?.illusionActive || !pokemon.illusionTarget) return pokemon;
 
@@ -87,6 +92,10 @@ function getAIPerceivedPokemon(pokemon) {
     };
 }
 
+/**
+ * @param {string | null | undefined} itemName
+ * @returns {boolean}
+ */
 function isChoiceItemName(itemName) {
     if (!itemName) return false;
     if (typeof window !== 'undefined' && typeof window.isChoiceItem === 'function') {
@@ -96,6 +105,11 @@ function isChoiceItemName(itemName) {
     return normalized.includes('choice') || String(itemName).includes('讲究');
 }
 
+/**
+ * @param {MoveData | null | undefined} move
+ * @param {string | null | undefined} lockedMoveName
+ * @returns {boolean}
+ */
 function moveMatchesChoiceLock(move, lockedMoveName) {
     if (!move || !lockedMoveName) return false;
     return move.name === lockedMoveName ||
@@ -103,15 +117,28 @@ function moveMatchesChoiceLock(move, lockedMoveName) {
         move.originalMoveName === lockedMoveName;
 }
 
+/**
+ * @param {PokemonLike} pokemon
+ * @returns {MoveData | null}
+ */
 function getChoiceLockedMove(pokemon) {
     if (!pokemon?.choiceLockedMove || !isChoiceItemName(pokemon.item || '')) return null;
     return (pokemon.moves || []).find(m => moveMatchesChoiceLock(m, pokemon.choiceLockedMove)) || null;
 }
 
+/**
+ * @param {MoveData | null | undefined} move
+ * @returns {boolean}
+ */
 function hasMovePP(move) {
     return !move || move.name === 'Struggle' || move.pp === undefined || move.pp > 0;
 }
 
+/**
+ * @param {PokemonLike} pokemon
+ * @param {{ filterNoPP?: boolean }} [options]
+ * @returns {MoveData[]}
+ */
 function getSelectableMoves(pokemon, { filterNoPP = false } = {}) {
     const lockedMove = getChoiceLockedMove(pokemon);
     if (lockedMove) return [lockedMove];
@@ -125,12 +152,12 @@ function getSelectableMoves(pokemon, { filterNoPP = false } = {}) {
 
 /**
  * 获取 AI 决策（统一入口）
- * @param {Pokemon} aiPoke - AI 当前宝可梦
- * @param {Pokemon} playerPoke - 玩家当前宝可梦
+ * @param {PokemonLike} aiPoke - AI 当前宝可梦
+ * @param {PokemonLike} playerPoke - 玩家当前宝可梦
  * @param {string} difficulty - 难度等级
- * @param {Pokemon[]} aiParty - AI 队伍（用于换人决策）
- * @param {object} battleContext - 战斗上下文（回合数、已用 Mega 等）
- * @returns {object} { type: 'move'|'switch', move?: Move, index?: number, reasoning?: string }
+ * @param {PokemonLike[]} aiParty - AI 队伍（用于换人决策）
+ * @param {AiBattleContext} battleContext - 战斗上下文（回合数、已用 Mega 等）
+ * @returns {AiAction | null} { type: 'move'|'switch', move?: Move, index?: number, reasoning?: string }
  */
 export function getAiAction(aiPoke, playerPoke, difficulty = 'hard', aiParty = [], battleContext = {}) {
     if (!aiPoke || !playerPoke) return null;
@@ -317,9 +344,9 @@ function isPivotMove(move) {
  * [AI 补丁] 古武流派评估器 (Style Evaluator)
  * 提升 AI 使用 迅疾 (Agile) / 刚猛 (Strong) 的频率
  * =======================================================
- * @param {Pokemon} aiPoke - AI 当前宝可梦
- * @param {Pokemon} playerPoke - 玩家当前宝可梦
- * @param {object} baseMove - 基础招式
+ * @param {PokemonLike} aiPoke - AI 当前宝可梦
+ * @param {PokemonLike} playerPoke - 玩家当前宝可梦
+ * @param {MoveData} baseMove - 基础招式
  * @returns {string|null} 'agile' | 'strong' | null
  */
 /**
@@ -1292,6 +1319,10 @@ function evaluateStrategicMoves(aiPoke, playerPoke, threatAssessment) {
 
 /**
  * 对技能按评分排序
+ * @param {PokemonLike} attacker
+ * @param {PokemonLike} defender
+ * @param {PokemonLike[] | null} [aiParty]
+ * @returns {AiMoveScore[]}
  */
 function rankMovesByScore(attacker, defender, aiParty = null) {
     if (!attacker?.moves) return [];
@@ -1325,6 +1356,8 @@ function rankMovesByScore(attacker, defender, aiParty = null) {
 
 /**
  * 获取合并后的技能数据（本地 + MOVES 数据库）
+ * @param {MoveData} move
+ * @returns {MoveData}
  */
 function getMergedMoveData(move) {
     const id = (move.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -1356,6 +1389,10 @@ function getMergedMoveData(move) {
 /**
  * 模拟伤害计算（简化版，用于 AI 决策）
  * 保持纯净：该是0就是0，不在这里做特性魔改
+ * @param {PokemonLike} attacker
+ * @param {PokemonLike} defender
+ * @param {MoveData} move
+ * @returns {Pick<DamageResult, 'damage' | 'effectiveness'>}
  */
 function simulateDamage(attacker, defender, move) {
     // 【关键修复】前置免疫检查：确保 AI 不会选择对目标无效的招式
@@ -1438,7 +1475,10 @@ function simulateDamage(attacker, defender, move) {
 /**
  * 评估技能的战术影响力（软编码，数据驱动）
  * 综合考虑：护盾破除、满血保命、威胁等级等因素
- * @returns {object} { totalScore, rawDamage, effectiveness, shieldBreak, threatBonus }
+ * @param {PokemonLike} attacker
+ * @param {PokemonLike} defender
+ * @param {MoveData} move
+ * @returns {{ totalScore: number, rawDamage: number, effectiveness: number, shieldBreak?: boolean, threatBonus?: number }}
  */
 function evaluateMoveImpact(attacker, defender, move) {
     // 1. 获取基础伤害模拟
@@ -1555,6 +1595,8 @@ function evaluateMoveImpact(attacker, defender, move) {
 
 /**
  * 获取有效速度（考虑麻痹、顺风、天气等）
+ * @param {PokemonLike} pokemon
+ * @returns {number}
  */
 function getEffectiveSpeed(pokemon) {
     let spe = pokemon.getStat?.('spe') || pokemon.spe || 100;
@@ -1577,6 +1619,10 @@ function getEffectiveSpeed(pokemon) {
 
 /**
  * 获取属性克制（使用内置表，避免循环调用）
+ * @param {string} atkType
+ * @param {string[]} defTypes
+ * @param {string} [moveName]
+ * @returns {number}
  */
 function getTypeEffectivenessAI(atkType, defTypes, moveName = '') {
     // 直接使用内置表，不调用 window.getTypeEffectiveness 避免循环
@@ -1616,10 +1662,11 @@ function getTypeEffectivenessAI(atkType, defTypes, moveName = '') {
 
 /**
  * 技能评分（用于排序）
- * @param {Pokemon} attacker - 攻击方
- * @param {Pokemon} defender - 防御方
- * @param {Object} move - 技能数据
- * @param {Pokemon[]} aiParty - AI 队伍（用于折返技能检查）
+ * @param {PokemonLike} attacker - 攻击方
+ * @param {PokemonLike} defender - 防御方
+ * @param {MoveData} move - 技能数据
+ * @param {PokemonLike[] | null} aiParty - AI 队伍（用于折返技能检查）
+ * @returns {number}
  */
 function calcMoveScore(attacker, defender, move, aiParty = null) {
     if (!move) return -9999;
@@ -1751,7 +1798,9 @@ function calcMoveScore(attacker, defender, move, aiParty = null) {
     const protectMoves = ['Protect', 'Detect', 'Spiky Shield', "King's Shield", 'Baneful Bunker', 
                           'Obstruct', 'Silk Trap', 'Burning Bulwark', 'Endure', 'Wide Guard', 'Quick Guard'];
     if (protectMoves.includes(moveName)) {
-        const lastMove = attacker.lastMoveUsed || '';
+        const lastMove = typeof attacker.lastMoveUsed === 'string'
+            ? attacker.lastMoveUsed
+            : attacker.lastMoveUsed?.name || '';
         if (protectMoves.includes(lastMove)) {
             console.log(`[AI BAN] ${moveName} 连续使用，成功率极低，禁止选择`);
             return -8000; // 连续使用守住类技能，极大降低权重
@@ -3695,8 +3744,8 @@ function calcMoveScore(attacker, defender, move, aiParty = null) {
 
 /**
  * 当 AI 的宝可梦倒下时，选择最佳的复仇者上场
- * @param {Pokemon[]} party - AI 队伍
- * @param {Pokemon} opp - 玩家当前场上的宝可梦
+ * @param {PokemonLike[]} party - AI 队伍
+ * @param {PokemonLike} opp - 玩家当前场上的宝可梦
  * @param {number} currentActive - 当前（已倒下的）宝可梦索引
  * @returns {number} - 最佳队员的 index，-1 表示没有可用的
  */

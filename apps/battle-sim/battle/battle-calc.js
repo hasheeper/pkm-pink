@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * ===========================================
  * BATTLE-CALC.JS - 伤害计算引擎
@@ -17,11 +18,11 @@
 
 /**
  * 伤害计算 (含能力等级修正、命中判定、多段攻击、暴击率)
- * @param {Pokemon} attacker 
- * @param {Pokemon} defender 
- * @param {object} move - { type, power, cat, accuracy }
- * @param {object} options - { isSimulation: boolean } 可选参数
- * @returns {object} - { damage, effectiveness, isCrit, miss, hitCount, blocked }
+ * @param {PokemonLike} attacker
+ * @param {PokemonLike} defender
+ * @param {MoveData} move - { type, power, cat, accuracy }
+ * @param {{ isSimulation?: boolean, [key: string]: any }} options - 可选参数
+ * @returns {DamageResult}
  */
 export function calcDamage(attacker, defender, move, options = {}) {
     // 获取 battle 对象

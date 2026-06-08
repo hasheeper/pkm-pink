@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * ===========================================
  * BATTLE-TURNS.JS - 回合执行
@@ -16,6 +17,8 @@
 
 /**
  * 辅助函数：等待
+ * @param {number} ms
+ * @returns {Promise<void>}
  */
 function wait(ms) { 
     return new Promise(r => setTimeout(r, ms)); 
@@ -23,6 +26,7 @@ function wait(ms) {
 
 /**
  * 辅助函数：日志输出
+ * @param {string} msg
  */
 function log(msg) {
     if (typeof window !== 'undefined' && typeof window.log === 'function') {
@@ -32,10 +36,18 @@ function log(msg) {
     }
 }
 
+/**
+ * @param {PokemonLike | null | undefined} pokemon
+ * @returns {string}
+ */
 function getBattleDisplayName(pokemon) {
     return pokemon?.displayCnName || pokemon?.cnName || pokemon?.name || '???';
 }
 
+/**
+ * @param {string | null | undefined} itemName
+ * @returns {boolean}
+ */
 function isChoiceItemName(itemName) {
     if (!itemName) return false;
     if (typeof window !== 'undefined' && typeof window.isChoiceItem === 'function') {
@@ -45,6 +57,11 @@ function isChoiceItemName(itemName) {
     return normalized.includes('choice') || String(itemName).includes('讲究');
 }
 
+/**
+ * @param {MoveData | null | undefined} move
+ * @param {string | null | undefined} lockedMoveName
+ * @returns {boolean}
+ */
 function moveMatchesChoiceLock(move, lockedMoveName) {
     if (!move || !lockedMoveName) return false;
     return move.name === lockedMoveName ||
@@ -52,11 +69,20 @@ function moveMatchesChoiceLock(move, lockedMoveName) {
         move.originalMoveName === lockedMoveName;
 }
 
+/**
+ * @param {PokemonLike} pokemon
+ * @returns {MoveData | null}
+ */
 function findChoiceLockedMove(pokemon) {
     if (!pokemon?.choiceLockedMove) return null;
     return (pokemon.moves || []).find(m => moveMatchesChoiceLock(m, pokemon.choiceLockedMove)) || null;
 }
 
+/**
+ * @param {PokemonLike[]} party
+ * @param {number} currentIndex
+ * @returns {boolean}
+ */
 function hasAliveSwitchFor(party, currentIndex) {
     if (typeof window !== 'undefined' && typeof window.hasAliveSwitch === 'function') {
         return window.hasAliveSwitch(party, currentIndex);
@@ -66,6 +92,10 @@ function hasAliveSwitchFor(party, currentIndex) {
     );
 }
 
+/**
+ * @param {PokemonLike | null | undefined} pokemon
+ * @param {PokemonLike | null | undefined} opponent
+ */
 function primeIllusionDisplay(pokemon, opponent) {
     if (!pokemon || pokemon.ability !== 'Illusion' || pokemon.illusionActive) return;
     if (typeof AbilityHandlers === 'undefined') return;
@@ -77,6 +107,7 @@ function primeIllusionDisplay(pokemon, opponent) {
 
 /**
  * 辅助函数：更新视觉
+ * @param {boolean | string} [forceSpriteAnim]
  */
 function updateAllVisuals(forceSpriteAnim) {
     if (typeof window !== 'undefined' && typeof window.updateAllVisuals === 'function') {
@@ -147,10 +178,10 @@ export function onTurnStart() {
 
 /**
  * 执行玩家回合
- * @param {Object} p 玩家宝可梦
- * @param {Object} e 敌方宝可梦
- * @param {Object} move 招式
- * @returns {Object} 包含 pivot 标记的结果
+ * @param {PokemonLike} p 玩家宝可梦
+ * @param {PokemonLike} e 敌方宝可梦
+ * @param {MoveData} move 招式
+ * @returns {Promise<SwitchFlowResult>} 包含 pivot 标记的结果
  */
 export async function executePlayerTurn(p, e, move) {
     const battle = window.battle;
@@ -363,10 +394,10 @@ export async function executePlayerTurn(p, e, move) {
 
 /**
  * 执行敌方回合
- * @param {Object} e 敌方宝可梦
- * @param {Object} p 玩家宝可梦
- * @param {Object} move 招式
- * @returns {Object} 包含 pivot 标记的结果
+ * @param {PokemonLike} e 敌方宝可梦
+ * @param {PokemonLike} p 玩家宝可梦
+ * @param {MoveData | null} move 招式
+ * @returns {Promise<SwitchFlowResult>} 包含 pivot 标记的结果
  */
 export async function executeEnemyTurn(e, p, move) {
     const battle = window.battle;
@@ -580,6 +611,7 @@ export async function enemyTurn() {
     }
 
     // 获取敌方 AI 决策
+    /** @type {PPMoveLike | null} */
     let move = null;
     let enemyAction = null;
     
@@ -657,7 +689,7 @@ export async function enemyTurn() {
     
     // 普通攻击
     if (enemyAction && enemyAction.move) {
-        move = enemyAction.move;
+        move = /** @type {PPMoveLike} */ (enemyAction.move);
     }
     
     // 回退到旧 AI
@@ -799,10 +831,10 @@ export async function enemyTurn() {
 
 /**
  * 回合结束时的状态伤害/回复结算
- * @param {Pokemon} poke 要结算的宝可梦
- * @param {Pokemon} opponent 对手宝可梦（用于寄生种子吸血）
+ * @param {PokemonLike} poke 要结算的宝可梦
+ * @param {PokemonLike} opponent 对手宝可梦（用于寄生种子吸血）
  * @param {boolean} isPlayerPoke 是否为玩家方的宝可梦（AVs 效果只对玩家方生效）
- * @returns {Array} logs
+ * @returns {string[]} logs
  */
 export function getEndTurnStatusLogs(poke, opponent, isPlayerPoke = false) {
     let logs = [];

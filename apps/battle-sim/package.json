@@ -10,7 +10,11 @@
     "dev": "vite",
     "build": "vite build && cp -r data dist/",
     "preview": "vite preview",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "battle:test": "node scripts/battle-test.js",
+    "flow:test": "node scripts/battle-flow-test.js",
+    "move:coverage": "node scripts/move-coverage-test.js",
+    "test": "npm run typecheck && npm run battle:test && npm run flow:test && npm run move:coverage"
   },
   "type": "module",
   "repository": {
@@ -25,6 +29,7 @@
   },
   "homepage": "https://github.com/hasheeper/pkm33#readme",
   "devDependencies": {
+    "typescript": "^6.0.3",
     "vite": "^7.3.1"
   }
 }
