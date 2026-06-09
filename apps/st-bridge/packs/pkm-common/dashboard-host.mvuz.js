@@ -63,7 +63,13 @@
     ROOT.__PKM_MVUZ_PUSH_DEDUP__ = pushDedupState;
     const stateReadCache = { key: '', at: 0, promise: null };
     let transferSequenceCancelers = [];
-    let lastTransferSignature = '';
+    const transferDedupeStore = ROOT.__PKM_MVUZ_TRANSFER_DEDUPE__ || {};
+    ROOT.__PKM_MVUZ_TRANSFER_DEDUPE__ = transferDedupeStore;
+    const transferDedupeState = transferDedupeStore[PRODUCT] || {
+      signature: '',
+      inFlight: false
+    };
+    transferDedupeStore[PRODUCT] = transferDedupeState;
 
     function trimTrailingSlash(value) {
       return typeof value === 'string' ? value.trim().replace(/\/+$/, '') : '';
@@ -121,6 +127,51 @@
       }
     }
 
+    function stableJsonValue(value) {
+      if (Array.isArray(value)) return value.map(stableJsonValue);
+      if (getPlainObject(value, null)) {
+        return Object.keys(value)
+          .sort()
+          .reduce((next, key) => {
+            if (value[key] !== undefined) next[key] = stableJsonValue(value[key]);
+            return next;
+          }, {});
+      }
+      return value ?? null;
+    }
+
+    function transferBufferSignature(transfer) {
+      return JSON.stringify(stableJsonValue({
+        product: PRODUCT,
+        floorKey: getCurrentFloorKey(),
+        name: transfer?.name || '',
+        species: transfer?.species || transfer?.name || '',
+        nickname: transfer?.nickname || '',
+        gender: transfer?.gender || '',
+        lv: transfer?.lv ?? transfer?.level ?? null,
+        quality: transfer?.quality || '',
+        nature: transfer?.nature || '',
+        ability: transfer?.ability || '',
+        shiny: transfer?.shiny === true,
+        item: transfer?.item || '',
+        mechanic: transfer?.mechanic || '',
+        teraType: transfer?.teraType || '',
+        moves: transfer?.moves || null,
+        stats_meta: transfer?.stats_meta || null,
+        friendship: transfer?.friendship || null,
+        bonds: transfer?.bonds ?? null,
+        notes: transfer?.notes || ''
+      }));
+    }
+
+    function pickTransferBuffer(party) {
+      return CORE.isObject(party?.transferBuffer) && party.transferBuffer.name
+        ? party.transferBuffer
+        : (CORE.isObject(party?.transfer_buffer) && party.transfer_buffer.name
+          ? party.transfer_buffer
+          : null);
+    }
+
     function getPlainObject(value, fallback = {}) {
       return value && typeof value === 'object' && !Array.isArray(value) ? value : fallback;
     }
@@ -140,7 +191,7 @@
         party[`slot${slot}`] = toDashboardPokemon(slots[index], CORE.createEmptySlot(slot, { moves: 'object' }));
       }
       party.transfer_buffer = toDashboardPokemon(
-        state?.party?.transferBuffer || state?.party?.transfer_buffer,
+        pickTransferBuffer(state?.party),
         CORE.createEmptySlot(maxPartySize + 1, { moves: 'object' })
       );
 
@@ -173,7 +224,7 @@
         ? CORE.legacyDashboardShape(state)
         : buildFallbackDashboardView(state);
       const party = dashboard.party || dashboard.player?.party || {};
-      party.transferBuffer = clone(party.transferBuffer ?? party.transfer_buffer, party.transfer_buffer);
+      party.transferBuffer = clone(pickTransferBuffer(party) || party.transfer_buffer, party.transfer_buffer);
       const box = dashboard.box || dashboard.player?.box || {};
       const settings = dashboard.settings || dashboard.player?.settings || clone(state?.settings, {});
       return {
@@ -540,6 +591,7 @@
       try {
         const state = await dispatchPluginAction(action, payload, {
           floorKey,
+          suppressResult,
           ...(meta.operationId ? { operationId: meta.operationId } : {}),
           ...(meta.messageId !== undefined ? { messageId: meta.messageId } : {})
         });
@@ -640,20 +692,31 @@
 
     async function handleTransferBuffer() {
       const state = await loadMvuzState();
-      const transfer = state?.party?.transferBuffer || state?.party?.transfer_buffer;
+      const transfer = pickTransferBuffer(state?.party);
       if (transfer?.name) {
-        const signature = JSON.stringify({
-          floorKey: getCurrentFloorKey(),
-          name: transfer.name || '',
-          species: transfer.species || '',
-          lv: transfer.lv ?? null
-        });
-        if (signature === lastTransferSignature) return { ok: true, skipped: true };
-        lastTransferSignature = signature;
-        await dispatchAction('box.depositTransferBuffer', {}, { suppressResult: true });
+        const signature = transferBufferSignature(transfer);
+        const alreadyHandled = transferDedupeState.signature === signature
+          && transferDedupeState.inFlight;
+        if (alreadyHandled) {
+          return { ok: true, skipped: true, deduped: true };
+        }
+        transferDedupeState.signature = signature;
+        transferDedupeState.inFlight = true;
+        let actionResult = null;
+        try {
+          actionResult = await dispatchAction('box.depositTransferBuffer', {}, { suppressResult: true });
+        } finally {
+          transferDedupeState.inFlight = false;
+        }
+        if (actionResult?.ok === false) {
+          transferDedupeState.signature = '';
+          return { ok: false, reason: actionResult.reason || 'transfer_buffer_deposit_failed' };
+        }
+        transferDedupeState.signature = '';
         return { ok: true };
       }
-      lastTransferSignature = '';
+      transferDedupeState.signature = '';
+      transferDedupeState.inFlight = false;
       return { ok: true, skipped: true };
     }
 

@@ -12,7 +12,8 @@
     const {
       DEFAULT_SETTINGS,
       DEFAULT_UNLOCKS,
-      MAX_PARTY_SIZE
+      MAX_PARTY_SIZE,
+      PRODUCT
     } = ctx;
     const {
       clampNumber,
@@ -28,6 +29,10 @@
       patchState,
       saveState
     } = stateService;
+    const actionLockState = ROOT.__PKM_MVUZ_ACTION_LOCKS__ || {};
+    ROOT.__PKM_MVUZ_ACTION_LOCKS__ = actionLockState;
+    const transferDepositLockKey = `${PRODUCT || 'default'}:transferDepositTail`;
+    if (!actionLockState[transferDepositLockKey]) actionLockState[transferDepositLockKey] = Promise.resolve();
 
     function actionWriteOptions(action, writeOptions = {}, paths = ['/pkm'], operationKey = '') {
       const suffix = operationKey ? `:${operationKey}` : '';
@@ -56,6 +61,24 @@
         if (match) return clampNumber(match[1], 1, MAX_PARTY_SIZE, fallback);
       }
       return clampNumber(value, 1, MAX_PARTY_SIZE, fallback);
+    }
+
+    function runTransferDeposit(task) {
+      const run = actionLockState[transferDepositLockKey]
+        .catch(() => {})
+        .then(task);
+      actionLockState[transferDepositLockKey] = run.catch(() => {});
+      return run;
+    }
+
+    function clearTransferBuffer(state) {
+      state.party.transferBuffer = null;
+      state.party.transfer_buffer = null;
+    }
+
+    function pickTransferBuffer(party) {
+      return normalizeTransferBuffer(party?.transferBuffer)
+        || normalizeTransferBuffer(party?.transfer_buffer);
     }
 
     const helpers = {
@@ -160,15 +183,26 @@
             }, [`/pkm/party/slots/${slotNumber - 1}/moves`]));
           }
         case 'box.depositTransferBuffer':
-          return patchState((state) => {
-            const pokemon = normalizeTransferBuffer(state.party.transferBuffer || state.party.transfer_buffer);
+          return runTransferDeposit(() => patchState((state) => {
+            const pokemon = pickTransferBuffer(state.party);
             if (!pokemon) return state;
-            if (!state.box.boxes?.length) state.box.boxes = [{ id: 'box_01', name: 'Box 1', slots: [] }];
-            state.box.boxes[0].slots.push(pokemon);
-            state.party.transferBuffer = null;
-            if ('transfer_buffer' in state.party) state.party.transfer_buffer = null;
+            state.box = isObject(state.box) ? state.box : {};
+            if (!Array.isArray(state.box.boxes) || !state.box.boxes.length) {
+              state.box.boxes = [{ id: 'box_01', name: 'Box 1', slots: [] }];
+            }
+            const box = isObject(state.box.boxes[0])
+              ? state.box.boxes[0]
+              : { id: 'box_01', name: 'Box 1', slots: [] };
+            state.box.boxes[0] = box;
+            box.slots = Array.isArray(box.slots) ? box.slots : [];
+            box.slots.push(pokemon);
+            clearTransferBuffer(state);
             return state;
-          }, actionWriteOptions(action, writeOptions, ['/pkm/party/transferBuffer', '/pkm/box/boxes/0/slots']));
+          }, actionWriteOptions(action, writeOptions, [
+            '/pkm/party/transferBuffer',
+            '/pkm/party/transfer_buffer',
+            '/pkm/box/boxes/0/slots'
+          ])));
         case 'box.applyTransferMutation':
           return patchState((state) => {
             const box = state.box.boxes?.[0] || { id: 'box_01', name: 'Box 1', slots: [] };

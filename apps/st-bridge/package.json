@@ -1,0 +1,11 @@
+{
+  "name": "pkm-st-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "npm run test:syntax && npm run test:regression",
+    "test:syntax": "node tests/syntax.test.mjs",
+    "test:regression": "node --test tests/regression/*.test.mjs"
+  }
+}

@@ -67,18 +67,25 @@
     function buildReplayDiffPatchesForPaths(prevRoot, nextRoot, paths) {
       const patches = [];
       (Array.isArray(paths) ? paths : []).forEach((path) => {
+        const prevValue = readJsonPointer(prevRoot, path);
         const nextValue = readJsonPointer(nextRoot, path);
-        if (nextValue === undefined) return;
-        collectReplayDiffPatches(readJsonPointer(prevRoot, path), nextValue, path, patches);
+        if (prevValue === undefined && nextValue === undefined) return;
+        collectReplayDiffPatches(prevValue, nextValue, path, patches);
       });
       return patches;
     }
 
-    function buildReplayValuePatchesForPaths(nextRoot, paths) {
+    function buildReplayValuePatchesForPaths(nextRoot, paths, prevRoot = null) {
       const patches = [];
       (Array.isArray(paths) ? paths : []).forEach((path) => {
         const nextValue = readJsonPointer(nextRoot, path);
-        if (nextValue !== undefined) patches.push(buildReplayPatch('add', path, nextValue));
+        if (nextValue !== undefined) {
+          patches.push(buildReplayPatch('add', path, nextValue));
+          return;
+        }
+        if (prevRoot && readJsonPointer(prevRoot, path) !== undefined) {
+          patches.push(buildReplayPatch('remove', path));
+        }
       });
       return patches;
     }
@@ -371,7 +378,7 @@
           : (isObject(options.beforeStatData) ? options.beforeStatData : vars.stat_data);
         patchList = buildReplayDiffPatchesForPaths(baselineStatData, options.afterStatData, replayPaths);
         if (!hasParsedBaseline && stripped !== originalMessage && replayPaths.length) {
-          patchList = buildReplayValuePatchesForPaths(options.afterStatData, replayPaths);
+          patchList = buildReplayValuePatchesForPaths(options.afterStatData, replayPaths, baselineStatData);
         }
       }
 

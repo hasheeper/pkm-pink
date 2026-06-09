@@ -252,7 +252,7 @@ function normalizeParty(value) {
   });
   return {
     slots,
-    transferBuffer: normalizeTransferBuffer(src.transferBuffer ?? src.transfer_buffer)
+    transferBuffer: pickTransferBuffer(src)
   };
 }
 
@@ -262,6 +262,11 @@ function normalizeTransferBuffer(value) {
   delete normalized.slot;
   normalized.isLead = false;
   return normalized;
+}
+
+function pickTransferBuffer(src) {
+  return normalizeTransferBuffer(src?.transferBuffer)
+    || normalizeTransferBuffer(src?.transfer_buffer);
 }
 
 function normalizeBox(value) {

@@ -154,6 +154,11 @@ function normalizeTransferBuffer(value) {
   return normalized;
 }
 
+function pickTransferBuffer(src) {
+  return normalizeTransferBuffer(src?.transferBuffer)
+    || normalizeTransferBuffer(src?.transfer_buffer);
+}
+
 function normalizeBox(value) {
   return {
     boxes: Array.isArray(value?.boxes)
@@ -205,7 +210,7 @@ export function normalizePkmState(value = {}) {
     },
     party: {
       slots: normalizePartySlots(party.slots),
-      transferBuffer: normalizeTransferBuffer(party.transferBuffer)
+      transferBuffer: pickTransferBuffer(party)
     },
     box: normalizeBox(source.box),
     world: normalizeWorld(source.world),

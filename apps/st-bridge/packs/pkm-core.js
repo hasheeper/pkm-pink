@@ -195,7 +195,9 @@
     for (const patch of patches) {
       const op = String(patch?.op || '').toLowerCase();
       const path = String(patch?.path || '');
-      const basePath = /^\/pkm\/party\/slots\/\d+$/.test(path) || path === '/pkm/party/transferBuffer'
+      const basePath = /^\/pkm\/party\/slots\/\d+$/.test(path)
+        || path === '/pkm/party/transferBuffer'
+        || path === '/pkm/party/transfer_buffer'
         ? path
         : '';
       if ((op !== 'add' && op !== 'replace') || !basePath || seen.has(basePath) || hasStatsPatch(basePath)) continue;
@@ -267,6 +269,14 @@
     return next;
   }
 
+  function pickTransferBuffer(party) {
+    return isObject(party?.transferBuffer) && party.transferBuffer.name
+      ? party.transferBuffer
+      : (isObject(party?.transfer_buffer) && party.transfer_buffer.name
+        ? party.transfer_buffer
+        : null);
+  }
+
   function legacyDashboardShape(state, options = {}) {
     const emptySlot = options.emptySlot || ((slot) => createEmptySlot(slot, { moves: 'object' }));
     const slots = Array.isArray(state?.party?.slots) ? state.party.slots : [];
@@ -276,7 +286,7 @@
       party[`slot${i + 1}`] = toLegacyPokemon(slots[i], emptySlot(i + 1));
     }
     party.transfer_buffer = toLegacyPokemon(
-      state?.party?.transferBuffer || state?.party?.transfer_buffer,
+      pickTransferBuffer(state?.party),
       emptySlot(MAX_PARTY_SIZE + 1)
     );
 

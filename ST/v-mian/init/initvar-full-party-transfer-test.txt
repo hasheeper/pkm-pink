@@ -1,0 +1,371 @@
+pkm:
+  player:
+    name: "{{user}}"
+    trainerProficiency: 45
+    proficiency: 45
+    unlocks:
+      enable_bond: false
+      enable_styles: false
+      enable_insight: false
+      enable_mega: false
+      enable_z_move: false
+      enable_dynamax: false
+      enable_tera: false
+      enable_proficiency_cap: false
+    bonds: {}
+  party:
+    slots:
+      - slot: 1
+        name: Meowscarada
+        nickname: null
+        species: Meowscarada
+        gender: F
+        lv: 78
+        quality: high
+        nature: Jolly
+        ability: Protean
+        shiny: false
+        item: Focus Sash
+        mechanic: null
+        teraType: null
+        isAce: true
+        isLead: true
+        friendship:
+          avs:
+            trust: 42
+            passion: 55
+            insight: 28
+            devotion: 36
+        moves:
+          - Flower Trick
+          - Knock Off
+          - U-turn
+          - Play Rough
+        stats_meta:
+          ivs:
+            hp: 31
+            atk: 31
+            def: 20
+            spa: 12
+            spd: 22
+            spe: 31
+          ev_level: 195
+        notes: null
+      - slot: 2
+        name: Pawmot
+        nickname: null
+        species: Pawmot
+        gender: M
+        lv: 76
+        quality: high
+        nature: Jolly
+        ability: Iron Fist
+        shiny: false
+        item: Leppa Berry
+        mechanic: null
+        teraType: null
+        isAce: true
+        isLead: false
+        friendship:
+          avs:
+            trust: 35
+            passion: 58
+            insight: 24
+            devotion: 31
+        moves:
+          - Double Shock
+          - Close Combat
+          - Mach Punch
+          - Revival Blessing
+        stats_meta:
+          ivs:
+            hp: 26
+            atk: 31
+            def: 18
+            spa: 8
+            spd: 22
+            spe: 31
+          ev_level: 190
+        notes: null
+      - slot: 3
+        name: Tinkaton
+        nickname: null
+        species: Tinkaton
+        gender: F
+        lv: 77
+        quality: high
+        nature: Jolly
+        ability: Mold Breaker
+        shiny: false
+        item: Leftovers
+        mechanic: null
+        teraType: null
+        isAce: true
+        isLead: false
+        friendship:
+          avs:
+            trust: 40
+            passion: 38
+            insight: 50
+            devotion: 44
+        moves:
+          - Gigaton Hammer
+          - Play Rough
+          - Knock Off
+          - Thunder Wave
+        stats_meta:
+          ivs:
+            hp: 31
+            atk: 29
+            def: 31
+            spa: 10
+            spd: 31
+            spe: 28
+          ev_level: 192
+        notes: null
+      - slot: 4
+        name: Ceruledge
+        nickname: null
+        species: Ceruledge
+        gender: M
+        lv: 79
+        quality: high
+        nature: Adamant
+        ability: Flash Fire
+        shiny: false
+        item: Clear Amulet
+        mechanic: null
+        teraType: null
+        isAce: true
+        isLead: false
+        friendship:
+          avs:
+            trust: 31
+            passion: 60
+            insight: 27
+            devotion: 34
+        moves:
+          - Bitter Blade
+          - Shadow Sneak
+          - Close Combat
+          - Swords Dance
+        stats_meta:
+          ivs:
+            hp: 27
+            atk: 31
+            def: 24
+            spa: 9
+            spd: 26
+            spe: 30
+          ev_level: 198
+        notes: null
+      - slot: 5
+        name: Clodsire
+        nickname: null
+        species: Clodsire
+        gender: F
+        lv: 75
+        quality: high
+        nature: Careful
+        ability: Water Absorb
+        shiny: false
+        item: Black Sludge
+        mechanic: null
+        teraType: null
+        isAce: true
+        isLead: false
+        friendship:
+          avs:
+            trust: 52
+            passion: 22
+            insight: 39
+            devotion: 48
+        moves:
+          - Earthquake
+          - Poison Jab
+          - Recover
+          - Toxic Spikes
+        stats_meta:
+          ivs:
+            hp: 31
+            atk: 24
+            def: 28
+            spa: 7
+            spd: 31
+            spe: 12
+          ev_level: 187
+        notes: null
+      - slot: 6
+        name: Corviknight
+        nickname: null
+        species: Corviknight
+        gender: M
+        lv: 78
+        quality: high
+        nature: Impish
+        ability: Mirror Armor
+        shiny: false
+        item: Rocky Helmet
+        mechanic: null
+        teraType: null
+        isAce: true
+        isLead: false
+        friendship:
+          avs:
+            trust: 46
+            passion: 30
+            insight: 41
+            devotion: 54
+        moves:
+          - Brave Bird
+          - Body Press
+          - Roost
+          - Iron Defense
+        stats_meta:
+          ivs:
+            hp: 31
+            atk: 26
+            def: 31
+            spa: 6
+            spd: 28
+            spe: 24
+          ev_level: 195
+        notes: null
+    transferBuffer:
+      name: Tyranitar
+      nickname: null
+      species: Tyranitar
+      gender: N
+      lv: 95
+      quality: perfect
+      nature: Adamant
+      ability: Sand Stream
+      shiny: true
+      item: Smooth Rock
+      mechanic: null
+      teraType: null
+      isAce: true
+      isLead: false
+      friendship:
+        avs:
+          trust: 20
+          passion: 35
+          insight: 18
+          devotion: 15
+      moves:
+        - Dragon Dance
+        - Stone Edge
+        - Crunch
+        - Earthquake
+      stats_meta:
+        ivs:
+          hp: 31
+          atk: 31
+          def: 31
+          spa: 31
+          spd: 31
+          spe: 31
+        ev_level: 237
+      notes: transferBuffer auto-box test target
+  box:
+    boxes:
+      - id: box_01
+        name: Box 1
+        slots: []
+    indexes: {}
+  world:
+    location:
+      region: B
+      location: Transfer Buffer Test Camp
+      x: -4
+      y: -5
+    time:
+      day: 1
+      period: morning
+      derived:
+        year: 1
+        dayOfYear: 1
+        month: 1
+        dayOfMonth: 1
+        week: 1
+        dayOfWeek: 0
+      day_advance: null
+      period_set: null
+    weatherGrid: {}
+    pokemonSpawns: {}
+    phenomenon:
+      active_type: clear
+      active_region: none
+  npcs:
+    records:
+      gloria:
+        love: 0
+      rosa:
+        love: 0
+      dawn:
+        love: 0
+      akari:
+        love: 0
+      serena:
+        love: 0
+      may:
+        love: 0
+      selene:
+        love: 0
+      juliana:
+        love: 0
+      lusamine:
+        love: 0
+      lillie:
+        love: 0
+      mallow:
+        love: 0
+      lana:
+        love: 0
+      irida:
+        love: 0
+      lacey:
+        love: 0
+      misty:
+        love: 0
+      sonia:
+        love: 0
+      hex:
+        love: 0
+      roxie:
+        love: 0
+      iono:
+        love: 0
+      erika:
+        love: 0
+      nessa:
+        love: 0
+      marnie:
+        love: 0
+      acerola:
+        love: 0
+      bea:
+        love: 0
+      skyla:
+        love: 0
+      iris:
+        love: 0
+      nemona:
+        love: 0
+      cynthia:
+        love: 0
+  battle:
+    lastConfig: null
+    lastResult: null
+    pendingNarrative: null
+  settings:
+    enableAVS: true
+    enableCommander: true
+    enableEVO: true
+    enableBGM: true
+    enableSFX: true
+    enableClash: false
+    enableEnvironment: true
+    enableBattlePerformanceMode: false
+    enableBattlePortraitMode: false
+    enableEnemyStrategicSwitching: true
